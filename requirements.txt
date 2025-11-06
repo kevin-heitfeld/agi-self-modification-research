@@ -1,0 +1,214 @@
+# AGI Self-Modification Research - Requirements
+# Python 3.10+ required
+# Generated: November 6, 2025
+
+# ==============================================================================
+# CORE DEEP LEARNING
+# ==============================================================================
+
+# PyTorch - Core deep learning framework
+# Version 2.1.0 for CUDA 12.1 support (adjust based on your CUDA version)
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+
+# Transformers - Hugging Face library for LLMs
+transformers==4.36.2
+
+# Accelerate - Efficient model loading and distributed training
+accelerate==0.25.0
+
+# Bitsandbytes - Optional: For quantization and memory optimization
+bitsandbytes==0.41.3.post2
+
+# Safetensors - Safe and fast model serialization
+safetensors==0.4.1
+
+# ==============================================================================
+# MEMORY & KNOWLEDGE SYSTEMS
+# ==============================================================================
+
+# ChromaDB - Vector database for semantic memory search
+chromadb==0.4.22
+
+# NetworkX - Knowledge graph for concept relationships
+networkx==3.2.1
+
+# FAISS - Alternative vector search (optional, for future optimization)
+# faiss-cpu==1.7.4  # CPU version
+# faiss-gpu==1.7.4  # GPU version (if needed later)
+
+# ==============================================================================
+# DEVELOPMENT & EXPLORATION
+# ==============================================================================
+
+# Jupyter - Interactive notebooks for exploration
+jupyter==1.0.0
+ipython==8.19.0
+ipykernel==6.28.0
+ipywidgets==8.1.1
+
+# ==============================================================================
+# MONITORING & LOGGING
+# ==============================================================================
+
+# Weights & Biases - Experiment tracking and visualization
+wandb==0.16.2
+
+# TensorBoard - Alternative visualization (can use alongside wandb)
+tensorboard==2.15.1
+
+# ==============================================================================
+# TESTING & QUALITY
+# ==============================================================================
+
+# pytest - Testing framework
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+
+# Code quality tools
+black==23.12.1  # Code formatter
+flake8==7.0.0  # Linter
+mypy==1.7.1  # Type checker
+isort==5.13.2  # Import sorter
+
+# ==============================================================================
+# DATA MANIPULATION & VISUALIZATION
+# ==============================================================================
+
+# NumPy - Numerical computing
+numpy==1.26.2
+
+# Pandas - Data manipulation
+pandas==2.1.4
+
+# Matplotlib - Basic plotting
+matplotlib==3.8.2
+
+# Seaborn - Statistical visualization
+seaborn==0.13.1
+
+# Plotly - Interactive plots
+plotly==5.18.0
+
+# ==============================================================================
+# UTILITIES
+# ==============================================================================
+
+# TQDM - Progress bars
+tqdm==4.66.1
+
+# Python-dotenv - Environment variable management
+python-dotenv==1.0.0
+
+# Pydantic - Data validation and settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# PyYAML - YAML configuration files
+pyyaml==6.0.1
+
+# Rich - Beautiful terminal output
+rich==13.7.0
+
+# Click - CLI framework (for building command-line tools)
+click==8.1.7
+
+# ==============================================================================
+# OPTIONAL PERFORMANCE OPTIMIZATIONS
+# ==============================================================================
+
+# Flash Attention - Faster attention mechanism (requires compatible GPU)
+# Uncomment if you have compatible hardware (Ampere/Ada GPUs)
+# flash-attn==2.5.0
+
+# Triton - GPU programming (dependency for flash-attn)
+# triton==2.1.0
+
+# ==============================================================================
+# DATABASE & STORAGE (for advanced memory systems)
+# ==============================================================================
+
+# SQLite is built into Python, but for advanced features:
+# sqlalchemy==2.0.25  # SQL toolkit (if needed for structured memory)
+
+# Neo4j driver (if switching from NetworkX to Neo4j for knowledge graph)
+# neo4j==5.16.0
+
+# ==============================================================================
+# API & WEB (if building dashboard or remote access)
+# ==============================================================================
+
+# FastAPI - Modern web framework (for potential API/dashboard)
+# fastapi==0.108.0
+# uvicorn==0.25.0  # ASGI server
+
+# Requests - HTTP library (for cloud/API interactions if needed)
+requests==2.31.0
+
+# ==============================================================================
+# SYSTEM MONITORING
+# ==============================================================================
+
+# psutil - System and process utilities
+psutil==5.9.7
+
+# GPUtil - GPU monitoring
+gputil==1.4.0
+
+# py3nvml - NVIDIA GPU monitoring
+py3nvml==0.2.7
+
+# ==============================================================================
+# SCIENTIFIC COMPUTING (additional)
+# ==============================================================================
+
+# SciPy - Scientific computing library
+scipy==1.11.4
+
+# scikit-learn - Machine learning utilities (for metrics, clustering, etc.)
+scikit-learn==1.3.2
+
+# ==============================================================================
+# NOTES
+# ==============================================================================
+
+# Installation instructions:
+# 
+# 1. Create virtual environment:
+#    python -m venv venv
+#    venv\Scripts\activate  (Windows)
+#    source venv/bin/activate  (Linux/Mac)
+#
+# 2. Install PyTorch with CUDA support (adjust for your CUDA version):
+#    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# 3. Install remaining requirements:
+#    pip install -r requirements.txt
+#
+# 4. Verify installation:
+#    python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+#
+# CUDA Version Notes:
+# - cu118: CUDA 11.8
+# - cu121: CUDA 12.1
+# - cpu: CPU-only version (not recommended for this project)
+#
+# Check your CUDA version:
+#    nvidia-smi
+#
+# Storage requirements:
+# - Virtual environment: ~5-8 GB
+# - Model weights (Llama 3.2 3B): ~6 GB
+# - Checkpoints: ~200-300 GB over project lifetime
+# - Total recommended: 500 GB free disk space
+#
+# Memory requirements:
+# - Minimum: 16 GB RAM + 24 GB VRAM (GPU)
+# - Recommended: 32 GB RAM + 24 GB VRAM
+#
+# Python version:
+# - Minimum: Python 3.10
+# - Recommended: Python 3.11
+# - Maximum tested: Python 3.11 (3.12 may have compatibility issues)

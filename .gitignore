@@ -1,0 +1,100 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# PyTorch & ML
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+checkpoints/
+!checkpoints/.gitkeep
+
+# Model files (large)
+models/
+*.bin
+*.model
+
+# Data & Logs
+data/experiments/
+data/logs/
+!data/.gitkeep
+!data/logs/.gitkeep
+
+# Heritage system outputs (keep template structure, not generated content)
+heritage/system_reflections/*.json
+heritage/system_reflections/*.md
+heritage/discoveries_for_claude/*.json
+heritage/discoveries_for_claude/*.md
+heritage/messages_to_claude/*.json
+heritage/messages_to_claude/*.md
+!heritage/**/.gitkeep
+
+# Weights & Biases
+wandb/
+
+# TensorBoard
+runs/
+tensorboard_logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Configuration (might contain API keys)
+configs/secrets.json
+configs/api_keys.json
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Large downloads
+*.tar.gz
+*.zip
+downloads/

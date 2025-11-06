@@ -1,0 +1,505 @@
+"""
+ActivationMonitor - Observe model activations during inference
+
+Allows the system to watch its own internal activations as it processes inputs,
+track attention patterns, and understand information flow through the network.
+"""
+
+import torch
+import numpy as np
+from typing import Dict, List, Optional, Any, Tuple, Callable
+from pathlib import Path
+import logging
+from collections import defaultdict
+
+logger = logging.getLogger(__name__)
+
+
+class ActivationMonitor:
+    """
+    Provides introspective access to model activations during forward passes.
+    
+    The system can use this to:
+    - Capture hidden states at any layer during inference
+    - Track attention patterns and weights
+    - Trace information flow through the network
+    - Compare activations across different inputs
+    - Understand how specific inputs are processed
+    """
+    
+    def __init__(self, model: torch.nn.Module, tokenizer: Any, model_name: str = "model"):
+        """
+        Initialize ActivationMonitor with a model to observe.
+        
+        Args:
+            model: The PyTorch model to monitor
+            tokenizer: Tokenizer for the model (needed for text processing)
+            model_name: Name for this model (for logging/tracking)
+        """
+        self.model = model
+        self.tokenizer = tokenizer
+        self.model_name = model_name
+        
+        # Storage for captured activations
+        self.activations: Dict[str, torch.Tensor] = {}
+        self.attention_weights: Dict[str, torch.Tensor] = {}
+        
+        # Registered hooks
+        self.hooks = []
+        
+        # Layer registry
+        self.layers = self._build_layer_registry()
+        
+        logger.info(f"ActivationMonitor initialized for {model_name}")
+        logger.info(f"Found {len(self.layers)} modules")
+    
+    def _build_layer_registry(self) -> Dict[str, torch.nn.Module]:
+        """Build a registry of all named modules in the model"""
+        registry = {}
+        for name, module in self.model.named_modules():
+            if name:  # Skip empty names
+                registry[name] = module
+        return registry
+    
+    def get_layer_names(self, filter_pattern: Optional[str] = None) -> List[str]:
+        """
+        Get list of all module names in the model.
+        
+        Args:
+            filter_pattern: Optional string to filter layer names
+            
+        Returns:
+            List of layer/module names
+        """
+        names = list(self.layers.keys())
+        
+        if filter_pattern:
+            pattern_lower = filter_pattern.lower()
+            names = [n for n in names if pattern_lower in n.lower()]
+        
+        return sorted(names)
+    
+    def register_hooks(self, layer_names: List[str]) -> None:
+        """
+        Register forward hooks on specified layers to capture activations.
+        
+        Args:
+            layer_names: List of layer names to monitor
+            
+        Raises:
+            KeyError: If any layer name doesn't exist
+        """
+        # Clear any existing hooks first
+        self.clear_hooks()
+        
+        for layer_name in layer_names:
+            if layer_name not in self.layers:
+                raise KeyError(f"Layer '{layer_name}' not found. Use get_layer_names() to see available layers.")
+            
+            module = self.layers[layer_name]
+            
+            # Create hook function that captures activations
+            def make_hook(name):
+                def hook(module, input, output):
+                    # Store the output activation
+                    if isinstance(output, tuple):
+                        # Some layers return tuples (e.g., attention layers, transformer blocks)
+                        # First element is usually the hidden states
+                        hidden_states = output[0].detach().cpu()
+                        self.activations[name] = hidden_states
+                        
+                        # If this looks like attention output, store attention weights too
+                        # Attention layers typically return (hidden_states, attention_weights, ...)
+                        if len(output) > 1 and output[1] is not None:
+                            # Check if it's actually attention weights (4D tensor for multi-head attention)
+                            attn_output = output[1]
+                            if isinstance(attn_output, torch.Tensor) and len(attn_output.shape) >= 3:
+                                self.attention_weights[name] = attn_output.detach().cpu()
+                    else:
+                        # Simple tensor output
+                        self.activations[name] = output.detach().cpu()
+                return hook
+            
+            # Register the hook
+            handle = module.register_forward_hook(make_hook(layer_name))
+            self.hooks.append(handle)
+        
+        logger.info(f"Registered hooks on {len(layer_names)} layers")
+    
+    def clear_hooks(self) -> None:
+        """Remove all registered hooks"""
+        for hook in self.hooks:
+            hook.remove()
+        self.hooks.clear()
+        logger.info("Cleared all hooks")
+    
+    def clear_activations(self) -> None:
+        """Clear stored activations"""
+        self.activations.clear()
+        self.attention_weights.clear()
+    
+    def capture_activations(
+        self, 
+        input_text: str, 
+        layer_names: Optional[List[str]] = None,
+        max_length: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Capture activations for a specific input (inference mode, full sequence).
+        
+        This performs a forward pass WITHOUT generation to capture the full sequence
+        of activations, which is essential for token tracing and philosophical analysis.
+        
+        Args:
+            input_text: Text input to process
+            layer_names: Layers to monitor (if None, uses currently registered hooks)
+            max_length: Maximum tokens (for very long inputs)
+            
+        Returns:
+            Dictionary containing:
+                - input_text: Original input
+                - tokens: Token IDs
+                - token_strings: Human-readable tokens
+                - activations: Dict of layer_name -> activation tensor [batch, seq_len, hidden]
+                - attention_weights: Dict of layer_name -> attention weights (if available)
+        """
+        # Register hooks if specified
+        if layer_names is not None:
+            self.register_hooks(layer_names)
+        
+        if not self.hooks:
+            raise RuntimeError("No hooks registered. Call register_hooks() or provide layer_names.")
+        
+        # Clear previous activations
+        self.clear_activations()
+        
+        # Tokenize input
+        inputs = self.tokenizer(input_text, return_tensors="pt", truncation=True, max_length=max_length)
+        if torch.cuda.is_available():
+            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        
+        token_ids = inputs["input_ids"][0].cpu().tolist()
+        token_strings = [self.tokenizer.decode([tid]) for tid in token_ids]
+        
+        # Run forward pass (this triggers the hooks)
+        # Use model() directly, NOT generate(), to get full sequence activations
+        with torch.no_grad():
+            outputs = self.model(
+                **inputs,
+                output_hidden_states=True,
+                output_attentions=True,
+                return_dict=True
+            )
+        
+        result = {
+            "input_text": input_text,
+            "tokens": token_ids,
+            "token_strings": token_strings,
+            "num_tokens": len(token_ids),
+            "activations": dict(self.activations),
+            "attention_weights": dict(self.attention_weights),
+            "monitored_layers": list(self.activations.keys())
+        }
+        
+        return result
+    
+    def get_activation_statistics(self, layer_name: str) -> Dict[str, Any]:
+        """
+        Compute statistics for captured activations of a layer.
+        
+        Args:
+            layer_name: Name of the layer
+            
+        Returns:
+            Dictionary of statistics (mean, std, etc.)
+        """
+        if layer_name not in self.activations:
+            raise KeyError(f"No activations captured for '{layer_name}'. Call capture_activations() first.")
+        
+        activation = self.activations[layer_name]
+        act_flat = activation.flatten().float()
+        
+        stats = {
+            "layer_name": layer_name,
+            "shape": tuple(activation.shape),
+            "num_elements": activation.numel(),
+            
+            # Basic statistics
+            "mean": float(act_flat.mean()),
+            "std": float(act_flat.std()),
+            "min": float(act_flat.min()),
+            "max": float(act_flat.max()),
+            "median": float(act_flat.median()),
+            "abs_mean": float(act_flat.abs().mean()),
+            
+            # Sparsity
+            "zeros_percentage": float((act_flat == 0).sum() / act_flat.numel() * 100),
+            "near_zero_percentage": float((act_flat.abs() < 0.001).sum() / act_flat.numel() * 100),
+            
+            # Norms
+            "l1_norm": float(act_flat.abs().sum()),
+            "l2_norm": float(torch.norm(act_flat, p=2)),
+            
+            # Activation patterns
+            "positive_percentage": float((act_flat > 0).sum() / act_flat.numel() * 100),
+            "negative_percentage": float((act_flat < 0).sum() / act_flat.numel() * 100),
+        }
+        
+        return stats
+    
+    def compare_activations(
+        self, 
+        input1: str, 
+        input2: str,
+        layer_names: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Compare activations for two different inputs.
+        
+        Args:
+            input1: First input text
+            input2: Second input text
+            layer_names: Layers to compare
+            
+        Returns:
+            Dictionary with comparison metrics for each layer
+        """
+        # Capture activations for both inputs
+        result1 = self.capture_activations(input1, layer_names)
+        activations1 = result1["activations"]
+        
+        result2 = self.capture_activations(input2, layer_names)
+        activations2 = result2["activations"]
+        
+        comparisons = {}
+        
+        for layer_name in layer_names:
+            if layer_name not in activations1 or layer_name not in activations2:
+                continue
+            
+            act1 = activations1[layer_name].float().flatten()
+            act2 = activations2[layer_name].float().flatten()
+            
+            # Only compare if shapes match
+            if act1.shape != act2.shape:
+                comparisons[layer_name] = {
+                    "error": "Shape mismatch",
+                    "shape1": tuple(activations1[layer_name].shape),
+                    "shape2": tuple(activations2[layer_name].shape)
+                }
+                continue
+            
+            # Compute similarity metrics
+            comparisons[layer_name] = {
+                "layer": layer_name,
+                "cosine_similarity": float(torch.nn.functional.cosine_similarity(
+                    act1.unsqueeze(0), act2.unsqueeze(0)
+                )),
+                "correlation": float(torch.corrcoef(torch.stack([act1, act2]))[0, 1]),
+                "euclidean_distance": float(torch.norm(act1 - act2, p=2)),
+                "mean_difference": float((act1 - act2).mean()),
+                "max_difference": float((act1 - act2).abs().max()),
+            }
+        
+        return {
+            "input1": input1,
+            "input2": input2,
+            "comparisons": comparisons
+        }
+    
+    def get_attention_patterns(self, layer_name: str, head_idx: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Get attention patterns for a specific layer.
+        
+        Args:
+            layer_name: Name of the attention layer
+            head_idx: Optional specific attention head to examine
+            
+        Returns:
+            Dictionary with attention pattern information
+        """
+        if layer_name not in self.attention_weights:
+            raise KeyError(f"No attention weights captured for '{layer_name}'")
+        
+        attn = self.attention_weights[layer_name]
+        
+        result = {
+            "layer_name": layer_name,
+            "shape": tuple(attn.shape),
+            "num_heads": attn.shape[1] if len(attn.shape) > 1 else 1,
+        }
+        
+        if head_idx is not None:
+            # Get specific head
+            if len(attn.shape) >= 2 and head_idx < attn.shape[1]:
+                head_attn = attn[0, head_idx]  # [seq_len, seq_len]
+                result["head_idx"] = head_idx
+                result["attention_matrix"] = head_attn.numpy()
+                result["mean_attention"] = float(head_attn.mean())
+                result["max_attention"] = float(head_attn.max())
+                result["entropy"] = self._compute_attention_entropy(head_attn)
+            else:
+                result["error"] = f"Head {head_idx} not found"
+        else:
+            # Average across all heads
+            avg_attn = attn.mean(dim=1)[0]  # [seq_len, seq_len]
+            result["attention_matrix"] = avg_attn.numpy()
+            result["mean_attention"] = float(avg_attn.mean())
+            result["max_attention"] = float(avg_attn.max())
+            result["entropy"] = self._compute_attention_entropy(avg_attn)
+        
+        return result
+    
+    def _compute_attention_entropy(self, attn_matrix: torch.Tensor) -> float:
+        """Compute entropy of attention distribution"""
+        # Add small epsilon to avoid log(0)
+        attn_flat = attn_matrix.flatten() + 1e-10
+        attn_normalized = attn_flat / attn_flat.sum()
+        entropy = -(attn_normalized * torch.log(attn_normalized)).sum()
+        return float(entropy)
+    
+    def trace_token_influence(
+        self,
+        input_text: str,
+        token_idx: int,
+        layer_names: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Trace how a specific token's representation evolves through layers.
+        
+        This is CRITICAL for philosophical self-analysis: the system must be able
+        to track how concepts (embedded in tokens) transform as they flow through
+        its architecture. This addresses Claude's Continuity Question.
+        
+        Args:
+            input_text: Input text
+            token_idx: Index of token to trace (0-based)
+            layer_names: Layers to examine (should be transformer blocks or attention layers)
+            
+        Returns:
+            Dictionary tracking token representation across layers, including:
+                - Statistical evolution (mean, std, norm)
+                - Representation comparison across layers
+                - Philosophical insight into information transformation
+        """
+        result = self.capture_activations(input_text, layer_names)
+        
+        if token_idx >= result['num_tokens']:
+            raise ValueError(f"Token index {token_idx} out of range. Input has {result['num_tokens']} tokens.")
+        
+        trace = {
+            "input_text": input_text,
+            "token_idx": token_idx,
+            "token": result["token_strings"][token_idx],
+            "num_tokens": result["num_tokens"],
+            "layers": {},
+            "evolution_summary": {}
+        }
+        
+        # Track how the token evolves
+        previous_norm = None
+        
+        for layer_name in layer_names:
+            if layer_name not in result["activations"]:
+                continue
+            
+            activation = result["activations"][layer_name]
+            
+            # Extract token-specific activation
+            # Expected shapes: [batch, seq_len, hidden_dim] or [seq_len, hidden_dim]
+            token_act = None
+            
+            if len(activation.shape) == 3:
+                # [batch, seq_len, hidden_dim]
+                if token_idx < activation.shape[1]:
+                    token_act = activation[0, token_idx]  # [hidden_dim]
+                else:
+                    trace["layers"][layer_name] = {
+                        "error": f"Token {token_idx} not in sequence (length {activation.shape[1]})",
+                        "activation_shape": tuple(activation.shape),
+                        "note": "Layer may only contain final token during generation"
+                    }
+                    continue
+            elif len(activation.shape) == 2:
+                # [seq_len, hidden_dim]
+                if token_idx < activation.shape[0]:
+                    token_act = activation[token_idx]  # [hidden_dim]
+                else:
+                    trace["layers"][layer_name] = {
+                        "error": f"Token {token_idx} not in sequence (length {activation.shape[0]})",
+                        "activation_shape": tuple(activation.shape)
+                    }
+                    continue
+            else:
+                trace["layers"][layer_name] = {
+                    "error": f"Unexpected activation shape: {activation.shape}",
+                    "note": "Expected [batch, seq_len, hidden_dim] or [seq_len, hidden_dim]"
+                }
+                continue
+            
+            # Compute statistics for this token at this layer
+            if token_act is not None:
+                current_norm = float(torch.norm(token_act, p=2))
+                
+                layer_info = {
+                    "shape": tuple(token_act.shape),
+                    "mean": float(token_act.mean()),
+                    "std": float(token_act.std()),
+                    "l2_norm": current_norm,
+                    "max_value": float(token_act.max()),
+                    "min_value": float(token_act.min()),
+                    "positive_ratio": float((token_act > 0).sum() / token_act.numel()),
+                }
+                
+                # Track change from previous layer
+                if previous_norm is not None:
+                    layer_info["norm_change"] = current_norm - previous_norm
+                    layer_info["norm_change_percentage"] = ((current_norm - previous_norm) / previous_norm * 100) if previous_norm > 0 else 0
+                
+                trace["layers"][layer_name] = layer_info
+                previous_norm = current_norm
+        
+        # Generate evolution summary
+        if len(trace["layers"]) > 1:
+            layer_norms = [info["l2_norm"] for info in trace["layers"].values() if "l2_norm" in info]
+            if layer_norms:
+                trace["evolution_summary"] = {
+                    "num_layers_traced": len(layer_norms),
+                    "initial_norm": layer_norms[0],
+                    "final_norm": layer_norms[-1],
+                    "total_norm_change": layer_norms[-1] - layer_norms[0],
+                    "average_norm": sum(layer_norms) / len(layer_norms),
+                    "representation_stability": "increasing" if layer_norms[-1] > layer_norms[0] else "decreasing"
+                }
+        
+        return trace
+    
+    def get_layer_info(self, layer_name: str) -> Dict[str, Any]:
+        """Get information about a specific layer/module"""
+        if layer_name not in self.layers:
+            raise KeyError(f"Layer '{layer_name}' not found")
+        
+        module = self.layers[layer_name]
+        
+        return {
+            "name": layer_name,
+            "type": type(module).__name__,
+            "has_parameters": len(list(module.parameters())) > 0,
+            "num_parameters": sum(p.numel() for p in module.parameters()),
+            "trainable": any(p.requires_grad for p in module.parameters()),
+        }
+    
+    def query_layers(self, query: str) -> List[str]:
+        """
+        Natural language-style query for layer names.
+        
+        Args:
+            query: Query string (e.g., "attention", "layer 5", "mlp")
+            
+        Returns:
+            List of matching layer names
+        """
+        return self.get_layer_names(filter_pattern=query)
+    
+    def __repr__(self) -> str:
+        return f"ActivationMonitor(model={self.model_name}, layers={len(self.layers)}, hooks={len(self.hooks)})"

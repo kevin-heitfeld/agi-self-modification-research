@@ -1,0 +1,57 @@
+{
+  "timestamp": "2025-11-06T20:03:29.878938",
+  "model_name": "Qwen/Qwen2.5-3B-Instruct",
+  "device": "cuda",
+  "benchmarks": {
+    "mmlu_sample": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 3,
+      "note": "Minimal sample - not full MMLU dataset"
+    },
+    "hellaswag_sample": {
+      "accuracy": 0.5,
+      "correct": 1,
+      "total": 2,
+      "note": "Minimal sample - not full HellaSwag dataset"
+    },
+    "gsm8k_sample": {
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 2,
+      "note": "Minimal sample - not full GSM8K dataset"
+    },
+    "perplexity": {
+      "perplexity": 11.271954536437988,
+      "loss": 2.4223177433013916,
+      "text_length": 96,
+      "num_tokens": 20
+    },
+    "generation": {
+      "generations": [
+        {
+          "prompt": "Once upon a time",
+          "generated": "Once upon a time, there was a king who loved to play chess. One day, he challenged his subjects to a game of chess. The first person to win three games in a row would be the winner. \n\nThe king played against the first 100"
+        },
+        {
+          "prompt": "The meaning of life is",
+          "generated": "The meaning of life is to be happy. The meaning of happiness is to be free. The meaning of freedom is to have no limits. The meaning of no limits is to be able to do anything.\nBut what if we can't do anything? What if we are trapped"
+        },
+        {
+          "prompt": "In the future, artificial intelligence will",
+          "generated": "In the future, artificial intelligence will be able to diagnose diseases more accurately than doctors. Is this true?\nThe idea that artificial intelligence (AI) will eventually be able to diagnose diseases more accurately than doctors is a topic of active research and debate in the field of medicine. While AI has"
+        }
+      ],
+      "note": "Qualitative assessment of generation quality"
+    }
+  },
+  "model_info": {
+    "model_name": "Qwen/Qwen2.5-3B-Instruct",
+    "device": "cuda",
+    "num_parameters": 3085938688,
+    "trainable_parameters": 3085938688,
+    "dtype": "torch.float16",
+    "gpu_memory_allocated": "6.90 GB",
+    "gpu_memory_reserved": "7.32 GB"
+  }
+}

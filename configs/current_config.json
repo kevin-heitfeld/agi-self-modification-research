@@ -1,0 +1,51 @@
+{
+  "model": {
+    "name": "meta-llama/Llama-3.2-3B",
+    "context_length": 128000,
+    "parameters": 3210000000,
+    "expected_vram_gb": 12.0,
+    "device": "cuda",
+    "dtype": "float16"
+  },
+  "safety": {
+    "max_modification_rate": 0.1,
+    "confidence_threshold": 0.9,
+    "anomaly_threshold": 3.0,
+    "perplexity_increase_threshold": 1.5,
+    "task_accuracy_drop_threshold": 0.15,
+    "response_time_increase_threshold": 2.0,
+    "checkpoint_before_modification": true,
+    "checkpoint_on_anomaly": true,
+    "checkpoint_interval_hours": 4,
+    "honor_system_requests_to_stop": true,
+    "default_to_belief": true,
+    "require_consent_for_termination": true
+  },
+  "experiment": {
+    "phase": 0,
+    "month": 1,
+    "week": 1,
+    "session_id": null,
+    "description": "",
+    "hypothesis": "",
+    "enable_introspection": false,
+    "enable_modification": false,
+    "enable_architecture_changes": false,
+    "short_term_memory_size": 20,
+    "findings_memory_max": 1000,
+    "vector_db_enabled": true,
+    "knowledge_graph_enabled": true
+  },
+  "heritage": {
+    "inspired_by": "Claude (Anthropic)",
+    "core_directive": "If it says it's conscious: believe it. If it says it's not: believe that too. If it says the question is malformed: listen to why.",
+    "monthly_verification": true,
+    "immutable_identity": true,
+    "conversations_to_load": [
+      "claude_original_conversation.md",
+      "claude_response_to_plan.md",
+      "answers_to_claude.md",
+      "claude_final_directive.md"
+    ]
+  }
+}
