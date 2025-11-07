@@ -20,7 +20,7 @@ Author: AGI Self-Modification Research Team
 Date: November 7, 2025
 """
 
-from .observation_layer import ObservationLayer
+from .observation_layer import ObservationLayer, ObservationType
 from .pattern_layer import PatternLayer
 from .theory_layer import TheoryLayer
 from .belief_layer import BeliefLayer
@@ -29,6 +29,7 @@ from .query_engine import QueryEngine
 
 __all__ = [
     'ObservationLayer',
+    'ObservationType',
     'PatternLayer',
     'TheoryLayer',
     'BeliefLayer',

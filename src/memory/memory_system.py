@@ -18,6 +18,7 @@ Date: November 7, 2025
 """
 
 import time
+import logging
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
@@ -26,6 +27,14 @@ from .pattern_layer import PatternLayer
 from .theory_layer import TheoryLayer, Theory
 from .belief_layer import BeliefLayer, Belief
 from .query_engine import QueryEngine, QueryResult
+
+# Optional import for weight sharing detection
+try:
+    from ..introspection import WeightInspector
+except ImportError:
+    WeightInspector = None
+
+logger = logging.getLogger(__name__)
 
 
 class MemorySystem:
@@ -104,8 +113,29 @@ class MemorySystem:
         # Track consolidation
         self.last_consolidation = 0.0
         self.consolidation_interval = 3600.0  # 1 hour default
+        
+        # Optional WeightInspector for coupled modification detection
+        self._weight_inspector = None  # Optional WeightInspector instance
 
     # ===== High-level convenience methods =====
+    
+    def set_weight_inspector(self, inspector) -> None:
+        """
+        Set WeightInspector for coupled modification detection.
+        
+        This enables the memory system to detect when modifications affect
+        shared weights (e.g., Qwen2.5's lm_head ↔ embed_tokens coupling).
+        
+        Args:
+            inspector: WeightInspector instance
+            
+        Example:
+            >>> memory = MemorySystem("data/memory")
+            >>> inspector = WeightInspector(model)
+            >>> memory.set_weight_inspector(inspector)
+        """
+        self._weight_inspector = inspector
+        logger.info("WeightInspector attached to MemorySystem for coupled modification detection")
 
     def record_observation(
         self,
@@ -136,6 +166,97 @@ class MemorySystem:
             description=description,
             data=data or {},
             tags=tags or [],
+            importance=importance
+        )
+    
+    def record_modification(
+        self,
+        layer_name: str,
+        modification_data: Dict[str, Any],
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        importance: float = 0.8
+    ) -> str:
+        """
+        Record a modification with weight sharing awareness.
+        
+        This method automatically detects if the modified layer shares weights
+        with other layers and records it as a coupled modification if needed.
+        This prevents the memory system from forming spurious patterns about
+        architectural facts.
+        
+        Args:
+            layer_name: Name of the layer being modified
+            modification_data: Details of the modification
+            description: Human-readable description (auto-generated if None)
+            tags: Additional tags (auto-generated tags will be added)
+            importance: Importance score (default 0.8 for modifications)
+            
+        Returns:
+            Observation ID
+            
+        Example:
+            >>> memory.record_modification(
+            ...     layer_name="model.embed_tokens.weight",
+            ...     modification_data={'change_magnitude': 0.01, 'method': 'gradient'},
+            ...     tags=['experimental', 'phase1']
+            ... )
+        """
+        # Check if WeightInspector is available and layer shares weights
+        shared_layers = []
+        if self._weight_inspector:
+            try:
+                shared_layers = self._weight_inspector.get_shared_layers(layer_name)
+            except Exception as e:
+                logger.warning(f"Could not check weight sharing for {layer_name}: {e}")
+        
+        # Prepare observation data
+        obs_tags = tags or []
+        obs_data = modification_data.copy()
+        obs_data['layer'] = layer_name
+        
+        if shared_layers:
+            # Record as coupled modification
+            category = "coupled_modification"
+            obs_data['coupled_layers'] = shared_layers
+            obs_data['primary_layer'] = layer_name
+            
+            # Generate description
+            if description is None:
+                description = (
+                    f"Modified {layer_name} (coupled with {', '.join(shared_layers)})"
+                )
+            
+            # Add coupled tags
+            obs_tags.extend(['modification', 'coupled', layer_name])
+            obs_tags.extend(shared_layers)
+            
+            # Higher importance - affects multiple components
+            importance = max(importance, 0.9)
+            
+            logger.info(
+                f"Recording coupled modification: {layer_name} affects {shared_layers}"
+            )
+        else:
+            # Record as standard modification
+            category = layer_name
+            
+            # Generate description
+            if description is None:
+                description = f"Modified {layer_name}"
+            
+            # Add standard tags
+            obs_tags.extend(['modification', layer_name])
+        
+        # Remove duplicates from tags
+        obs_tags = list(set(obs_tags))
+        
+        return self.observations.record(
+            obs_type=ObservationType.MODIFICATION,
+            category=category,
+            description=description,
+            data=obs_data,
+            tags=obs_tags,
             importance=importance
         )
 
