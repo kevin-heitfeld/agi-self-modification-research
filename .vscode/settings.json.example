@@ -11,12 +11,18 @@
     "python.envFile": "${workspaceFolder}/.env",
     "python.terminal.activateEnvironment": true,
     "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
-    
+
     // Pylance Settings
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",  // Turn off strict type checking
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.autoImportCompletions": true,
-    
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportGeneralTypeIssues": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportUnboundVariable": "warning",
+        "reportUndefinedVariable": "warning"
+    },
+
     // Pylint Configuration - Disable overly strict rules
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
@@ -24,13 +30,15 @@
         "--disable=C0103,C0114,C0115,C0116",  // Naming, missing docstrings
         "--disable=W0703",  // broad-except (catching Exception)
         "--disable=W1203",  // logging-fstring-interpolation
+        "--disable=W1309",  // f-string-without-interpolation
         "--disable=W0612,W0613",  // unused-variable, unused-argument
         "--disable=R0913,R0914,R0915",  // too-many-arguments/locals/statements
-        "--disable=R0801",  // duplicate-code
+        "--disable=R0801,R0902,R0904",  // duplicate-code, too-many-instance-attributes, too-many-public-methods
+        "--disable=E1101,E1136",  // no-member, unsubscriptable-object (Pylance handles this better)
         "--max-line-length=120",
-        "--good-names=i,j,k,ex,_,f,e,x,y,id,db"
+        "--good-names=i,j,k,ex,_,f,e,x,y,id,db,lr"
     ],
-    
+
     // Formatting
     "editor.formatOnSave": false,
     "editor.rulers": [120],
@@ -39,12 +47,12 @@
         "editor.insertSpaces": true,
         "editor.defaultFormatter": "ms-python.python"
     },
-    
+
     // File associations
     "files.associations": {
         "*.py": "python"
     },
-    
+
     // Testing
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
@@ -52,7 +60,7 @@
         "-v"
     ],
     "python.testing.unittestEnabled": false,
-    
+
     // Files to exclude from search/watch
     "files.exclude": {
         "**/__pycache__": true,
