@@ -19,7 +19,7 @@ from pathlib import Path
 import time
 
 # Add src to path
-src_path = Path(__file__).parent.parent
+src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from memory.memory_system import MemorySystem
@@ -94,7 +94,7 @@ def demonstrate_observation_recording(memory: MemorySystem):
     print(f"\n✓ Recorded {len(obs_ids)} observations")
     
     # Show recent observations
-    recent = memory.observations.get_recent(hours=1)
+    recent = memory.observations.get_recent(limit=10)
     print(f"\nMost recent observations ({len(recent)}):")
     for obs in recent[:5]:
         print(f"  - [{obs.type.value}] {obs.description}")
@@ -109,7 +109,7 @@ def demonstrate_pattern_detection(memory: MemorySystem):
     print("\nAnalyzing observations to detect patterns...")
     
     # Detect patterns
-    patterns_found = memory.patterns.detect_patterns(min_support=2)
+    patterns_found = memory.patterns.detect_patterns()
     
     print(f"\n✓ Detected {patterns_found} patterns")
     
