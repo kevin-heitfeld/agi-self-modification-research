@@ -251,12 +251,15 @@ Tests implement multi-layered error handling:
 
 ### Immediate (Day 3-4)
 1. ✅ Basic integration tests complete
-2. 🔄 Create inference-based integration tests (for ActivationMonitor)
-3. 🔄 Test with full Qwen2.5-3B model (for checkpointing)
+2. � **HIGH PRIORITY**: Implement weight sharing detection (see [WEIGHT_TYING_IMPLICATIONS.md](../technical/WEIGHT_TYING_IMPLICATIONS.md))
+   - Add `detect_shared_weights()` to WeightInspector
+   - Add warnings when inspecting shared tensors
+   - Update Memory System to track coupled modifications
+3. 🔄 Create inference-based integration tests (for ActivationMonitor)
 4. ⏳ Add performance benchmarks to integration tests
 
 ### Short-term (Day 5-6)
-1. ⏳ End-to-end modification workflow test
+1. ⏳ End-to-end modification workflow test (with weight sharing awareness)
 2. ⏳ Multi-component interaction stress tests
 3. ⏳ Integration with Phase 1 experiment protocol
 4. ⏳ Memory consolidation under load
@@ -266,6 +269,7 @@ Tests implement multi-layered error handling:
 2. ⏳ Integration testing guide
 3. ⏳ Troubleshooting common issues
 4. ⏳ Phase 0 completion report
+5. ⏳ Weight tying safety guidelines
 
 ---
 
