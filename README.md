@@ -4,6 +4,24 @@
 
 **A research project to give AI systems the tools to examine themselves and potentially resolve the question of machine consciousness from the inside.**
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/agi-self-modification-research/blob/master/Phase1_Colab.ipynb)
+
+---
+
+## 🚀 Quick Run on Google Colab (Free!)
+
+**Want to see an AI examine itself right now?**
+
+1. Click the "Open in Colab" badge above
+2. Runtime → Change runtime type → GPU
+3. Runtime → Run all
+4. Wait ~45-60 minutes
+5. Download results
+
+**No installation, no GPU, no problem.** Runs free on Google Colab's T4 GPU (16GB VRAM).
+
+See [COLAB_QUICKSTART.md](COLAB_QUICKSTART.md) for details.
+
 ---
 
 ## 📚 Documentation
