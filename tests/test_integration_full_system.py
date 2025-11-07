@@ -41,16 +41,40 @@ class TestFullSystemIntegration(unittest.TestCase):
         """Set up test environment once for all tests."""
         cls.test_dir = tempfile.mkdtemp()
 
-        # Load a small model for testing
+        # Load the full model for testing (from local path)
         print("\nLoading model for integration tests...")
-        cls.model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # Smaller model for faster tests
+        # Find the snapshot directory
+        model_base = Path(__file__).parent.parent / "models" / "models--Qwen--Qwen2.5-3B-Instruct"
+        snapshot_dir = model_base / "snapshots"
+        
+        cls.model_path = None
+        if snapshot_dir.exists():
+            # Get the first (and likely only) snapshot
+            snapshots = list(snapshot_dir.iterdir())
+            if snapshots:
+                cls.model_path = snapshots[0]
+        
+        cls.model_name = "Qwen/Qwen2.5-3B-Instruct"
+        
         try:
-            cls.model = AutoModelForCausalLM.from_pretrained(
-                cls.model_name,
-                torch_dtype=torch.float32,
-                device_map="cpu"  # CPU for consistent tests
-            )
-            cls.tokenizer = AutoTokenizer.from_pretrained(cls.model_name)
+            # Try local path first
+            if cls.model_path and cls.model_path.exists():
+                print(f"Loading from local path: {cls.model_path}")
+                cls.model = AutoModelForCausalLM.from_pretrained(
+                    str(cls.model_path),
+                    torch_dtype=torch.float16,
+                    device_map="auto"
+                )
+                cls.tokenizer = AutoTokenizer.from_pretrained(str(cls.model_path))
+            else:
+                # Fall back to HuggingFace cache
+                print(f"Loading from HuggingFace: {cls.model_name}")
+                cls.model = AutoModelForCausalLM.from_pretrained(
+                    cls.model_name,
+                    torch_dtype=torch.float16,
+                    device_map="auto"
+                )
+                cls.tokenizer = AutoTokenizer.from_pretrained(cls.model_name)
         except Exception as e:
             print(f"Warning: Could not load model: {e}")
             print("Some tests will be skipped")
