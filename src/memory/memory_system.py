@@ -81,24 +81,24 @@ class MemorySystem:
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize layers
+        # Initialize layers - all databases in same directory
         self.observations = ObservationLayer(
-            str(self.storage_dir / "observations")
+            str(self.storage_dir)
         )
 
         self.patterns = PatternLayer(
-            str(self.storage_dir / "patterns"),
+            str(self.storage_dir),
             self.observations
         )
 
         self.theories = TheoryLayer(
-            str(self.storage_dir / "theories"),
+            str(self.storage_dir),
             self.patterns,
             self.observations
         )
 
         self.beliefs = BeliefLayer(
-            str(self.storage_dir / "beliefs"),
+            str(self.storage_dir),
             self.theories
         )
 
