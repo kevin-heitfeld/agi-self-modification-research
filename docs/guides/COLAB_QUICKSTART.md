@@ -6,7 +6,7 @@
 
 ## Option 1: Direct Upload (Easiest)
 
-1. **Download notebook**: Get `Phase1_Colab.ipynb` from this repo
+1. **Download notebook**: Get `notebooks/Phase1_Colab.ipynb` from this repo
 2. **Open Colab**: Go to [colab.research.google.com](https://colab.research.google.com)
 3. **Upload**: File → Upload notebook → Choose `Phase1_Colab.ipynb`
 4. **Update repo URL**: In Cell 3, replace `YOUR_USERNAME` with your GitHub username
@@ -22,7 +22,7 @@ After you push this notebook to your GitHub repo:
 
 1. **Add badge** to your README:
    ```markdown
-   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/agi-self-modification-research/blob/master/Phase1_Colab.ipynb)
+   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/agi-self-modification-research/blob/master/notebooks/Phase1_Colab.ipynb)
    ```
 
 2. **Click badge** - Opens directly in Colab

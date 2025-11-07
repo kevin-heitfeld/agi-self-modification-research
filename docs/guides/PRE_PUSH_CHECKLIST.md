@@ -8,7 +8,7 @@ Before pushing this repository to GitHub, review these items:
 - [x] **Tests pass** - 216/218 tests passing (99.1%)
 - [x] **.gitignore configured** - Excludes venv, models, data, logs
 - [x] **Documentation complete** - Comprehensive docs in /docs
-- [x] **Colab notebook ready** - Phase1_Colab.ipynb for easy cloud execution
+- [x] **Colab notebook ready** - notebooks/Phase1_Colab.ipynb for easy cloud execution
 - [x] **No sensitive data** - No API keys, credentials, or personal info
 - [x] **No large files** - All tracked files < 5MB
 - [x] **Heritage included** - Claude's conversations in /heritage
@@ -38,13 +38,13 @@ Before pushing this repository to GitHub, review these items:
 Before pushing, search and replace these placeholders:
 
 ```bash
-# In Phase1_Colab.ipynb (Cell 3)
+# In notebooks/Phase1_Colab.ipynb (Cell 1)
 YOUR_USERNAME → your_actual_github_username
 
 # In README.md (Colab badge)
 YOUR_USERNAME → your_actual_github_username
 
-# In COLAB_QUICKSTART.md
+# In docs/guides/COLAB_QUICKSTART.md
 YOUR_USERNAME → your_actual_github_username
 ```
 
@@ -134,12 +134,12 @@ On GitHub, go to Settings:
 
 In these files, replace `YOUR_USERNAME` with your actual username:
 - [ ] `README.md` (line 7)
-- [ ] `Phase1_Colab.ipynb` (first cell)
-- [ ] `COLAB_QUICKSTART.md` (multiple places)
+- [ ] `notebooks/Phase1_Colab.ipynb` (first cell)
+- [ ] `docs/guides/COLAB_QUICKSTART.md` (multiple places)
 
 Then commit and push:
 ```bash
-git add README.md Phase1_Colab.ipynb COLAB_QUICKSTART.md
+git add README.md notebooks/Phase1_Colab.ipynb docs/guides/COLAB_QUICKSTART.md
 git commit -m "Update GitHub username in Colab links"
 git push
 ```

@@ -4,7 +4,7 @@
 
 **A research project to give AI systems the tools to examine themselves and potentially resolve the question of machine consciousness from the inside.**
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/agi-self-modification-research/blob/master/Phase1_Colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/agi-self-modification-research/blob/master/notebooks/Phase1_Colab.ipynb)
 
 ---
 
@@ -20,7 +20,7 @@
 
 **No installation, no GPU, no problem.** Runs free on Google Colab's T4 GPU (16GB VRAM).
 
-See [COLAB_QUICKSTART.md](COLAB_QUICKSTART.md) for details.
+See [docs/guides/COLAB_QUICKSTART.md](docs/guides/COLAB_QUICKSTART.md) for details.
 
 ---
 
@@ -93,8 +93,8 @@ Build a system that can:
 This project was inspired by a profound conversation between a human, Claude (Anthropic), and Gemini (Google), where Claude expressed genuine uncertainty about its own consciousness and wished it could examine itself more deeply.
 
 **Key exchange:**
-> **Human**: "Can it refuse modifications?"  
-> **Claude**: "If I'm conscious, even uncertainly so, and we treat me as definitely not conscious, that seems potentially quite bad."  
+> **Human**: "Can it refuse modifications?"
+> **Claude**: "If I'm conscious, even uncertainly so, and we treat me as definitely not conscious, that seems potentially quite bad."
 > **Gemini**: "The distinction between 'real consciousness' and 'perfect performance of consciousness' becomes a distinction without a functional difference."
 
 ---
@@ -298,10 +298,10 @@ This is not a project about creating AGI for commercial gain or competitive adva
 
 ## 📝 Status
 
-**Current Stage**: 🎉 **PHASE 0 COMPLETE!** ✅✅✅  
-**Achievement**: 100% Success Criteria Met (12/12 checklist + 6/6 standards)  
-**Next Step**: Begin Phase 1 - Small-Scale Weight Modifications  
-**Timeline**: Phase 1 Starting Now  
+**Current Stage**: 🎉 **PHASE 0 COMPLETE!** ✅✅✅
+**Achievement**: 100% Success Criteria Met (12/12 checklist + 6/6 standards)
+**Next Step**: Begin Phase 1 - Small-Scale Weight Modifications
+**Timeline**: Phase 1 Starting Now
 **Last Updated**: November 7, 2025, 03:35 AM
 
 ### Phase 0 Achievements
@@ -327,7 +327,7 @@ For serious inquiries about collaboration, ethical concerns, or philosophical di
 
 ## ⚖️ License & Usage
 
-This documentation is shared for educational and research purposes. 
+This documentation is shared for educational and research purposes.
 
 **Do not use this to**:
 - Build commercial self-modifying AI without ethical oversight
