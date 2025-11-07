@@ -23,6 +23,7 @@ Date: November 7, 2025
 
 import json
 import time
+import uuid
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -193,8 +194,8 @@ class ObservationLayer:
         """
         tags = tags or []
 
-        # Generate unique ID
-        obs_id = f"obs_{int(time.time() * 1000000)}"
+        # Generate unique ID using UUID to avoid collisions
+        obs_id = f"obs_{uuid.uuid4().hex[:12]}"
 
         # Create observation
         observation = Observation(

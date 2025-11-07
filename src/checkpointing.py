@@ -23,6 +23,7 @@ Date: November 6, 2025
 
 import os
 import json
+import uuid
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional, Any, Tuple
@@ -156,11 +157,11 @@ class CheckpointManager:
             ... )
         """
         # Generate checkpoint ID
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         if auto_id:
-            # Add microseconds to ensure uniqueness
-            microseconds = datetime.now().strftime('%f')[:3]
-            checkpoint_id = f"checkpoint_{timestamp}_{microseconds}"
+            # Use UUID for guaranteed uniqueness, add short timestamp for readability
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            unique_id = uuid.uuid4().hex[:8]
+            checkpoint_id = f"checkpoint_{timestamp}_{unique_id}"
         else:
             checkpoint_id = description.lower().replace(' ', '_')
         

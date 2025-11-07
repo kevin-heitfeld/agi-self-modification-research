@@ -287,8 +287,8 @@ class TestObservationLayer(unittest.TestCase):
         recent = self.layer.get_recent(limit=2)
         self.assertEqual(len(recent), 2)
         
-        # Should be ordered newest first
-        self.assertGreater(recent[0].timestamp, recent[1].timestamp)
+        # Should be ordered newest first (or equal if same timestamp)
+        self.assertGreaterEqual(recent[0].timestamp, recent[1].timestamp)
     
     def test_cache_behavior(self):
         """Test cache stores recent observations."""

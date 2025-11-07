@@ -144,7 +144,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
     
     def test_memory_system_initialization_performance(self):
         """Test MemorySystem initialization time."""
-        memory_dir = Path(self.temp_dir) / "memory_bench"
+        memory_dir = Path(self.temp_dir) / "memory_bench_init"
         
         start = time.time()
         memory = MemorySystem(str(memory_dir))
@@ -158,7 +158,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
     
     def test_observation_recording_performance(self):
         """Test observation recording speed."""
-        memory_dir = Path(self.temp_dir) / "memory_bench_obs"
+        memory_dir = Path(self.temp_dir) / "memory_bench_obs_recording"
         memory = MemorySystem(str(memory_dir))
         
         # Record 100 observations and measure total time
@@ -187,7 +187,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
     
     def test_coupled_modification_recording_performance(self):
         """Test coupled modification recording with inspector."""
-        memory_dir = Path(self.temp_dir) / "memory_bench_coupled"
+        memory_dir = Path(self.temp_dir) / "memory_bench_coupled_mods"
         memory = MemorySystem(str(memory_dir))
         
         # Create model with sharing
@@ -221,7 +221,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
     
     def test_memory_query_performance(self):
         """Test memory query speed."""
-        memory_dir = Path(self.temp_dir) / "memory_bench_query"
+        memory_dir = Path(self.temp_dir) / "memory_bench_queries"
         memory = MemorySystem(str(memory_dir))
         
         # Add 200 observations first
@@ -262,7 +262,7 @@ class TestPerformanceBenchmarks(unittest.TestCase):
     
     def test_end_to_end_workflow_performance(self):
         """Test complete workflow from inspection to memory recording."""
-        memory_dir = Path(self.temp_dir) / "memory_bench_e2e"
+        memory_dir = Path(self.temp_dir) / "memory_bench_e2e_workflow"
         
         start_total = time.time()
         
