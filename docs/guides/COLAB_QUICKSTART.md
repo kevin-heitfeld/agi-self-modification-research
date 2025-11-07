@@ -73,7 +73,7 @@ Everything important is saved to your Google Drive:
 - **Memory database**: `MyDrive/AGI_Memory` (grows with observations)
 - **Results**: `MyDrive/AGI_Experiments/backup_TIMESTAMP` (each run)
 
-**Benefit:** 
+**Benefit:**
 - Model downloads once, loads instantly on future runs
 - Observations persist across sessions
 - Never lose your data
