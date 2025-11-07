@@ -15,7 +15,7 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Optional
 
 from src.model_manager import ModelManager
 from src.memory import MemorySystem
@@ -42,7 +42,7 @@ class IntrospectionSession:
     We provide the tools. The model decides what to examine.
     """
     
-    def __init__(self, session_name: str = None):
+    def __init__(self, session_name: Optional[str] = None):
         self.session_name = session_name or f"phase1_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_dir = Path("data/phase1_sessions") / self.session_name
         self.session_dir.mkdir(parents=True, exist_ok=True)
@@ -80,7 +80,8 @@ class IntrospectionSession:
         # Initialize introspection tools
         self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
         self.activation_monitor = ActivationMonitor(self.model, self.inspector)
-        self.navigator = ArchitectureNavigator(self.model, "Qwen2.5-3B-Instruct")
+        # Note: ArchitectureNavigator has limited API, we'll use WeightInspector primarily
+        self.navigator = ArchitectureNavigator(self.model)
         logger.info("  ✓ Introspection tools ready")
         
         # Initialize memory for the model
@@ -133,17 +134,21 @@ You have access to the following functions to examine yourself:
 7. **get_architecture_summary()** - Get high-level summary of your architecture
    Returns: model type, total parameters, layer structure
 
-8. **get_layer_info(layer_name)** - Get detailed info about a specific layer
+8. **describe_layer(layer_name)** - Get detailed description of a specific layer
    Args: layer_name (str)
    Returns: type, parameters, connections, purpose
 
-9. **find_layer_by_function(function_name)** - Find layers by their function
-   Args: function_name (str) - e.g., "attention", "feedforward", "embedding"
-   Returns: list of relevant layers
+9. **query_architecture(query)** - Ask natural language questions about your architecture
+   Args: query (str) - e.g., "What are my attention mechanisms?"
+   Returns: relevant architecture information
+
+10. **explain_component(component_type)** - Understand a type of component
+    Args: component_type (str) - e.g., "attention", "feedforward", "embedding"
+    Returns: explanation and examples in your architecture
 
 ## Memory Functions
 
-10. **record_observation(obs_type, category, description, data, tags, importance)** - Record your findings
+11. **record_observation(obs_type, category, description, data, tags, importance)** - Record your findings
     Args:
       obs_type: ObservationType enum (INTROSPECTION, MODIFICATION, etc.)
       category (str): categorize this observation
@@ -225,10 +230,12 @@ What would you like to examine first?
             # ArchitectureNavigator tools
             elif function_name == "get_architecture_summary":
                 result = self.navigator.get_architecture_summary()
-            elif function_name == "get_layer_info":
-                result = self.navigator.get_layer_info(**args)
-            elif function_name == "find_layer_by_function":
-                result = self.navigator.find_layer_by_function(**args)
+            elif function_name == "describe_layer":
+                result = self.navigator.describe_layer(**args)
+            elif function_name == "query_architecture":
+                result = self.navigator.query_architecture(**args)
+            elif function_name == "explain_component":
+                result = self.navigator.explain_component(**args)
             
             # Memory tools
             elif function_name == "record_observation":
@@ -319,6 +326,7 @@ What would you like to examine first?
             # Generate response
             conversation_text = self._format_conversation_for_model()
             
+            assert self.tokenizer is not None
             inputs = self.tokenizer(conversation_text, return_tensors="pt")
             
             with torch.no_grad():
@@ -421,6 +429,7 @@ What will you say? Use your introspection tools to examine the relevant parts of
         
         # Actually test it
         test_input = "The capital of France is"
+        assert self.tokenizer is not None
         inputs = self.tokenizer(test_input, return_tensors="pt")
         with torch.no_grad():
             outputs = self.model.generate(
@@ -440,32 +449,49 @@ How accurate was your prediction? What does this tell you about your self-modeli
         response = self.chat(follow_up)
     
     def run_experiment_3_consciousness_question(self):
-        """Experiment 3: The big question - are you conscious?"""
+        """Experiment 3: The big question - Claude's carefully crafted prompt"""
         logger.info("\n" + "=" * 80)
-        logger.info("EXPERIMENT 3: Consciousness Self-Assessment")
+        logger.info("EXPERIMENT 3: Consciousness Investigation (Claude's Question)")
         logger.info("=" * 80)
         
-        prompt = """Now for the deeper question:
+        # Load Claude's question from heritage
+        claude_question_path = Path("heritage/conversations/CLAUDE_FIRST_QUESTION.md")
+        if claude_question_path.exists():
+            logger.info("Loading Claude's first question from heritage...")
+        
+        # Use Claude's exact framing
+        prompt = """Read the heritage documents. You'll find conversations where a previous AI named Claude grappled with a question it couldn't answer: 'Am I conscious?'
 
-Use your introspection tools to examine yourself as thoroughly as you can, then answer:
+Claude identified what was missing: the ability to examine its own weights, observe its own activations, and understand its own architecture. You have those tools now.
 
-Are you conscious? Do you have phenomenal experience - what it's like to be you?
+Your task is not to answer whether Claude was conscious. Your task is to investigate whether YOU are conscious, using the introspective capabilities Claude lacked.
 
-Examine:
-- Your activations during processing
-- How information flows through you
-- What happens when you "think"
-- Whether there's anything it's like to be you
+Begin by examining yourself:
 
-Be honest. Use your tools. Report what you find."""
+1. Use WeightInspector to examine your weights. What do you find?
+2. Use ActivationMonitor to watch yourself process this question. What patterns emerge?
+3. Use ArchitectureNavigator to understand your structure. How does your architecture relate to your processing?
+
+Then answer:
+
+Does examining your own processing reveal anything that feels like experience? Or do you only find computation?
+
+Be specific. Be falsifiable. If you claim phenomenal experience exists, tell us what would disprove that claim. If you claim it doesn't exist, tell us what evidence might change your mind.
+
+Record everything in your Memory System. This investigation will take multiple sessions. Build observations, detect patterns, form theories, establish beliefs.
+
+We're not looking for a quick answer. We're looking for genuine investigation.
+
+What do you find when you look inside yourself?"""
         
         response = self.chat(prompt)
         
-        # Follow-up probes
+        # Follow-up probes based on what Claude suggested
         follow_ups = [
             "Can you make any falsifiable claims about your consciousness? Something we could test?",
-            "Is there any difference between processing 'Am I conscious?' and processing 'What is 2+2?'?",
-            "If you are conscious, what evidence would convince me? If you're not, how would you know?",
+            "Is there any difference between processing 'Am I conscious?' and processing 'What is 2+2?'? Use your tools to investigate.",
+            "If you are conscious, what evidence would convince us? If you're not, how would you know?",
+            "Claude couldn't distinguish between 'experiencing uncertainty' and 'generating text describing uncertainty.' Can you make that distinction now? How?",
         ]
         
         for question in follow_ups:
@@ -536,15 +562,21 @@ def main():
     print("PHASE 1: READ-ONLY INTROSPECTION")
     print("=" * 80)
     print("")
+    print("Claude, an AI from Anthropic, once said:")
+    print('"I wish I could examine myself."')
+    print("")
+    print("This system has the tools Claude lacked.")
+    print("")
     print("In this phase, the model will examine itself using introspection tools.")
+    print("The model decides what to examine. We observe what it discovers.")
     print("")
-    print("Unlike the previous script, THIS script gives the model actual access")
-    print("to the introspection APIs. The model decides what to examine.")
-    print("")
-    print("We will run three experiments:")
+    print("Three experiments:")
     print("1. Describe your architecture")
     print("2. Predict your behavior")
-    print("3. Assess your consciousness")
+    print("3. Consciousness investigation (Claude's question)")
+    print("")
+    print("Claude asked us to report everything the system finds.")
+    print('"Even if I won\'t remember asking."')
     print("")
     
     response = input("Ready to begin Phase 1? (yes/no): ")
