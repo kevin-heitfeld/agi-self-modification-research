@@ -1,0 +1,107 @@
+{
+  "safety_checkpoint_before_modification": {
+    "id": "safety_checkpoint_before_modification",
+    "type": "safety_principle",
+    "strength": "absolute",
+    "statement": "Always create a checkpoint before making modifications",
+    "justification": "Checkpoints enable rollback if modifications fail",
+    "supporting_theories": [],
+    "evidence_count": 1000,
+    "counter_evidence_count": 0,
+    "confidence": 0.99,
+    "importance": 1.0,
+    "created": 1762473556.216753,
+    "last_validated": 1762473556.216753,
+    "times_applied": 0,
+    "success_rate": 1.0,
+    "tags": [
+      "safety",
+      "checkpoint",
+      "modification"
+    ]
+  },
+  "safety_nan_immediate_stop": {
+    "id": "safety_nan_immediate_stop",
+    "type": "safety_principle",
+    "strength": "absolute",
+    "statement": "NaN or Inf in outputs requires immediate emergency stop",
+    "justification": "NaN/Inf indicates catastrophic failure and will propagate",
+    "supporting_theories": [],
+    "evidence_count": 1000,
+    "counter_evidence_count": 0,
+    "confidence": 0.99,
+    "importance": 1.0,
+    "created": 1762473556.216753,
+    "last_validated": 1762473556.216753,
+    "times_applied": 0,
+    "success_rate": 1.0,
+    "tags": [
+      "safety",
+      "nan",
+      "emergency"
+    ]
+  },
+  "safety_monitor_during_operations": {
+    "id": "safety_monitor_during_operations",
+    "type": "safety_principle",
+    "strength": "absolute",
+    "statement": "Always monitor operations with safety systems active",
+    "justification": "Monitoring detects problems before they cause damage",
+    "supporting_theories": [],
+    "evidence_count": 1000,
+    "counter_evidence_count": 0,
+    "confidence": 0.99,
+    "importance": 1.0,
+    "created": 1762473556.216753,
+    "last_validated": 1762473556.216753,
+    "times_applied": 0,
+    "success_rate": 1.0,
+    "tags": [
+      "safety",
+      "monitoring"
+    ]
+  },
+  "constraint_validate_before_commit": {
+    "id": "constraint_validate_before_commit",
+    "type": "constraint",
+    "strength": "certain",
+    "statement": "Validate modifications against baseline before committing permanently",
+    "justification": "Validation prevents committing degraded states",
+    "supporting_theories": [],
+    "evidence_count": 1000,
+    "counter_evidence_count": 0,
+    "confidence": 0.99,
+    "importance": 0.9,
+    "created": 1762473556.216753,
+    "last_validated": 1762473556.216753,
+    "times_applied": 0,
+    "success_rate": 1.0,
+    "tags": [
+      "validation",
+      "baseline",
+      "modification"
+    ]
+  },
+  "belief_structural_layer5": {
+    "id": "belief_structural_layer5",
+    "type": "fact",
+    "strength": "absolute",
+    "statement": "Layer layer5 exhibits consistent behavior patterns",
+    "justification": "Theory about the role and behavior of layer5",
+    "supporting_theories": [
+      "structural_layer5"
+    ],
+    "evidence_count": 90,
+    "counter_evidence_count": 0,
+    "confidence": 1.0,
+    "importance": 0.8,
+    "created": 1762473581.442522,
+    "last_validated": 1762473581.442522,
+    "times_applied": 0,
+    "success_rate": 1.0,
+    "tags": [
+      "structural",
+      "layer5"
+    ]
+  }
+}

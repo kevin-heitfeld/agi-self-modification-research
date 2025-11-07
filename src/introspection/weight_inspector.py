@@ -44,8 +44,13 @@ class WeightInspector:
         # Cache for weight statistics (computed on-demand)
         self._stats_cache = {}
         
+        # Detect shared weights on initialization
+        self._shared_weights = self._detect_shared_weights()
+        
         logger.info(f"WeightInspector initialized for {model_name}")
         logger.info(f"Found {len(self.layers)} named parameters")
+        if self._shared_weights:
+            logger.warning(f"Detected {len(self._shared_weights)} groups of shared weights")
     
     def _build_layer_registry(self) -> Dict[str, torch.nn.Parameter]:
         """Build a registry of all named parameters in the model"""
@@ -53,6 +58,110 @@ class WeightInspector:
         for name, param in self.model.named_parameters():
             registry[name] = param
         return registry
+    
+    def _detect_shared_weights(self) -> Dict[int, List[str]]:
+        """
+        Detect weight tensors that share memory.
+        
+        This checks ALL module attributes (not just named_parameters) to find
+        weight sharing, since PyTorch deduplicates shared parameters in named_parameters().
+        
+        Returns:
+            Dict mapping data_ptr -> list of layer names sharing that memory
+            Only includes groups with multiple layers (actual sharing)
+        """
+        ptr_to_names = {}
+        
+        # Check all module attributes to find weight sharing
+        for module_name, module in self.model.named_modules():
+            for attr_name in dir(module):
+                try:
+                    attr = getattr(module, attr_name)
+                    if isinstance(attr, torch.nn.Parameter):
+                        # Build full parameter name
+                        if module_name:
+                            full_name = f"{module_name}.{attr_name}"
+                        else:
+                            full_name = attr_name
+                        
+                        ptr = attr.data_ptr()
+                        if ptr not in ptr_to_names:
+                            ptr_to_names[ptr] = []
+                        
+                        # Avoid duplicates
+                        if full_name not in ptr_to_names[ptr]:
+                            ptr_to_names[ptr].append(full_name)
+                except (AttributeError, TypeError):
+                    # Skip non-parameter attributes
+                    continue
+        
+        # Return only groups with multiple layers (actual sharing)
+        return {
+            ptr: names for ptr, names in ptr_to_names.items()
+            if len(names) > 1
+        }
+    
+    def get_shared_weights(self) -> Dict[str, List[str]]:
+        """
+        Get information about weight sharing in the model.
+        
+        Returns:
+            Dictionary where each key is a representative layer name and
+            value is a list of all layers sharing that tensor.
+            
+        Example:
+            >>> inspector.get_shared_weights()
+            {
+                'lm_head.weight': ['lm_head.weight', 'model.embed_tokens.weight'],
+            }
+        """
+        if not self._shared_weights:
+            return {}
+        
+        # Convert from ptr-based to name-based for easier use
+        result = {}
+        for ptr, names in self._shared_weights.items():
+            # Use first name as the key
+            result[names[0]] = names
+        
+        return result
+    
+    def get_shared_layers(self, layer_name: str) -> List[str]:
+        """
+        Get list of layers that share memory with the given layer.
+        
+        Args:
+            layer_name: Name of the layer to check
+            
+        Returns:
+            List of layer names sharing the same tensor (excluding the input layer)
+            Empty list if the layer doesn't share memory with any other layers
+            
+        Example:
+            >>> inspector.get_shared_layers('lm_head.weight')
+            ['model.embed_tokens.weight']
+        """
+        # First check if it's in the standard layer registry
+        if layer_name in self.layers:
+            param = self.layers[layer_name]
+            ptr = param.data_ptr()
+        else:
+            # Maybe it's a name we detected but isn't in named_parameters
+            # Try to find it in the shared weights
+            ptr = None
+            for p, names in self._shared_weights.items():
+                if layer_name in names:
+                    ptr = p
+                    break
+            
+            if ptr is None:
+                raise KeyError(f"Layer '{layer_name}' not found")
+        
+        if ptr not in self._shared_weights:
+            return []
+        
+        # Return all layers except the one we're checking
+        return [name for name in self._shared_weights[ptr] if name != layer_name]
     
     def get_layer_names(self, filter_pattern: Optional[str] = None) -> List[str]:
         """
@@ -173,6 +282,17 @@ class WeightInspector:
             # Percentiles (computed efficiently)
             "percentiles": self._compute_percentiles(weights_flat)
         }
+        
+        # Add shared weight warning if applicable
+        shared_layers = self.get_shared_layers(layer_name)
+        if shared_layers:
+            stats['shared_with'] = shared_layers
+            stats['warning'] = (
+                f"⚠️  WEIGHT SHARING DETECTED: This layer shares memory with "
+                f"{', '.join(shared_layers)}. Modifying this layer will also "
+                f"modify the shared layers!"
+            )
+            logger.warning(f"Layer '{layer_name}' shares weights with: {shared_layers}")
         
         # Cache results
         self._stats_cache[layer_name] = stats

@@ -1,0 +1,145 @@
+{
+  "seq_-2095116506904605407": {
+    "id": "seq_-2095116506904605407",
+    "type": "sequential",
+    "name": "perplexity \u2192 layer5",
+    "description": "'perplexity' is typically followed by 'layer5'",
+    "components": {
+      "first": [
+        "performance",
+        "perplexity"
+      ],
+      "second": [
+        "modification",
+        "layer5"
+      ],
+      "avg_time_gap": -0.002492209275563558
+    },
+    "support_count": 24,
+    "confidence": 1.0,
+    "first_seen": 1762473556.2197542,
+    "last_seen": 1762473579.3994763,
+    "evidence": [
+      "obs_1762473556235963",
+      "obs_1762473556232272",
+      "obs_1762473579384476",
+      "obs_1762473579399476",
+      "obs_1762473579395475",
+      "obs_1762473556245518",
+      "obs_1762473579389476",
+      "obs_1762473579372477",
+      "obs_1762473579379476",
+      "obs_1762473556241485"
+    ],
+    "tags": [
+      "sequential",
+      "perplexity",
+      "layer5"
+    ]
+  },
+  "seq_8489627143837319673": {
+    "id": "seq_8489627143837319673",
+    "type": "sequential",
+    "name": "layer5 \u2192 perplexity",
+    "description": "'layer5' is typically followed by 'perplexity'",
+    "components": {
+      "first": [
+        "modification",
+        "layer5"
+      ],
+      "second": [
+        "performance",
+        "perplexity"
+      ],
+      "avg_time_gap": -0.002902674674987793
+    },
+    "support_count": 20,
+    "confidence": 0.909090909090909,
+    "first_seen": 1762473556.2237637,
+    "last_seen": 1762473579.397475,
+    "evidence": [
+      "obs_1762473556243485",
+      "obs_1762473556229272",
+      "obs_1762473556238972",
+      "obs_1762473556223763",
+      "obs_1762473579392475",
+      "obs_1762473579376475",
+      "obs_1762473579387477",
+      "obs_1762473556234272",
+      "obs_1762473579397475",
+      "obs_1762473579382476"
+    ],
+    "tags": [
+      "sequential",
+      "layer5",
+      "perplexity"
+    ]
+  },
+  "causal_layer5_perplexity": {
+    "id": "causal_layer5_perplexity",
+    "type": "causal",
+    "name": "layer5 \u2192 perplexity change",
+    "description": "Modifying 'layer5' affects 'perplexity' by ~-2.6%",
+    "components": {
+      "modification_type": "layer5",
+      "metric": "perplexity",
+      "average_change_percent": -2.631578947368412
+    },
+    "support_count": 16,
+    "confidence": 0.6999999999999998,
+    "first_seen": 1762473579.368309,
+    "last_seen": 1762473556.2197542,
+    "evidence": [
+      "obs_1762473556243485",
+      "obs_1762473556229272",
+      "obs_1762473556238972",
+      "obs_1762473579372477",
+      "obs_1762473556223763",
+      "obs_1762473556219754",
+      "obs_1762473579368309",
+      "obs_1762473556234272",
+      "obs_1762473556217752"
+    ],
+    "tags": [
+      "causal",
+      "layer5",
+      "perplexity"
+    ]
+  },
+  "threshold_perplexity_checkpoint": {
+    "id": "threshold_perplexity_checkpoint",
+    "type": "threshold",
+    "name": "perplexity threshold \u2192 checkpoint",
+    "description": "When 'perplexity' reaches 4.00, 'checkpoint' often follows",
+    "components": {
+      "metric": "perplexity",
+      "threshold_value": 4.0,
+      "event_type": "checkpoint"
+    },
+    "support_count": 36,
+    "confidence": 0.6499999999999997,
+    "first_seen": 1762473579.3994763,
+    "last_seen": 1762473556.2474904,
+    "evidence": [
+      "obs_1762473556235963",
+      "obs_1762473556226262",
+      "obs_1762473579384476",
+      "obs_1762473579399476",
+      "obs_1762473556219754",
+      "obs_1762473556247490",
+      "obs_1762473579395475",
+      "obs_1762473556245518",
+      "obs_1762473579372477",
+      "obs_1762473579389476",
+      "obs_1762473579402478",
+      "obs_1762473556241485",
+      "obs_1762473556232272",
+      "obs_1762473579379476"
+    ],
+    "tags": [
+      "threshold",
+      "perplexity",
+      "checkpoint"
+    ]
+  }
+}
