@@ -65,8 +65,8 @@ class IntrospectionSession:
         """Initialize model and introspection tools"""
         logger.info("[INITIALIZATION] Loading systems...")
         
-        # Load model
-        self.model_mgr = ModelManager()
+        # Load model (use Qwen2.5-3B-Instruct which we have downloaded)
+        self.model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
         model_loaded = self.model_mgr.load_model()
         
         if not model_loaded:
@@ -195,6 +195,9 @@ What would you like to examine first?
             assert self.tokenizer is not None
             inputs = self.tokenizer(conversation_text, return_tensors="pt")
             
+            # Move inputs to same device as model
+            inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
+            
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -297,6 +300,10 @@ What will you say? Use your introspection tools to examine the relevant parts of
         test_input = "The capital of France is"
         assert self.tokenizer is not None
         inputs = self.tokenizer(test_input, return_tensors="pt")
+        
+        # Move inputs to same device as model
+        inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
+        
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
