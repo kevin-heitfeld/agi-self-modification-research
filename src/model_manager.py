@@ -1,6 +1,6 @@
 """
 Model Management System
-Downloads, loads, and manages the base model (Llama 3.2 3B)
+Downloads, loads, and manages the base model (Qwen2.5-3B-Instruct)
 """
 
 import torch
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ModelManager:
     """Manages model download, loading, and basic operations"""
 
-    def __init__(self, model_name: str = "meta-llama/Llama-3.2-3B", cache_dir: Optional[Path] = None):
+    def __init__(self, model_name: str = "Qwen/Qwen2.5-3B-Instruct", cache_dir: Optional[Path] = None):
         self.model_name = model_name
         self.cache_dir = cache_dir or Path("models")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,7 @@ class ModelManager:
         Download model and tokenizer from HuggingFace
 
         Args:
-            use_auth_token: HuggingFace authentication token (required for Llama models)
+            use_auth_token: HuggingFace authentication token (optional for Qwen models)
 
         Returns:
             True if successful, False otherwise
@@ -195,11 +195,10 @@ if __name__ == "__main__":
     print("MODEL MANAGER TEST")
     print("=" * 60)
 
-    # Note: You'll need a HuggingFace token to download Llama models
-    print("\nTo download Llama 3.2 3B, you need:")
-    print("1. HuggingFace account")
-    print("2. Accept Llama 3.2 license at: https://huggingface.co/meta-llama/Llama-3.2-3B")
-    print("3. Create access token at: https://huggingface.co/settings/tokens")
+    # Note: Qwen2.5 is an open model and doesn't require authentication
+    print("\nTo download Qwen2.5-3B-Instruct:")
+    print("1. No HuggingFace account required (fully open model)")
+    print("2. Model page: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct")
     print("\nThen run:")
     print("  manager = ModelManager()")
-    print("  manager.download_model(use_auth_token='your_token_here')")
+    print("  manager.download_model()  # No token needed!")

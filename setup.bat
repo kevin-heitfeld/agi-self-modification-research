@@ -47,18 +47,20 @@ if %errorlevel% neq 0 (
     echo.
     echo Please confirm your CUDA version:
     echo   [1] CUDA 11.8 (cu118)
-    echo   [2] CUDA 12.1 (cu121) - Recommended
-    echo   [3] CPU only (not recommended)
+    echo   [2] CUDA 12.4 (cu124) - Recommended (works with CUDA 12.x and 13.x)
+    echo   [3] CUDA 12.1 (cu121)
+    echo   [4] CPU only (not recommended)
     echo.
-    set /p cuda_choice="Enter choice [1-3]: "
-    
+    set /p cuda_choice="Enter choice [1-4]: "
+
     if "%cuda_choice%"=="1" set CUDA_VERSION=cu118
-    if "%cuda_choice%"=="2" set CUDA_VERSION=cu121
-    if "%cuda_choice%"=="3" set CUDA_VERSION=cpu
-    
+    if "%cuda_choice%"=="2" set CUDA_VERSION=cu124
+    if "%cuda_choice%"=="3" set CUDA_VERSION=cu121
+    if "%cuda_choice%"=="4" set CUDA_VERSION=cpu
+
     if not defined CUDA_VERSION (
-        echo Invalid choice, using cu121 (CUDA 12.1)
-        set CUDA_VERSION=cu121
+        echo Invalid choice, using cu124 (CUDA 12.4)
+        set CUDA_VERSION=cu124
     )
 )
 
@@ -112,6 +114,7 @@ set TMPDIR=D:\temp
 set TEMP=D:\temp
 set TMP=D:\temp
 echo.
+
 REM Install PyTorch with appropriate CUDA version
 echo [6/8] Installing PyTorch (this may take several minutes^)...
 if "%CUDA_VERSION%"=="cpu" (
