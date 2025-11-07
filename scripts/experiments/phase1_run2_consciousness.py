@@ -15,11 +15,17 @@ Author: AGI Self-Modification Research
 Date: November 7, 2025
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 import gc
 import torch
 import json
 import logging
-from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
