@@ -20,7 +20,7 @@ logging.basicConfig(
 
 def main():
     print("=" * 70)
-    print("PHI-3.5-MINI-INSTRUCT MODEL DOWNLOAD")
+    print("QWEN2.5-3B-INSTRUCT MODEL DOWNLOAD")
     print("=" * 70)
     print()
 
@@ -28,10 +28,10 @@ def main():
     print("No authentication required - fully open model!")
     print()
     print("MODEL INFO:")
-    print("- Model: Microsoft Phi-3.5-mini-instruct")
-    print("- Size: ~7.5GB download")
-    print("- Parameters: 3.82 billion")
-    print("- License: MIT License (fully open)")
+    print("- Model: Qwen/Qwen2.5-3B-Instruct")
+    print("- Size: ~6GB download")
+    print("- Parameters: 3.09 billion")
+    print("- License: Apache 2.0 (fully open)")
     print()
 
     input("Press Enter to start download...")
