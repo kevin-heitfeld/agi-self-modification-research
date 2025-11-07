@@ -256,7 +256,10 @@ Tests implement multi-layered error handling:
    - ✅ Add warnings when inspecting shared tensors
    - ✅ Test suite created: 11/11 tests passing (100%)
    - ✅ Detects Qwen2.5 lm_head ↔ embed_tokens sharing
-   - ⏳ Update Memory System to track coupled modifications (MEDIUM PRIORITY)
+   - ✅ Update Memory System to track coupled modifications (commit b1345a9)
+     - ✅ `set_weight_inspector()` method
+     - ✅ `record_modification()` with automatic coupling detection
+     - ✅ 11/11 tests passing for coupled tracking
 3. 🔄 Create inference-based integration tests (for ActivationMonitor)
 4. ⏳ Add performance benchmarks to integration tests
 
