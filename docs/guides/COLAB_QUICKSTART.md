@@ -100,6 +100,9 @@ Everything important is saved to your Google Drive:
 ### "No GPU available"
 **Fix:** Runtime → Change runtime type → GPU → Save, then restart
 
+### "AttributeError: np.float_ was removed in NumPy 2.0"
+**Fix:** Already handled! The notebook downgrades NumPy automatically. If you see this, restart the runtime and re-run Cell 4 (Install Dependencies).
+
 ### "Session disconnected"
 **Fix:** Results auto-saved to Drive. Re-run from that cell.
 
