@@ -24,6 +24,7 @@ Date: November 7, 2025
 
 import json
 import time
+import sqlite3
 from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -310,10 +311,11 @@ class TheoryLayer:
         self.pattern_layer = pattern_layer
         self.observation_layer = observation_layer
 
-        # Theory storage
-        self.theories_file = self.storage_dir / "theories.json"
-        self.theories: Dict[str, Theory] = {}
-        self._load_theories()
+        # Theory storage - SQLite database
+        self.db_path = self.storage_dir / "theories.db"
+        self.conn = sqlite3.connect(str(self.db_path))
+        self.conn.row_factory = sqlite3.Row
+        self._init_database()
 
         # Theory builders
         self.builders = [
@@ -324,29 +326,85 @@ class TheoryLayer:
 
         self.last_build_time = 0.0
 
-    def _load_theories(self):
-        """Load theories from storage."""
-        if self.theories_file.exists():
-            with open(self.theories_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.theories = {
-                    tid: Theory.from_dict(tdata)
-                    for tid, tdata in data.items()
-                }
-
-    def _save_theories(self):
-        """Save theories to storage."""
-        with open(self.theories_file, 'w', encoding='utf-8') as f:
-            json.dump(
-                {tid: theory.to_dict() for tid, theory in self.theories.items()},
-                f,
-                indent=2
+    def _init_database(self):
+        """Initialize the SQLite database schema."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS theories (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                hypothesis TEXT NOT NULL,
+                supporting_patterns TEXT NOT NULL,
+                evidence_count INTEGER NOT NULL,
+                counter_evidence_count INTEGER NOT NULL,
+                confidence REAL NOT NULL,
+                predictive_power REAL NOT NULL,
+                created REAL NOT NULL,
+                last_updated REAL NOT NULL,
+                predictions TEXT NOT NULL,
+                tags TEXT NOT NULL
             )
+        """)
+
+        # Create indexes for common queries
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_theory_type ON theories(type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_theory_confidence ON theories(confidence)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_theory_evidence ON theories(evidence_count)")
+
+        self.conn.commit()
+
+    def _save_theory(self, theory: Theory):
+        """Save a single theory to the database."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO theories
+            (id, type, name, description, hypothesis, supporting_patterns, evidence_count,
+             counter_evidence_count, confidence, predictive_power, created, last_updated,
+             predictions, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            theory.id,
+            theory.type.value,
+            theory.name,
+            theory.description,
+            theory.hypothesis,
+            json.dumps(theory.supporting_patterns),
+            theory.evidence_count,
+            theory.counter_evidence_count,
+            theory.confidence,
+            theory.predictive_power,
+            theory.created,
+            theory.last_updated,
+            json.dumps(theory.predictions),
+            json.dumps(theory.tags)
+        ))
+        self.conn.commit()
+
+    def _load_theory_from_row(self, row: sqlite3.Row) -> Theory:
+        """Convert a database row to a Theory object."""
+        return Theory(
+            id=row['id'],
+            type=TheoryType(row['type']),
+            name=row['name'],
+            description=row['description'],
+            hypothesis=row['hypothesis'],
+            supporting_patterns=json.loads(row['supporting_patterns']),
+            evidence_count=row['evidence_count'],
+            counter_evidence_count=row['counter_evidence_count'],
+            confidence=row['confidence'],
+            predictive_power=row['predictive_power'],
+            created=row['created'],
+            last_updated=row['last_updated'],
+            predictions=json.loads(row['predictions']),
+            tags=json.loads(row['tags'])
+        )
 
     def build_theories(self):
         """
         Build theories from available patterns.
-        
+
         Returns:
             Number of new theories built
         """
@@ -367,12 +425,17 @@ class TheoryLayer:
 
         # Track new theories added
         new_count = 0
-        
+
         # Merge with existing theories
         for new_theory in new_theories:
-            if new_theory.id in self.theories:
+            # Check if theory already exists
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM theories WHERE id = ?", (new_theory.id,))
+            existing_row = cursor.fetchone()
+
+            if existing_row:
                 # Update existing theory
-                existing = self.theories[new_theory.id]
+                existing = self._load_theory_from_row(existing_row)
 
                 # Merge supporting patterns
                 all_patterns = set(existing.supporting_patterns + new_theory.supporting_patterns)
@@ -388,19 +451,24 @@ class TheoryLayer:
                     existing.confidence = existing.evidence_count / total_evidence
 
                 existing.last_updated = time.time()
+                self._save_theory(existing)
             else:
                 # Add new theory
-                self.theories[new_theory.id] = new_theory
+                self._save_theory(new_theory)
                 new_count += 1
 
         self.last_build_time = time.time()
-        self._save_theories()
-        
+
         return new_count
 
     def get_theory(self, theory_id: str) -> Optional[Theory]:
         """Get a specific theory by ID."""
-        return self.theories.get(theory_id)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM theories WHERE id = ?", (theory_id,))
+        row = cursor.fetchone()
+        if row:
+            return self._load_theory_from_row(row)
+        return None
 
     def get_theories(
         self,
@@ -421,22 +489,32 @@ class TheoryLayer:
         Returns:
             List of matching theories
         """
-        results = list(self.theories.values())
+        # Build SQL query with filters
+        query = "SELECT * FROM theories WHERE 1=1"
+        params = []
 
         if theory_type:
-            results = [t for t in results if t.type == theory_type]
-
-        if tags:
-            results = [t for t in results if any(tag in t.tags for tag in tags)]
+            query += " AND type = ?"
+            params.append(theory_type.value)
 
         if min_confidence is not None:
-            results = [t for t in results if t.confidence >= min_confidence]
+            query += " AND confidence >= ?"
+            params.append(min_confidence)
 
         if min_evidence is not None:
-            results = [t for t in results if t.evidence_count >= min_evidence]
+            query += " AND evidence_count >= ?"
+            params.append(min_evidence)
 
-        # Sort by confidence * evidence (most reliable theories first)
-        results.sort(key=lambda t: t.confidence * t.evidence_count, reverse=True)
+        # Order by confidence * evidence (most reliable theories first)
+        query += " ORDER BY (confidence * evidence_count) DESC"
+
+        cursor = self.conn.cursor()
+        cursor.execute(query, params)
+        results = [self._load_theory_from_row(row) for row in cursor.fetchall()]
+
+        # Filter by tags in memory (JSON array filtering is complex in SQLite)
+        if tags:
+            results = [t for t in results if any(tag in t.tags for tag in tags)]
 
         return results
 
@@ -451,7 +529,7 @@ class TheoryLayer:
         Returns:
             True if observation supports theory, False otherwise
         """
-        theory = self.theories.get(theory_id)
+        theory = self.get_theory(theory_id)
         if not theory:
             return False
 
@@ -469,7 +547,7 @@ class TheoryLayer:
             theory.confidence = theory.evidence_count / total if total > 0 else 0.5
 
             theory.last_updated = time.time()
-            self._save_theories()
+            self._save_theory(theory)
 
             return True
 
@@ -486,7 +564,7 @@ class TheoryLayer:
         Returns:
             Prediction dictionary
         """
-        theory = self.theories.get(theory_id)
+        theory = self.get_theory(theory_id)
         if not theory:
             return {'error': 'Theory not found'}
 
@@ -528,13 +606,19 @@ class TheoryLayer:
             'prediction': prediction['prediction']
         })
 
-        self._save_theories()
+        self._save_theory(theory)
 
         return prediction
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about theories."""
-        if not self.theories:
+        cursor = self.conn.cursor()
+        
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM theories")
+        total = cursor.fetchone()[0]
+        
+        if total == 0:
             return {
                 'total_theories': 0,
                 'by_type': {},
@@ -543,22 +627,24 @@ class TheoryLayer:
             }
 
         # Count by type
-        by_type = defaultdict(int)
-        for theory in self.theories.values():
-            by_type[theory.type.value] += 1
+        cursor.execute("SELECT type, COUNT(*) FROM theories GROUP BY type")
+        by_type = dict(cursor.fetchall())
 
         # Average confidence
-        avg_confidence = sum(t.confidence for t in self.theories.values()) / len(self.theories)
+        cursor.execute("SELECT AVG(confidence) FROM theories")
+        avg_confidence = cursor.fetchone()[0]
 
         # High confidence theories (>0.8)
-        high_conf = sum(1 for t in self.theories.values() if t.confidence > 0.8)
+        cursor.execute("SELECT COUNT(*) FROM theories WHERE confidence > 0.8")
+        high_conf = cursor.fetchone()[0]
 
-        # Total predictions made
-        total_predictions = sum(len(t.predictions) for t in self.theories.values())
+        # Total predictions made (need to count from JSON array)
+        cursor.execute("SELECT predictions FROM theories")
+        total_predictions = sum(len(json.loads(row[0])) for row in cursor.fetchall())
 
         return {
-            'total_theories': len(self.theories),
-            'by_type': dict(by_type),
+            'total_theories': total,
+            'by_type': by_type,
             'average_confidence': avg_confidence,
             'high_confidence_count': high_conf,
             'total_predictions': total_predictions,
@@ -575,23 +661,31 @@ class TheoryLayer:
         """
         cutoff_time = time.time() - (max_age_days * 24 * 3600)
 
-        to_remove = []
-        for tid, theory in self.theories.items():
-            if theory.confidence < min_confidence or theory.last_updated < cutoff_time:
-                to_remove.append(tid)
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM theories 
+            WHERE confidence < ? OR last_updated < ?
+        """, (min_confidence, cutoff_time))
+        
+        removed = cursor.rowcount
+        self.conn.commit()
 
-        for tid in to_remove:
-            del self.theories[tid]
-
-        self._save_theories()
-
-        return len(to_remove)
+        return removed
 
     def export(self, filepath: str):
         """Export theories to JSON file."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM theories")
+        theories = [self._load_theory_from_row(row) for row in cursor.fetchall()]
+        
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(
-                [theory.to_dict() for theory in self.theories.values()],
+                [theory.to_dict() for theory in theories],
                 f,
                 indent=2
             )
+
+    def __del__(self):
+        """Cleanup database connection."""
+        if hasattr(self, 'conn'):
+            self.conn.close()

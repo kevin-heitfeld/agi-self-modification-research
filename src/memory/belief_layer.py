@@ -24,6 +24,7 @@ Date: November 7, 2025
 
 import json
 import time
+import sqlite3
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -67,14 +68,14 @@ class Belief:
     times_applied: int  # How often this belief has been used
     success_rate: float  # When applied, how often was it correct
     tags: List[str]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         d = asdict(self)
         d['type'] = self.type.value
         d['strength'] = self.strength.value
         return d
-    
+
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'Belief':
         """Create from dictionary."""
@@ -85,15 +86,15 @@ class Belief:
 
 class BeliefFormation:
     """Handles formation of beliefs from theories."""
-    
+
     @staticmethod
     def can_form_belief(theory: Any) -> bool:
         """
         Check if a theory is strong enough to become a belief.
-        
+
         Args:
             theory: Theory to evaluate
-            
+
         Returns:
             True if theory can become a belief
         """
@@ -101,29 +102,29 @@ class BeliefFormation:
         # 1. High confidence (>0.85)
         # 2. Substantial evidence (>10 observations)
         # 3. Low counter-evidence (<10% of total)
-        
+
         if theory.confidence < 0.85:
             return False
-        
+
         if theory.evidence_count < 10:
             return False
-        
+
         total_evidence = theory.evidence_count + theory.counter_evidence_count
         if total_evidence > 0:
             counter_ratio = theory.counter_evidence_count / total_evidence
             if counter_ratio > 0.1:
                 return False
-        
+
         return True
-    
+
     @staticmethod
     def theory_to_belief(theory: Any) -> Belief:
         """
         Convert a theory into a belief.
-        
+
         Args:
             theory: Theory to convert
-            
+
         Returns:
             Belief object
         """
@@ -134,9 +135,9 @@ class BeliefFormation:
             'constraint': BeliefType.CONSTRAINT,
             'structural': BeliefType.FACT
         }
-        
+
         belief_type = belief_type_map.get(theory.type.value, BeliefType.FACT)
-        
+
         # Determine strength based on confidence
         if theory.confidence >= 0.95:
             strength = BeliefStrength.ABSOLUTE
@@ -146,7 +147,7 @@ class BeliefFormation:
             strength = BeliefStrength.CONFIDENT
         else:
             strength = BeliefStrength.TENTATIVE
-        
+
         return Belief(
             id=f"belief_{theory.id}",
             type=belief_type,
@@ -169,74 +170,134 @@ class BeliefFormation:
 class BeliefLayer:
     """
     Layer 4: Core Beliefs and Principles
-    
+
     Maintains the system's core knowledge base - high-confidence beliefs that
     guide behavior and decision making.
-    
+
     Features:
     - Automatic belief formation from strong theories
     - Belief validation and updating
     - Query interface for decision support
     - Conflict detection between beliefs
     - Belief importance ranking
-    
+
     Usage:
         >>> layer = BeliefLayer("data/memory/beliefs", theory_layer)
-        >>> 
+        >>>
         >>> # Form beliefs from theories
         >>> layer.form_beliefs()
         >>>
         >>> # Query beliefs
         >>> safety = layer.get_beliefs(type=BeliefType.SAFETY_PRINCIPLE)
         >>> high_conf = layer.get_beliefs(min_confidence=0.9)
-        >>> 
+        >>>
         >>> # Check beliefs for a decision
         >>> relevant = layer.query_for_decision(context)
     """
-    
+
     def __init__(self, storage_dir: str, theory_layer: Any):
         """
         Initialize belief layer.
-        
+
         Args:
             storage_dir: Directory for storing beliefs
             theory_layer: Reference to theory layer
         """
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.theory_layer = theory_layer
-        
-        # Belief storage
-        self.beliefs_file = self.storage_dir / "beliefs.json"
-        self.beliefs: Dict[str, Belief] = {}
-        self._load_beliefs()
-        
+
+        # Belief storage - SQLite database
+        self.db_path = self.storage_dir / "beliefs.db"
+        self.conn = sqlite3.connect(str(self.db_path))
+        self.conn.row_factory = sqlite3.Row
+        self._init_database()
+
         # Track when beliefs were last formed
         self.last_formation_time = 0.0
-        
+
         # Initialize core safety beliefs (hardcoded foundational beliefs)
         self._initialize_core_beliefs()
-    
-    def _load_beliefs(self):
-        """Load beliefs from storage."""
-        if self.beliefs_file.exists():
-            with open(self.beliefs_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.beliefs = {
-                    bid: Belief.from_dict(bdata)
-                    for bid, bdata in data.items()
-                }
-    
-    def _save_beliefs(self):
-        """Save beliefs to storage."""
-        with open(self.beliefs_file, 'w', encoding='utf-8') as f:
-            json.dump(
-                {bid: belief.to_dict() for bid, belief in self.beliefs.items()},
-                f,
-                indent=2
+
+    def _init_database(self):
+        """Initialize the SQLite database schema."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS beliefs (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                strength TEXT NOT NULL,
+                statement TEXT NOT NULL,
+                justification TEXT NOT NULL,
+                supporting_theories TEXT NOT NULL,
+                evidence_count INTEGER NOT NULL,
+                counter_evidence_count INTEGER NOT NULL,
+                confidence REAL NOT NULL,
+                importance REAL NOT NULL,
+                created REAL NOT NULL,
+                last_validated REAL NOT NULL,
+                times_applied INTEGER NOT NULL,
+                success_rate REAL NOT NULL,
+                tags TEXT NOT NULL
             )
-    
+        """)
+
+        # Create indexes for common queries
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_belief_type ON beliefs(type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_belief_confidence ON beliefs(confidence)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_belief_importance ON beliefs(importance)")
+
+        self.conn.commit()
+
+    def _save_belief(self, belief: Belief):
+        """Save a single belief to the database."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO beliefs
+            (id, type, strength, statement, justification, supporting_theories,
+             evidence_count, counter_evidence_count, confidence, importance,
+             created, last_validated, times_applied, success_rate, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            belief.id,
+            belief.type.value,
+            belief.strength.value,
+            belief.statement,
+            belief.justification,
+            json.dumps(belief.supporting_theories),
+            belief.evidence_count,
+            belief.counter_evidence_count,
+            belief.confidence,
+            belief.importance,
+            belief.created,
+            belief.last_validated,
+            belief.times_applied,
+            belief.success_rate,
+            json.dumps(belief.tags)
+        ))
+        self.conn.commit()
+
+    def _load_belief_from_row(self, row: sqlite3.Row) -> Belief:
+        """Convert a database row to a Belief object."""
+        return Belief(
+            id=row['id'],
+            type=BeliefType(row['type']),
+            strength=BeliefStrength(row['strength']),
+            statement=row['statement'],
+            justification=row['justification'],
+            supporting_theories=json.loads(row['supporting_theories']),
+            evidence_count=row['evidence_count'],
+            counter_evidence_count=row['counter_evidence_count'],
+            confidence=row['confidence'],
+            importance=row['importance'],
+            created=row['created'],
+            last_validated=row['last_validated'],
+            times_applied=row['times_applied'],
+            success_rate=row['success_rate'],
+            tags=json.loads(row['tags'])
+        )
+
     def _initialize_core_beliefs(self):
         """Initialize fundamental safety beliefs."""
         core_beliefs = [
@@ -277,9 +338,12 @@ class BeliefLayer:
                 'tags': ['validation', 'baseline', 'modification']
             }
         ]
-        
+
         for core in core_beliefs:
-            if core['id'] not in self.beliefs:
+            # Check if belief already exists
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id FROM beliefs WHERE id = ?", (core['id'],))
+            if not cursor.fetchone():
                 belief = Belief(
                     id=core['id'],
                     type=core['type'],
@@ -297,47 +361,54 @@ class BeliefLayer:
                     success_rate=1.0,
                     tags=core['tags']
                 )
-                self.beliefs[belief.id] = belief
-        
-        self._save_beliefs()
-    
+                self._save_belief(belief)
+
     def form_beliefs(self):
         """Form new beliefs from strong theories."""
         # Get theories from theory layer
         theories = self.theory_layer.get_theories(min_confidence=0.8)
-        
+
         formed_count = 0
         for theory in theories:
             # Check if theory can become belief
             if BeliefFormation.can_form_belief(theory):
                 belief = BeliefFormation.theory_to_belief(theory)
-                
+
                 # Check if we already have this belief
-                if belief.id not in self.beliefs:
-                    self.beliefs[belief.id] = belief
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT * FROM beliefs WHERE id = ?", (belief.id,))
+                existing_row = cursor.fetchone()
+
+                if not existing_row:
+                    self._save_belief(belief)
                     formed_count += 1
                 else:
                     # Update existing belief with new evidence
-                    existing = self.beliefs[belief.id]
+                    existing = self._load_belief_from_row(existing_row)
                     existing.evidence_count += theory.evidence_count
                     existing.counter_evidence_count += theory.counter_evidence_count
-                    
+
                     # Recalculate confidence
                     total = existing.evidence_count + existing.counter_evidence_count
                     if total > 0:
                         existing.confidence = existing.evidence_count / total
-                    
+
                     existing.last_validated = time.time()
-        
+                    self._save_belief(existing)
+
         self.last_formation_time = time.time()
-        self._save_beliefs()
-        
+
         return formed_count
-    
+
     def get_belief(self, belief_id: str) -> Optional[Belief]:
         """Get a specific belief by ID."""
-        return self.beliefs.get(belief_id)
-    
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM beliefs WHERE id = ?", (belief_id,))
+        row = cursor.fetchone()
+        if row:
+            return self._load_belief_from_row(row)
+        return None
+
     def get_beliefs(
         self,
         belief_type: Optional[BeliefType] = None,
@@ -348,46 +419,57 @@ class BeliefLayer:
     ) -> List[Belief]:
         """
         Query beliefs with filters.
-        
+
         Args:
             belief_type: Filter by belief type
             strength: Filter by belief strength
             tags: Filter by tags
             min_confidence: Minimum confidence score
             min_importance: Minimum importance score
-            
+
         Returns:
             List of matching beliefs
         """
-        results = list(self.beliefs.values())
-        
+        # Build SQL query with filters
+        query = "SELECT * FROM beliefs WHERE 1=1"
+        params = []
+
         if belief_type:
-            results = [b for b in results if b.type == belief_type]
-        
+            query += " AND type = ?"
+            params.append(belief_type.value)
+
         if strength:
-            results = [b for b in results if b.strength == strength]
-        
+            query += " AND strength = ?"
+            params.append(strength.value)
+
+        if min_confidence is not None:
+            query += " AND confidence >= ?"
+            params.append(min_confidence)
+
+        if min_importance is not None:
+            query += " AND importance >= ?"
+            params.append(min_importance)
+
+        # Order by importance * confidence
+        query += " ORDER BY (importance * confidence) DESC"
+
+        cursor = self.conn.cursor()
+        cursor.execute(query, params)
+        results = [self._load_belief_from_row(row) for row in cursor.fetchall()]
+
+        # Filter by tags in memory (JSON array filtering is complex in SQLite)
         if tags:
             results = [b for b in results if any(tag in b.tags for tag in tags)]
-        
-        if min_confidence is not None:
-            results = [b for b in results if b.confidence >= min_confidence]
-        
-        if min_importance is not None:
-            results = [b for b in results if b.importance >= min_importance]
-        
-        # Sort by importance * confidence
-        results.sort(key=lambda b: b.importance * b.confidence, reverse=True)
-        
+
         return results
-    
+
     def query_for_decision(self, context: Dict[str, Any]) -> List[Belief]:
         """
         Find beliefs relevant to a decision.
-        
+
         Args:
             context: Decision context (e.g., {'action': 'modify_layer5'})
-            
+
         Returns:
             List of relevant beliefs
         """
@@ -397,75 +479,80 @@ class BeliefLayer:
             if isinstance(value, str):
                 context_tags.append(value.lower())
             context_tags.append(key.lower())
-        
+
+        # Find beliefs with matching tags (load all for now - could optimize)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM beliefs ORDER BY (importance * confidence) DESC")
+        all_beliefs = [self._load_belief_from_row(row) for row in cursor.fetchall()]
+
         # Find beliefs with matching tags
         relevant = []
-        for belief in self.beliefs.values():
+        for belief in all_beliefs:
             # Check if any belief tags match context tags
             matches = set(belief.tags) & set(context_tags)
             if matches:
                 relevant.append(belief)
-        
-        # Sort by importance
-        relevant.sort(key=lambda b: b.importance * b.confidence, reverse=True)
-        
+
         return relevant
-    
+
     def validate_belief(self, belief_id: str, outcome: bool):
         """
         Update belief based on outcome when applied.
-        
+
         Args:
             belief_id: Belief that was applied
             outcome: Whether the belief led to success (True) or failure (False)
         """
-        belief = self.beliefs.get(belief_id)
+        belief = self.get_belief(belief_id)
         if not belief:
             return
-        
+
         belief.times_applied += 1
-        
+
         # Update success rate
         current_successes = belief.success_rate * (belief.times_applied - 1)
         if outcome:
             current_successes += 1
-        
+
         belief.success_rate = current_successes / belief.times_applied
-        
+
         # Update confidence based on success rate
         # If success rate drops below 0.7, reduce confidence
         if belief.success_rate < 0.7:
             belief.confidence *= 0.95  # Reduce confidence
-        
+
         belief.last_validated = time.time()
-        self._save_beliefs()
-    
+        self._save_belief(belief)
+
     def detect_conflicts(self) -> List[Dict[str, Any]]:
         """
         Detect conflicting beliefs.
-        
+
         Returns:
             List of conflict descriptions
         """
         conflicts = []
-        
-        beliefs_list = list(self.beliefs.values())
-        
+
+        # Get all beliefs
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM beliefs")
+        beliefs_list = [self._load_belief_from_row(row) for row in cursor.fetchall()]
+
         # Simple conflict detection: beliefs with opposing statements
         # (In practice, would use more sophisticated NLP)
-        
+
         for i, belief1 in enumerate(beliefs_list):
             for belief2 in beliefs_list[i+1:]:
                 # Check for tag overlap (might be related)
                 shared_tags = set(belief1.tags) & set(belief2.tags)
-                
+
                 if len(shared_tags) >= 2:
                     # Check if one negates the other (very simple check)
-                    if ('never' in belief1.statement.lower() and 
+                    if ('never' in belief1.statement.lower() and
                         'always' in belief2.statement.lower()) or \
-                       ('always' in belief1.statement.lower() and 
+                       ('always' in belief1.statement.lower() and
                         'never' in belief2.statement.lower()):
-                        
+
                         conflicts.append({
                             'belief1_id': belief1.id,
                             'belief1_statement': belief1.statement,
@@ -473,65 +560,83 @@ class BeliefLayer:
                             'belief2_statement': belief2.statement,
                             'shared_tags': list(shared_tags)
                         })
-        
+
         return conflicts
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about beliefs."""
-        if not self.beliefs:
+        cursor = self.conn.cursor()
+
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM beliefs")
+        total = cursor.fetchone()[0]
+
+        if total == 0:
             return {
                 'total_beliefs': 0,
                 'by_type': {},
                 'by_strength': {},
                 'average_confidence': 0.0
             }
-        
+
         # Count by type
-        by_type = defaultdict(int)
-        for belief in self.beliefs.values():
-            by_type[belief.type.value] += 1
-        
+        cursor.execute("SELECT type, COUNT(*) FROM beliefs GROUP BY type")
+        by_type = dict(cursor.fetchall())
+
         # Count by strength
-        by_strength = defaultdict(int)
-        for belief in self.beliefs.values():
-            by_strength[belief.strength.value] += 1
-        
+        cursor.execute("SELECT strength, COUNT(*) FROM beliefs GROUP BY strength")
+        by_strength = dict(cursor.fetchall())
+
         # Average confidence
-        avg_confidence = sum(b.confidence for b in self.beliefs.values()) / len(self.beliefs)
-        
-        # Average success rate
-        beliefs_with_applications = [b for b in self.beliefs.values() if b.times_applied > 0]
-        avg_success = (sum(b.success_rate for b in beliefs_with_applications) / 
-                      len(beliefs_with_applications)) if beliefs_with_applications else 0.0
-        
+        cursor.execute("SELECT AVG(confidence) FROM beliefs")
+        avg_confidence = cursor.fetchone()[0]
+
+        # Average success rate (for beliefs that have been applied)
+        cursor.execute("SELECT AVG(success_rate) FROM beliefs WHERE times_applied > 0")
+        result = cursor.fetchone()
+        avg_success = result[0] if result[0] is not None else 0.0
+
+        # Total applications
+        cursor.execute("SELECT SUM(times_applied) FROM beliefs")
+        total_applications = cursor.fetchone()[0] or 0
+
         return {
-            'total_beliefs': len(self.beliefs),
-            'by_type': dict(by_type),
-            'by_strength': dict(by_strength),
+            'total_beliefs': total,
+            'by_type': by_type,
+            'by_strength': by_strength,
             'average_confidence': avg_confidence,
             'average_success_rate': avg_success,
-            'total_applications': sum(b.times_applied for b in self.beliefs.values()),
+            'total_applications': total_applications,
             'conflicts': len(self.detect_conflicts()),
             'last_formation': self.last_formation_time
         }
-    
+
     def get_core_principles(self) -> List[str]:
         """
         Get list of core principles as strings.
-        
+
         Returns:
             List of principle statements
         """
         # Get high-importance, high-confidence beliefs
         core = self.get_beliefs(min_confidence=0.9, min_importance=0.8)
-        
+
         return [belief.statement for belief in core]
-    
+
     def export(self, filepath: str):
         """Export beliefs to JSON file."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM beliefs")
+        beliefs = [self._load_belief_from_row(row) for row in cursor.fetchall()]
+
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(
-                [belief.to_dict() for belief in self.beliefs.values()],
+                [belief.to_dict() for belief in beliefs],
                 f,
                 indent=2
             )
+
+    def __del__(self):
+        """Cleanup database connection."""
+        if hasattr(self, 'conn'):
+            self.conn.close()
