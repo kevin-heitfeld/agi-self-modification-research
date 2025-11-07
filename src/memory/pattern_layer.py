@@ -25,6 +25,7 @@ Date: November 7, 2025
 
 import json
 import time
+import sqlite3
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -332,10 +333,11 @@ class PatternLayer:
 
         self.observation_layer = observation_layer
 
-        # Pattern storage
-        self.patterns_file = self.storage_dir / "patterns.json"
-        self.patterns: Dict[str, Pattern] = {}
-        self._load_patterns()
+        # SQLite database for efficient queries
+        self.db_path = self.storage_dir / "patterns.db"
+        self.conn = sqlite3.connect(str(self.db_path))
+        self.conn.row_factory = sqlite3.Row
+        self._init_database()
 
         # Pattern detectors
         self.detectors = [
@@ -347,24 +349,73 @@ class PatternLayer:
         # Track when patterns were last updated
         self.last_detection_time = 0.0
 
-    def _load_patterns(self):
-        """Load patterns from storage."""
-        if self.patterns_file.exists():
-            with open(self.patterns_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.patterns = {
-                    pid: Pattern.from_dict(pdata)
-                    for pid, pdata in data.items()
-                }
-
-    def _save_patterns(self):
-        """Save patterns to storage."""
-        with open(self.patterns_file, 'w', encoding='utf-8') as f:
-            json.dump(
-                {pid: pattern.to_dict() for pid, pattern in self.patterns.items()},
-                f,
-                indent=2
+    def _init_database(self):
+        """Initialize database schema."""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS patterns (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                components TEXT NOT NULL,
+                support_count INTEGER NOT NULL,
+                confidence REAL NOT NULL,
+                first_seen REAL NOT NULL,
+                last_seen REAL NOT NULL,
+                evidence TEXT NOT NULL,
+                tags TEXT NOT NULL
             )
+        """)
+        
+        # Create indexes
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns(type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_confidence ON patterns(confidence)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_support ON patterns(support_count)")
+        
+        self.conn.commit()
+
+    def _save_pattern(self, pattern: Pattern):
+        """Save a single pattern to database."""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO patterns 
+            (id, type, name, description, components, support_count, confidence, 
+             first_seen, last_seen, evidence, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            pattern.id,
+            pattern.type.value,
+            pattern.name,
+            pattern.description,
+            json.dumps(pattern.components),
+            pattern.support_count,
+            pattern.confidence,
+            pattern.first_seen,
+            pattern.last_seen,
+            json.dumps(pattern.evidence),
+            json.dumps(pattern.tags)
+        ))
+        
+        self.conn.commit()
+
+    def _load_pattern_from_row(self, row: sqlite3.Row) -> Pattern:
+        """Convert database row to Pattern object."""
+        return Pattern(
+            id=row['id'],
+            type=PatternType(row['type']),
+            name=row['name'],
+            description=row['description'],
+            components=json.loads(row['components']),
+            support_count=row['support_count'],
+            confidence=row['confidence'],
+            first_seen=row['first_seen'],
+            last_seen=row['last_seen'],
+            evidence=json.loads(row['evidence']),
+            tags=json.loads(row['tags'])
+        )
 
     def detect_patterns(self, lookback_hours: int = 24):
         """
@@ -394,9 +445,11 @@ class PatternLayer:
         
         # Merge with existing patterns
         for new_pattern in new_patterns:
-            if new_pattern.id in self.patterns:
+            # Check if pattern exists
+            existing = self.get_pattern(new_pattern.id)
+            
+            if existing:
                 # Update existing pattern
-                existing = self.patterns[new_pattern.id]
                 existing.support_count += new_pattern.support_count
                 existing.last_seen = new_pattern.last_seen
 
@@ -411,13 +464,14 @@ class PatternLayer:
                 # Add new evidence
                 existing.evidence.extend(new_pattern.evidence)
                 existing.evidence = list(set(existing.evidence))[:20]  # Keep unique, limit size
+                
+                self._save_pattern(existing)
             else:
                 # Add new pattern
-                self.patterns[new_pattern.id] = new_pattern
+                self._save_pattern(new_pattern)
                 new_count += 1
 
         self.last_detection_time = time.time()
-        self._save_patterns()
         
         return new_count
 
@@ -431,7 +485,13 @@ class PatternLayer:
         Returns:
             Pattern if found, None otherwise
         """
-        return self.patterns.get(pattern_id)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM patterns WHERE id = ?", (pattern_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            return self._load_pattern_from_row(row)
+        return None
 
     def get_patterns(
         self,
@@ -444,7 +504,7 @@ class PatternLayer:
         Query patterns with filters.
 
         Args:
-            type: Filter by pattern type
+            pattern_type: Filter by pattern type
             tags: Filter by tags (must have any)
             min_confidence: Minimum confidence score
             min_support: Minimum support count
@@ -452,23 +512,33 @@ class PatternLayer:
         Returns:
             List of matching patterns
         """
-        results = list(self.patterns.values())
-
+        cursor = self.conn.cursor()
+        
+        query = "SELECT * FROM patterns WHERE 1=1"
+        params = []
+        
         if pattern_type:
-            results = [p for p in results if p.type == pattern_type]
-
+            query += " AND type = ?"
+            params.append(pattern_type.value)
+        
+        if min_confidence is not None:
+            query += " AND confidence >= ?"
+            params.append(min_confidence)
+        
+        if min_support is not None:
+            query += " AND support_count >= ?"
+            params.append(min_support)
+        
+        # Order by confidence * log(support) for best patterns first
+        query += " ORDER BY (confidence * (1 + support_count)) DESC"
+        
+        cursor.execute(query, params)
+        results = [self._load_pattern_from_row(row) for row in cursor.fetchall()]
+        
+        # Filter by tags (can't do efficiently in SQL with JSON)
         if tags:
             results = [p for p in results if any(tag in p.tags for tag in tags)]
-
-        if min_confidence is not None:
-            results = [p for p in results if p.confidence >= min_confidence]
-
-        if min_support is not None:
-            results = [p for p in results if p.support_count >= min_support]
-
-        # Sort by confidence * support (most reliable patterns first)
-        results.sort(key=lambda p: p.confidence * math.log(p.support_count + 1), reverse=True)
-
+        
         return results
 
     def find_related_patterns(self, pattern_id: str) -> List[Pattern]:
@@ -481,14 +551,16 @@ class PatternLayer:
         Returns:
             List of related patterns
         """
-        pattern = self.patterns.get(pattern_id)
+        pattern = self.get_pattern(pattern_id)
         if not pattern:
             return []
 
-        # Find patterns with overlapping tags
+        # Get all patterns and check tag overlap
+        all_patterns = self.get_patterns()
         related = []
-        for pid, other in self.patterns.items():
-            if pid != pattern_id:
+        
+        for other in all_patterns:
+            if other.id != pattern_id:
                 # Check tag overlap
                 overlap = set(pattern.tags) & set(other.tags)
                 if len(overlap) >= 2:  # At least 2 shared tags
@@ -503,7 +575,13 @@ class PatternLayer:
         Returns:
             Dictionary with statistics
         """
-        if not self.patterns:
+        cursor = self.conn.cursor()
+        
+        # Total count
+        cursor.execute("SELECT COUNT(*) as total FROM patterns")
+        total = cursor.fetchone()['total']
+        
+        if total == 0:
             return {
                 'total_patterns': 0,
                 'by_type': {},
@@ -512,25 +590,31 @@ class PatternLayer:
             }
 
         # Count by type
-        by_type = defaultdict(int)
-        for pattern in self.patterns.values():
-            by_type[pattern.type.value] += 1
+        cursor.execute("""
+            SELECT type, COUNT(*) as count 
+            FROM patterns 
+            GROUP BY type
+        """)
+        by_type = {row['type']: row['count'] for row in cursor.fetchall()}
 
         # Average confidence
-        avg_confidence = sum(p.confidence for p in self.patterns.values()) / len(self.patterns)
+        cursor.execute("SELECT AVG(confidence) as avg_conf FROM patterns")
+        avg_confidence = cursor.fetchone()['avg_conf']
 
         # High confidence patterns (>0.8)
-        high_conf = sum(1 for p in self.patterns.values() if p.confidence > 0.8)
+        cursor.execute("SELECT COUNT(*) as high_conf FROM patterns WHERE confidence > 0.8")
+        high_conf = cursor.fetchone()['high_conf']
 
-        # Most common tags
+        # Most common tags (need to query all for this)
+        all_patterns = self.get_patterns()
         all_tags = []
-        for pattern in self.patterns.values():
+        for pattern in all_patterns:
             all_tags.extend(pattern.tags)
         tag_counts = Counter(all_tags)
 
         return {
-            'total_patterns': len(self.patterns),
-            'by_type': dict(by_type),
+            'total_patterns': total,
+            'by_type': by_type,
             'average_confidence': avg_confidence,
             'high_confidence_count': high_conf,
             'most_common_tags': dict(tag_counts.most_common(10)),
@@ -547,17 +631,21 @@ class PatternLayer:
         """
         cutoff_time = time.time() - (max_age_days * 24 * 3600)
 
-        to_remove = []
-        for pid, pattern in self.patterns.items():
-            if pattern.confidence < min_confidence or pattern.last_seen < cutoff_time:
-                to_remove.append(pid)
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM patterns 
+            WHERE confidence < ? OR last_seen < ?
+        """, (min_confidence, cutoff_time))
+        
+        deleted = cursor.rowcount
+        self.conn.commit()
+        
+        return deleted
 
-        for pid in to_remove:
-            del self.patterns[pid]
-
-        self._save_patterns()
-
-        return len(to_remove)
+    def __del__(self):
+        """Cleanup database connection."""
+        if hasattr(self, 'conn'):
+            self.conn.close()
 
     def export(self, filepath: str):
         """
@@ -566,9 +654,10 @@ class PatternLayer:
         Args:
             filepath: Output file path
         """
+        patterns = self.get_patterns()
         with open(filepath, 'w') as f:
             json.dump(
-                [pattern.to_dict() for pattern in self.patterns.values()],
+                [pattern.to_dict() for pattern in patterns],
                 f,
                 indent=2
             )
