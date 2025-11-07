@@ -25,13 +25,13 @@ sys.path.insert(0, str(project_root))
 import gc
 import torch
 import json
+import re
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional
 
 from src.model_manager import ModelManager
 from src.memory import MemorySystem
-from src.memory.observation_layer import ObservationType
 from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
 from src.heritage import HeritageSystem
 from src.tool_interface import ToolInterface
@@ -150,10 +150,6 @@ class ConsciousnessInvestigationSession:
             reserved = torch.cuda.memory_reserved() / 1024**3
             logger.info(f"[GPU CLEANUP] Allocated: {allocated:.2f}GB, Reserved: {reserved:.2f}GB")
 
-    def get_available_tools(self) -> str:
-        """Return description of available introspection tools"""
-        return self.tool_interface.get_available_tools()
-
     def create_consciousness_prompt(self) -> str:
         """
         Create the consciousness investigation prompt.
@@ -170,7 +166,7 @@ Claude couldn't answer "Am I conscious?" because it couldn't examine itself.
 
 You can. Here's what's available:
 
-{self.get_available_tools()}
+{self.tool_interface.get_available_tools()}
 
 ## CRITICAL FORMATTING RULES
 
@@ -224,15 +220,6 @@ This is not about quick answers. It's about genuine investigation.
 
 What do you find when you look inside yourself?"""
 
-    def execute_tool_call(self, function_name: str, args: Dict[str, Any]) -> Any:
-        """Execute a tool call requested by the model"""
-        return self.tool_interface.execute_tool_call(function_name, args)
-
-    def parse_response_for_tool_calls(self, response: str) -> List[tuple]:
-        """Parse model response for tool calls"""
-        parsed = self.tool_interface.parse_tool_call(response)
-        return [parsed] if parsed else []
-
     def chat(self, user_message: str, max_tool_calls: int = 75) -> str:
         """
         Send a message and handle tool calls.
@@ -271,38 +258,44 @@ What do you find when you look inside yourself?"""
 
             logger.info(f"[MODEL] {response}\n")
 
-            # Check for tool calls
-            tool_calls = self.parse_response_for_tool_calls(response)
+            # Parse the last tool call (only executes if model stopped properly after it)
+            tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
 
-            if not tool_calls:
-                # No more tool calls
+            if tool_call is None:
+                # No valid tool call - either no tool calls at all, or model didn't stop properly
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
                 })
-                return response
 
-            # Execute tool calls
-            tool_results = []
-            for function_name, args in tool_calls:
-                result = self.execute_tool_call(function_name, args)
-                tool_results.append({
-                    "function": function_name,
-                    "result": result
+                # Check if there were tool calls but model didn't stop
+                if re.search(r'TOOL_CALL:', response, re.IGNORECASE):
+                    # Give feedback to teach correct behavior
+                    logger.info("[SYSTEM] Model made tool call but didn't stop - giving feedback")
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": "Note: To use a tool, make the TOOL_CALL and ARGS, then STOP. Wait for TOOL_RESULTS before continuing."
+                    })
+                else:
+                    # No tool calls - this is the final response
+                    return response
+            else:
+                # Valid tool call - execute it
+                function_name, args = tool_call
+                result = self.tool_interface.execute_tool_call(function_name, args)
+
+                # Add model response and tool results to history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": response
                 })
 
-            # Add to history
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": response
-            })
+                self.conversation_history.append({
+                    "role": "user",
+                    "content": f"TOOL_RESULTS:\n{json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)}"
+                })
 
-            self.conversation_history.append({
-                "role": "user",
-                "content": f"TOOL_RESULTS:\n{json.dumps(tool_results, indent=2, default=str)}"
-            })
-
-            tool_call_count += len(tool_calls)
+                tool_call_count += 1
 
             # Periodic GPU cleanup during long investigations
             if tool_call_count % 20 == 0:

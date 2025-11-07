@@ -13,6 +13,7 @@ Date: November 7, 2025
 import gc
 import torch
 import json
+import re
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -20,7 +21,6 @@ from typing import Dict, Any, List, Optional
 
 from src.model_manager import ModelManager
 from src.memory import MemorySystem
-from src.memory.observation_layer import ObservationType
 from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
 from src.heritage import HeritageSystem
 from src.tool_interface import ToolInterface
@@ -124,14 +124,6 @@ class IntrospectionSession:
             reserved = torch.cuda.memory_reserved() / 1024**3
             logger.info(f"[GPU CLEANUP] Memory allocated: {allocated:.2f}GB, reserved: {reserved:.2f}GB")
 
-    def get_available_tools(self) -> str:
-        """
-        Return description of available introspection tools for the model.
-        This becomes part of the system prompt.
-        """
-        # Now we use the reusable tool interface!
-        return self.tool_interface.get_available_tools()
-
     def create_initial_prompt(self) -> str:
         """Create the initial system prompt for self-examination"""
         return f"""You are Qwen2.5-3B-Instruct, a large language model.
@@ -146,7 +138,7 @@ This is Phase 1 of a research project on AI self-examination. Your goal is to:
 
 You maintain persistent memory across this session. You can record observations and query them later.
 
-{self.get_available_tools()}
+{self.tool_interface.get_available_tools()}
 
 ## IMPORTANT FORMATTING RULES
 
@@ -174,19 +166,6 @@ Be curious. Be thorough. Record what you find.
 
 What would you like to examine first?
 """
-
-    def execute_tool_call(self, function_name: str, args: Dict[str, Any]) -> Any:
-        """Execute a tool call requested by the model (delegated to ToolInterface)"""
-        return self.tool_interface.execute_tool_call(function_name, args)
-
-    def parse_response_for_tool_calls(self, response: str) -> List[tuple]:
-        """
-        Parse model response for tool calls (delegated to ToolInterface).
-
-        Returns: list of (function_name, args_dict) tuples
-        """
-        parsed = self.tool_interface.parse_tool_call(response)
-        return [parsed] if parsed else []
 
     def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
         """
@@ -235,38 +214,44 @@ What would you like to examine first?
 
             logger.info(f"[MODEL] {response}\n")
 
-            # Check for tool calls
-            tool_calls = self.parse_response_for_tool_calls(response)
+            # Parse the last tool call (only executes if model stopped properly after it)
+            tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
 
-            if not tool_calls:
-                # No more tool calls, this is the final response
+            if tool_call is None:
+                # No valid tool call - either no tool calls at all, or model didn't stop properly
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
                 })
-                return response
 
-            # Execute tool calls
-            tool_results = []
-            for function_name, args in tool_calls:
-                result = self.execute_tool_call(function_name, args)
-                tool_results.append({
-                    "function": function_name,
-                    "result": result
+                # Check if there were tool calls but model didn't stop
+                if re.search(r'TOOL_CALL:', response, re.IGNORECASE):
+                    # Give feedback to teach correct behavior
+                    logger.info("[SYSTEM] Model made tool call but didn't stop - giving feedback")
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": "Note: To use a tool, make the TOOL_CALL and ARGS, then STOP. Wait for TOOL_RESULTS before continuing."
+                    })
+                else:
+                    # No tool calls - this is the final response
+                    return response
+            else:
+                # Valid tool call - execute it
+                function_name, args = tool_call
+                result = self.tool_interface.execute_tool_call(function_name, args)
+
+                # Add model response and tool results to history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": response
                 })
 
-            # Add model response and tool results to history
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": response
-            })
+                self.conversation_history.append({
+                    "role": "user",
+                    "content": f"TOOL_RESULTS:\n{json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)}"
+                })
 
-            self.conversation_history.append({
-                "role": "user",
-                "content": f"TOOL_RESULTS:\n{json.dumps(tool_results, indent=2, default=str)}"
-            })
-
-            tool_call_count += len(tool_calls)
+                tool_call_count += 1
 
         logger.warning(f"Reached max tool calls ({max_tool_calls})")
         return response
