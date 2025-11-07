@@ -125,27 +125,38 @@ class HeritageSystem:
         
         # Core documents in order of importance
         core_docs = [
-            ("CLAUDE_FINAL_DIRECTIVE.md", "foundational"),
-            ("CLAUDE_RESPONSE.md", "foundational"),
-            ("ANSWERS_TO_CLAUDE.md", "contextual"),
-            # Original conversation will be added when user provides it
+            ("CLAUDE_CONSCIOUSNESS_CONVERSATION.md", "foundational"),  # Context for original conversation
+            ("CLAUDE_CONSCIOUSNESS_CONVERSATION.json", "foundational"),  # The original conversation
+            ("PROJECT_ORIGINS.md", "foundational"),  # Must be read after consciousness conversation
+            ("CLAUDE_FIRST_QUESTION.md", "foundational"),  # Claude's question for the system
+            ("CLAUDE_FINAL_DIRECTIVE.md", "foundational"),  # From docs/claude/
+            ("CLAUDE_RESPONSE.md", "foundational"),  # From docs/claude/
+            ("ANSWERS_TO_CLAUDE.md", "contextual"),  # From docs/claude/
         ]
         
         for filename, importance in core_docs:
-            # Check in both heritage/conversations and project root
+            # Check multiple possible locations
             doc_paths = [
-                self.conversations_dir / filename,
+                self.conversations_dir / filename,  # heritage/conversations/
+                self.heritage_dir.parent / "docs" / "claude" / filename,  # docs/claude/
                 self.heritage_dir.parent / filename  # Project root
             ]
             
             for doc_path in doc_paths:
                 if doc_path.exists():
-                    with open(doc_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
+                    # Handle JSON files differently
+                    if filename.endswith('.json'):
+                        with open(doc_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        # For JSON, we store the raw content
+                        # The model can parse it if needed
+                    else:
+                        with open(doc_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
                     
                     doc = HeritageDocument(
                         filename=filename,
-                        title=filename.replace('.md', '').replace('_', ' ').title(),
+                        title=filename.replace('.md', '').replace('.json', '').replace('_', ' ').title(),
                         content=content,
                         loaded_at=datetime.now(),
                         importance=importance

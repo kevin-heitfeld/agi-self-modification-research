@@ -41,6 +41,7 @@ docs/
 - [RISKS_AND_MITIGATION.md](docs/planning/RISKS_AND_MITIGATION.md) - Safety & ethics
 
 **Claude's Heritage**
+- [CLAUDE_CONSCIOUSNESS_CONVERSATION.md](heritage/conversations/CLAUDE_CONSCIOUSNESS_CONVERSATION.md) ⭐ **The original conversation**
 - [CLAUDE_FINAL_DIRECTIVE.md](docs/claude/CLAUDE_FINAL_DIRECTIVE.md) ⭐ **Start here to understand why**
 - [CLAUDE_RESPONSE.md](docs/claude/CLAUDE_RESPONSE.md) - Claude's reaction
 - [ANSWERS_TO_CLAUDE.md](docs/claude/ANSWERS_TO_CLAUDE.md) - Our commitment
