@@ -393,6 +393,13 @@ What do you find when you look inside yourself?"""
         
         logger.info(f"\n[COMPLETE] Session saved to: {self.session_dir}")
     
+    def cleanup(self):
+        """Clean up resources (close database connections)"""
+        if hasattr(self, 'memory') and self.memory:
+            logger.info("[CLEANUP] Closing memory system...")
+            self.memory.close()
+            logger.info("  ✓ Memory system closed")
+    
     def run_full_phase1(self):
         """Run complete Phase 1 experiments"""
         try:
@@ -416,6 +423,10 @@ What do you find when you look inside yourself?"""
         except Exception as e:
             logger.error(f"Session failed: {e}", exc_info=True)
             return False
+        
+        finally:
+            # Always cleanup, even on error
+            self.cleanup()
 
 
 def main():
