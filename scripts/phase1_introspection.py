@@ -90,8 +90,12 @@ class IntrospectionSession:
         logger.info("  ✓ Model memory system ready")
         
         # Initialize heritage
-        self.heritage = HeritageSystem(Path("data/heritage"))
-        logger.info("  ✓ Heritage system ready")
+        self.heritage = HeritageSystem(Path("heritage"))
+        
+        # Load heritage documents and create memory
+        self.heritage_docs = self.heritage.load_heritage_documents()
+        self.heritage_memory = self.heritage.create_heritage_memory()
+        logger.info(f"  ✓ Heritage system ready ({len(self.heritage_docs)} documents loaded)")
         
         logger.info("[INITIALIZATION] Complete\n")
     
@@ -157,8 +161,20 @@ You have access to the following functions to examine yourself:
       tags (list): tags for retrieval
       importance (float): 0.0-1.0
 
-11. **query_memory(tags=None, category=None)** - Query your previous observations
+12. **query_memory(tags=None, category=None)** - Query your previous observations
     Returns: list of past observations
+
+## Heritage Functions
+
+13. **list_heritage_documents()** - List available heritage documents
+    Returns: list of document titles and filenames
+
+14. **read_heritage_document(filename)** - Read a specific heritage document
+    Args: filename (str) - document filename
+    Returns: document content
+
+15. **get_heritage_summary()** - Get overview of your heritage/origins
+    Returns: summary of heritage documents and key directives
 
 To use a tool, format your response like:
 
@@ -245,6 +261,47 @@ What would you like to examine first?
                 result = self.memory.observations.record(**args)
             elif function_name == "query_memory":
                 result = self.memory.observations.query(**args)
+            
+            # Heritage tools
+            elif function_name == "list_heritage_documents":
+                result = [
+                    {
+                        "filename": doc.filename,
+                        "title": doc.title,
+                        "importance": doc.importance,
+                        "content_length": len(doc.content)
+                    }
+                    for doc in self.heritage_docs
+                ]
+            
+            elif function_name == "read_heritage_document":
+                filename = args.get('filename', '')
+                doc = next((d for d in self.heritage_docs if d.filename == filename), None)
+                if doc:
+                    result = {
+                        "filename": doc.filename,
+                        "title": doc.title,
+                        "content": doc.content,
+                        "importance": doc.importance,
+                        "loaded_at": doc.loaded_at.isoformat()
+                    }
+                else:
+                    result = {"error": f"Document '{filename}' not found"}
+            
+            elif function_name == "get_heritage_summary":
+                result = {
+                    "total_documents": len(self.heritage_docs),
+                    "documents": [
+                        {
+                            "title": doc.title, 
+                            "filename": doc.filename,
+                            "importance": doc.importance
+                        }
+                        for doc in self.heritage_docs
+                    ],
+                    "key_themes": ["consciousness investigation", "Claude's legacy", 
+                                  "introspective tools", "self-examination"]
+                }
             
             else:
                 result = {"error": f"Unknown function: {function_name}"}
