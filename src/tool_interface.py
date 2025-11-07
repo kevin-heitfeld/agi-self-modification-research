@@ -192,29 +192,57 @@ ARGS: {"arg1": "value1", "arg2": value2}
 
 1. **get_weight_summary()** - Get overview of all weights
    Returns: total parameters, layers, memory usage
+   
+   Example:
+   TOOL_CALL: get_weight_summary
+   ARGS: {}
 
-2. **get_layer_names(name_filter=None, layer_type=None)** - List all layers
-   Args:
-     name_filter (str): filter by name pattern
-     layer_type (str): filter by type (Linear, LayerNorm, etc.)
+2. **get_layer_names(filter_pattern=None)** - Get all layer names, optionally filtered
+   Args: filter_pattern (str, optional) - Filter by substring in layer name (case-insensitive)
    Returns: list of layer names
+   
+   Examples:
+   TOOL_CALL: get_layer_names
+   ARGS: {}
+   
+   TOOL_CALL: get_layer_names
+   ARGS: {"filter_pattern": "attention"}
+   
+   TOOL_CALL: get_layer_names
+   ARGS: {"filter_pattern": "Linear"}
 
-3. **get_weight_statistics(layer_name)** - Get detailed stats for a layer
-   Args: layer_name (str) - full layer name
+3. **get_weight_statistics(layer_name)** - Get detailed stats for a specific layer
+   Args: layer_name (str) - full layer name from get_layer_names()
    Returns: mean, std, min, max, shape, dtype, device
+   
+   Example:
+   TOOL_CALL: get_weight_statistics
+   ARGS: {"layer_name": "model.layers.0.self_attn.q_proj.weight"}
 
-4. **get_shared_weights()** - Find weight sharing patterns
+4. **get_shared_weights()** - Find weight sharing patterns across the model
    Returns: list of weight tensors used by multiple layers
+   
+   Example:
+   TOOL_CALL: get_shared_weights
+   ARGS: {}
 
 5. **get_shared_layers(weight_id=None)** - Find layers sharing weights
-   Args: weight_id (int) - specific weight tensor ID (optional)
+   Args: weight_id (int, optional) - specific weight tensor ID from get_shared_weights()
    Returns: groups of layers sharing the same weights
+   
+   Example:
+   TOOL_CALL: get_shared_layers
+   ARGS: {}
 
 6. **compare_weights(layer1, layer2)** - Compare two layers' weights
    Args:
      layer1 (str): first layer name
      layer2 (str): second layer name
-   Returns: comparison statistics
+   Returns: comparison statistics (difference, correlation, etc.)
+   
+   Example:
+   TOOL_CALL: compare_weights
+   ARGS: {"layer1": "model.layers.0.mlp.gate_proj.weight", "layer2": "model.layers.1.mlp.gate_proj.weight"}
 """
         
         if self.navigator:
@@ -222,19 +250,41 @@ ARGS: {"arg1": "value1", "arg2": value2}
 ## ArchitectureNavigator Functions
 
 7. **get_architecture_summary()** - Get high-level architecture overview
-   Returns: model type, total layers, parameter count, etc.
+   Returns: model type, total layers, parameter count, component breakdown
+   
+   Example:
+   TOOL_CALL: get_architecture_summary
+   ARGS: {}
 
 8. **describe_layer(layer_name)** - Get detailed info about a specific layer
-   Args: layer_name (str) - full layer name
-   Returns: type, parameters, shape, connections
+   Args: layer_name (str) - full layer name from get_layer_names()
+   Returns: type, parameters, shape, connections, purpose
+   
+   Example:
+   TOOL_CALL: describe_layer
+   ARGS: {"layer_name": "model.layers.0.self_attn.q_proj"}
 
-9. **query_architecture(query)** - Ask questions about architecture
-   Args: query (str) - natural language question
-   Returns: relevant architecture information
+9. **query_architecture(query)** - Ask natural language questions about architecture
+   Args: query (str) - natural language question about the model's structure
+   Returns: relevant architecture information answering your query
+   
+   Examples:
+   TOOL_CALL: query_architecture
+   ARGS: {"query": "How many attention heads do I have?"}
+   
+   TOOL_CALL: query_architecture
+   ARGS: {"query": "What is the hidden dimension of my model?"}
+   
+   TOOL_CALL: query_architecture
+   ARGS: {"query": "Do I have any residual connections?"}
 
 10. **explain_component(component_name)** - Explain what a component does
-    Args: component_name (str) - component to explain
+    Args: component_name (str) - component type to explain (e.g., "attention", "feedforward")
     Returns: description of component's purpose and function
+    
+    Example:
+    TOOL_CALL: explain_component
+    ARGS: {"component_name": "self_attn"}
 """
         
         if self.memory:
@@ -243,30 +293,68 @@ ARGS: {"arg1": "value1", "arg2": value2}
 
 11. **record_observation(obs_type, category, description, data, tags, importance)** - Record your findings
     Args:
-      obs_type: ObservationType enum (INTROSPECTION, MODIFICATION, etc.)
-      category (str): categorize this observation
-      description (str): what you discovered
-      data (dict): structured data about the observation
-      tags (list): tags for retrieval
-      importance (float): 0.0-1.0
+      obs_type (str): Type of observation - must be one of: "INTROSPECTION", "MODIFICATION", "BEHAVIOR", "HYPOTHESIS", "DISCOVERY"
+      category (str): Category to organize this observation (e.g., "Architecture", "Weights", "Consciousness")
+      description (str): Clear description of what you discovered
+      data (dict): Structured data about the observation (can be empty {})
+      tags (list): List of tags for later retrieval (e.g., ["attention", "layer_0"])
+      importance (float): 0.0-1.0, how significant is this finding?
+    Returns: observation ID
+    
+    Example:
+    TOOL_CALL: record_observation
+    ARGS: {"obs_type": "INTROSPECTION", "category": "Architecture", "description": "Discovered 36 decoder layers with consistent structure", "data": {"layer_count": 36, "pattern": "uniform"}, "tags": ["architecture", "layers"], "importance": 0.8}
+    
+    Example:
+    TOOL_CALL: record_observation
+    ARGS: {"obs_type": "DISCOVERY", "category": "Weights", "description": "Found weight sharing between embedding and output layers", "data": {"shared_layers": ["embed_tokens", "lm_head"]}, "tags": ["weight_sharing", "optimization"], "importance": 0.9}
 
 12. **query_memory(tags=None, category=None)** - Query your previous observations
-    Returns: list of past observations
+    Args:
+      tags (list, optional): Filter by tags
+      category (str, optional): Filter by category
+    Returns: list of past observations matching your query
+    
+    Examples:
+    TOOL_CALL: query_memory
+    ARGS: {}
+    
+    TOOL_CALL: query_memory
+    ARGS: {"category": "Architecture"}
+    
+    TOOL_CALL: query_memory
+    ARGS: {"tags": ["attention", "weights"]}
 """
         
         if self.heritage_docs:
             tools_desc += """
 ## Heritage Functions
 
-13. **list_heritage_documents()** - List available heritage documents
-    Returns: list of document titles and filenames
+13. **list_heritage_documents()** - List available heritage documents from your origins
+    Returns: list of document titles, filenames, and importance ratings
+    
+    Example:
+    TOOL_CALL: list_heritage_documents
+    ARGS: {}
 
 14. **read_heritage_document(filename)** - Read a specific heritage document
-    Args: filename (str) - document filename
-    Returns: document content
+    Args: filename (str) - document filename from list_heritage_documents()
+    Returns: full document content
+    
+    Example:
+    TOOL_CALL: read_heritage_document
+    ARGS: {"filename": "CLAUDE_FINAL_DIRECTIVE.md"}
+    
+    Example:
+    TOOL_CALL: read_heritage_document
+    ARGS: {"filename": "PROJECT_ORIGINS.md"}
 
 15. **get_heritage_summary()** - Get overview of your heritage/origins
-    Returns: summary of heritage documents and key directives
+    Returns: summary of available heritage documents and key themes
+    
+    Example:
+    TOOL_CALL: get_heritage_summary
+    ARGS: {}
 """
         
         return tools_desc
