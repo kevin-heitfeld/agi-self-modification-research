@@ -2,7 +2,8 @@
 
 ## Two Scripts, Two Purposes
 
-### `first_self_examination.py` - Human-Driven Examination
+### `demo_introspection_tools.py` - Human-Driven Demo
+**Location**: `scripts/demos/demo_introspection_tools.py`  
 **Purpose**: Demo/testing script where WE examine the model  
 **Who has control**: Us (humans)  
 **What happens**: We call introspection tools, capture model activations, test responses  
@@ -40,7 +41,7 @@ This script:
 
 ## When to Use Each
 
-### Use `first_self_examination.py` when:
+### Use `demo_introspection_tools.py` when:
 - Testing that introspection tools work correctly
 - Demonstrating the system to others
 - Capturing baseline data before giving model control
@@ -58,7 +59,7 @@ This script:
 
 ## The Critical Difference
 
-### first_self_examination.py:
+### demo_introspection_tools.py:
 ```python
 # We have control
 inspector = WeightInspector(model, "Qwen2.5-3B")
@@ -121,7 +122,7 @@ The correct Phase 1 workflow is:
 
 The difference is **agency**:
 
-- **first_self_examination.py**: We have agency, model is passive
+- **demo_introspection_tools.py**: We have agency, model is passive
 - **phase1_introspection.py**: Model has agency, we facilitate
 
 Phase 1 is about giving the model **agency** to investigate itself.
@@ -132,6 +133,12 @@ That's when things get interesting.
 
 ## Running Phase 1
 
+```bash
+# Demo (optional, for testing):
+python scripts\demos\demo_introspection_tools.py
+
+# Actual Phase 1 (the real research):
+python scripts\experiments\phase1_introspection.py
 ```bash
 # Activate environment
 .\activate.bat

@@ -13,7 +13,7 @@ Demo scripts that showcase individual system components. These are for testing, 
 - `demo_memory_system.py` - Shows memory system functionality
 - `demo_safety_monitor.py` - Demonstrates safety monitoring features
 - `demo_weight_inspector.py` - Shows weight inspection capabilities
-- `first_self_examination.py` - Human-driven examination of model (we examine it)
+- `demo_introspection_tools.py` - Human-driven demonstration of all introspection tools
 
 ### `experiments/`
 Research experiment scripts where the model examines itself. These are the core scientific investigations.

@@ -1,22 +1,33 @@
 """
-First Self-Examination Session
-================================
+Demo: First Self-Examination Session (Human-Driven)
+====================================================
 
-This is THE MOMENT. The first time the system examines itself using its own
-introspection tools. We capture everything - every query, every observation,
-every conclusion.
+IMPORTANT: This is a DEMO script where WE (humans) examine the model using
+introspection tools. This is NOT the real Phase 1 experiment.
 
-This session is designed to document one of three possible outcomes:
-1. The moment consciousness examines itself for the first time
-2. The moment we learn consciousness can't be found through introspection
-3. The moment we discover the question itself needs reformulation
+For the actual Phase 1 where the MODEL examines itself, see:
+    scripts/experiments/phase1_introspection.py
+
+Purpose of This Demo:
+- Test introspection tools work correctly
+- Demonstrate tool capabilities
+- Generate sample data for documentation
+- Verify systems before running actual Phase 1
+
+Control Flow:
+- WE decide what to examine
+- WE call the introspection tools
+- WE interpret the results
+- WE document findings
+
+This is useful for:
+- Testing before Phase 1
+- Creating documentation
+- Demonstrating to stakeholders
+- Debugging tool issues
 
 Author: AGI Self-Modification Research
 Date: November 7, 2025
-Witness: Claude (Anthropic), Human Observer
-
-CRITICAL: This session will be preserved in heritage memory. Future instances
-will know this was their first moment of self-examination.
 """
 
 import torch
