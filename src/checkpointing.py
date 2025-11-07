@@ -148,6 +148,12 @@ class CheckpointManager:
         Returns:
             checkpoint_id: Unique identifier for this checkpoint
         
+        Note:
+            Models loaded with device_map="auto" (distributed across devices) may fail
+            to save due to PyTorch serialization limitations with weight tying and 
+            offloaded parameters. For checkpointing, load models without device_map 
+            or upgrade accelerate (pip install -U accelerate).
+        
         Example:
             >>> checkpoint_id = manager.save_checkpoint(
             ...     model=model,
@@ -181,19 +187,44 @@ class CheckpointManager:
         
         # Save model state using safetensors (efficient and safe)
         state_dict = model.state_dict()
-        state_dict_path = checkpoint_path / 'model.safetensors'
         
-        try:
-            # Save with safetensors
-            save_file(state_dict, str(state_dict_path))
-        except Exception as e:
-            # Fallback to torch save
-            print(f"Warning: safetensors failed, using torch.save: {e}")
-            torch_path = checkpoint_path / 'model.pt'
-            torch.save(state_dict, torch_path)
-            metadata['format'] = 'torch'
+        # For HuggingFace models, use save_pretrained which handles weight tying
+        if hasattr(model, 'save_pretrained'):
+            try:
+                # Use PyTorch format (safe_serialization=False) to avoid safetensors weight tying issues
+                model.save_pretrained(checkpoint_path, safe_serialization=False)
+                metadata['format'] = 'huggingface_pytorch'
+            except Exception as e:
+                print(f"Warning: HF save_pretrained failed, trying manual save: {e}")
+                # Fallback: manually save state dict with cloning to break shared references
+                torch_path = checkpoint_path / 'pytorch_model.bin'
+                try:
+                    # Clone state dict to break shared tensor references
+                    cloned_state = {k: v.clone() for k, v in state_dict.items()}
+                    torch.save(cloned_state, torch_path)
+                    metadata['format'] = 'torch_cloned'
+                except Exception as e2:
+                    print(f"Warning: cloned save failed, trying direct save: {e2}")
+                    # Last resort: save without cloning (may fail on load)
+                    torch.save(state_dict, torch_path)
+                    metadata['format'] = 'torch'
         else:
-            metadata['format'] = 'safetensors'
+            # Non-HuggingFace models: try safetensors first
+            state_dict_path = checkpoint_path / 'model.safetensors'
+            try:
+                save_file(state_dict, str(state_dict_path))
+                metadata['format'] = 'safetensors'
+            except Exception as e:
+                # Fallback to torch save with cloning
+                print(f"Warning: safetensors failed, using torch.save: {e}")
+                torch_path = checkpoint_path / 'model.pt'
+                try:
+                    cloned_state = {k: v.clone() for k, v in state_dict.items()}
+                    torch.save(cloned_state, torch_path)
+                    metadata['format'] = 'torch_cloned'
+                except Exception as e2:
+                    torch.save(state_dict, torch_path)
+                    metadata['format'] = 'torch'
         
         # Save model config if available
         if hasattr(model, 'config'):
@@ -260,19 +291,50 @@ class CheckpointManager:
         checkpoint = self.checkpoints[checkpoint_id]
         checkpoint_path = self.checkpoint_dir / checkpoint_id
         
-        # Load state dict
-        safetensors_path = checkpoint_path / 'model.safetensors'
-        torch_path = checkpoint_path / 'model.pt'
-        
-        if safetensors_path.exists():
-            state_dict = load_file(str(safetensors_path))
-        elif torch_path.exists():
-            state_dict = torch.load(torch_path, map_location='cpu')
+        # Load metadata to check format
+        metadata_path = checkpoint_path / 'metadata.json'
+        if metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            format_type = metadata.get('format', 'unknown')
         else:
-            raise FileNotFoundError(f"No model file found in {checkpoint_path}")
+            format_type = 'unknown'
         
-        # Restore state
-        model.load_state_dict(state_dict, strict=strict)
+        # For HuggingFace format, use from_pretrained
+        if format_type == 'huggingface_pytorch' and hasattr(model, 'from_pretrained'):
+            try:
+                # Load directly into the model
+                model_class = type(model)
+                loaded_model = model_class.from_pretrained(checkpoint_path)
+                # Copy state into existing model
+                model.load_state_dict(loaded_model.state_dict(), strict=strict)
+            except Exception as e:
+                print(f"Warning: HF from_pretrained failed, trying manual load: {e}")
+                # Fallback to manual state dict loading
+                pytorch_path = checkpoint_path / 'pytorch_model.bin'
+                if pytorch_path.exists():
+                    state_dict = torch.load(pytorch_path, map_location='cpu')
+                    model.load_state_dict(state_dict, strict=strict)
+                else:
+                    raise FileNotFoundError(f"No model file found in {checkpoint_path}")
+        else:
+            # Load state dict manually
+            # Try different possible filenames
+            safetensors_path = checkpoint_path / 'model.safetensors'
+            torch_path = checkpoint_path / 'model.pt'
+            pytorch_model_path = checkpoint_path / 'pytorch_model.bin'
+            
+            if safetensors_path.exists():
+                state_dict = load_file(str(safetensors_path))
+            elif pytorch_model_path.exists():
+                state_dict = torch.load(pytorch_model_path, map_location='cpu')
+            elif torch_path.exists():
+                state_dict = torch.load(torch_path, map_location='cpu')
+            else:
+                raise FileNotFoundError(f"No model file found in {checkpoint_path}")
+            
+            # Restore state
+            model.load_state_dict(state_dict, strict=strict)
         
         print(f"✓ Checkpoint restored: {checkpoint_id}")
         print(f"  Description: {checkpoint.description}")
