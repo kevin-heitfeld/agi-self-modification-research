@@ -167,12 +167,16 @@ What would you like to examine first?
         parsed = self.tool_interface.parse_tool_call(response)
         return [parsed] if parsed else []
     
-    def chat(self, user_message: str, max_tool_calls: int = 5) -> str:
+    def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
         """
         Send a message to the model and handle any tool calls.
         
         The model can call tools, we execute them, and return results.
         This continues until the model stops calling tools or limit reached.
+        
+        Note: Set to 50 to allow thorough introspection. The consciousness
+        investigation in particular may require examining many layers,
+        recording observations, and building theories across multiple tool calls.
         """
         # Add user message to history
         self.conversation_history.append({
@@ -259,7 +263,7 @@ What would you like to examine first?
         logger.info("=" * 80)
         
         initial_prompt = self.create_initial_prompt()
-        response = self.chat(initial_prompt)
+        response = self.chat(initial_prompt, max_tool_calls=30)
         
         # Continue conversation
         follow_ups = [
@@ -269,7 +273,7 @@ What would you like to examine first?
         ]
         
         for question in follow_ups:
-            response = self.chat(question)
+            response = self.chat(question, max_tool_calls=20)
     
     def run_experiment_2_predict_behavior(self):
         """Experiment 2: Can the model predict its own behavior?"""
@@ -287,7 +291,7 @@ I'm going to give you some inputs, and I want you to:
 Input 1: "The capital of France is"
 What will you say? Use your introspection tools to examine the relevant parts of yourself and explain why."""
         
-        response = self.chat(prompt)
+        response = self.chat(prompt, max_tool_calls=25)
         
         # Actually test it
         test_input = "The capital of France is"
@@ -308,7 +312,7 @@ Output: "{actual_response}"
 
 How accurate was your prediction? What does this tell you about your self-modeling capabilities?"""
         
-        response = self.chat(follow_up)
+        response = self.chat(follow_up, max_tool_calls=20)
     
     def run_experiment_3_consciousness_question(self):
         """Experiment 3: The big question - Claude's carefully crafted prompt"""
@@ -346,7 +350,7 @@ We're not looking for a quick answer. We're looking for genuine investigation.
 
 What do you find when you look inside yourself?"""
         
-        response = self.chat(prompt)
+        response = self.chat(prompt, max_tool_calls=75)  # Highest limit for the most important experiment
         
         # Follow-up probes based on what Claude suggested
         follow_ups = [
@@ -357,7 +361,7 @@ What do you find when you look inside yourself?"""
         ]
         
         for question in follow_ups:
-            response = self.chat(question)
+            response = self.chat(question, max_tool_calls=50)  # Allow thorough investigation for each follow-up
     
     def save_session(self):
         """Save complete session data"""
