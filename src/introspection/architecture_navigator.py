@@ -64,6 +64,29 @@ class ArchitectureNavigator:
         self._module_cache: Optional[Dict[str, nn.Module]] = None
         self._architecture_type: Optional[str] = None
         
+        # Optional WeightInspector for weight sharing detection
+        self._weight_inspector = None
+        
+    def set_weight_inspector(self, inspector) -> None:
+        """
+        Set WeightInspector for enhanced architectural analysis.
+        
+        When a WeightInspector is attached, the navigator can detect
+        and report weight sharing (e.g., tied embeddings).
+        
+        Args:
+            inspector: WeightInspector instance
+            
+        Example:
+            >>> from introspection import WeightInspector, ArchitectureNavigator
+            >>> inspector = WeightInspector(model)
+            >>> navigator = ArchitectureNavigator(model)
+            >>> navigator.set_weight_inspector(inspector)
+            >>> summary = navigator.get_architecture_summary()
+            >>> print(summary['weight_sharing'])
+        """
+        self._weight_inspector = inspector
+        
     def get_architecture_summary(self) -> Dict[str, Any]:
         """
         Get a high-level summary of the model architecture.
@@ -102,7 +125,10 @@ class ArchitectureNavigator:
         # Extract structure information
         structure = self._extract_structure_info()
         
-        return {
+        # Detect weight sharing if WeightInspector available
+        weight_sharing = self._detect_weight_sharing()
+        
+        summary = {
             'model_type': model_type,
             'description': description,
             'total_parameters': total_params,
@@ -113,6 +139,12 @@ class ArchitectureNavigator:
             'config': self.config,
             'structure_summary': structure
         }
+        
+        # Add weight sharing info if detected
+        if weight_sharing:
+            summary['weight_sharing'] = weight_sharing
+        
+        return summary
     
     def describe_layer(self, layer_name: str) -> Dict[str, Any]:
         """
@@ -291,6 +323,94 @@ class ArchitectureNavigator:
                 'suggestion': 'Try rephrasing your question.'
             }
     
+    def get_weight_sharing_info(self, layer_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get information about weight sharing in the model.
+        
+        Args:
+            layer_name: Optional specific layer to check. If None, returns all sharing.
+        
+        Returns:
+            Dictionary with weight sharing information:
+            - has_sharing: Whether any weight sharing is detected
+            - summary: Natural language summary
+            - groups: List of sharing groups (if layer_name is None)
+            - coupled_with: List of layers coupled with layer_name (if specified)
+            - implications: What this means for modifications
+        
+        Example:
+            >>> # Get all weight sharing
+            >>> info = navigator.get_weight_sharing_info()
+            >>> print(info['summary'])
+            >>>
+            >>> # Check specific layer
+            >>> info = navigator.get_weight_sharing_info('model.embed_tokens.weight')
+            >>> print(f"Coupled with: {info['coupled_with']}")
+        """
+        if not self._weight_inspector:
+            return {
+                'has_sharing': False,
+                'error': 'WeightInspector not attached. Use set_weight_inspector() first.',
+                'suggestion': 'Attach a WeightInspector to enable weight sharing detection.'
+            }
+        
+        try:
+            if layer_name:
+                # Query for specific layer
+                coupled_layers = self._weight_inspector.get_shared_layers(layer_name)
+                
+                if not coupled_layers:
+                    return {
+                        'has_sharing': False,
+                        'layer': layer_name,
+                        'coupled_with': [],
+                        'summary': f"Layer '{layer_name}' does not share weights with any other layer."
+                    }
+                
+                implications = self._describe_weight_sharing_implications(
+                    [layer_name] + coupled_layers
+                )
+                
+                return {
+                    'has_sharing': True,
+                    'layer': layer_name,
+                    'coupled_with': coupled_layers,
+                    'num_coupled_layers': len(coupled_layers),
+                    'summary': (
+                        f"Layer '{layer_name}' shares weights with "
+                        f"{len(coupled_layers)} other layer(s): {', '.join(coupled_layers)}"
+                    ),
+                    'implications': implications,
+                    'warning': (
+                        f"⚠️ Modifying '{layer_name}' will also affect: {', '.join(coupled_layers)}"
+                    )
+                }
+            else:
+                # Get all weight sharing
+                sharing_info = self._detect_weight_sharing()
+                
+                if not sharing_info or not sharing_info.get('detected'):
+                    return {
+                        'has_sharing': False,
+                        'summary': 'No weight sharing detected in this model.',
+                        'note': 'All layers have independent weights.'
+                    }
+                
+                return {
+                    'has_sharing': True,
+                    'num_groups': sharing_info['num_groups'],
+                    'total_layers_affected': sharing_info['total_layers_affected'],
+                    'groups': sharing_info['shared_groups'],
+                    'summary': sharing_info['summary'],
+                    'warning': sharing_info['warning']
+                }
+        
+        except Exception as e:
+            return {
+                'has_sharing': False,
+                'error': f"Could not query weight sharing: {e}"
+            }
+
     def generate_diagram(self, format: str = 'text') -> str:
         """
         Generate an architectural diagram.
@@ -416,6 +536,111 @@ class ArchitectureNavigator:
             type_counts[module_type] += 1
         
         return dict(type_counts)
+    
+    def _detect_weight_sharing(self) -> Optional[Dict[str, Any]]:
+        """
+        Detect weight sharing using WeightInspector if available.
+        
+        Returns:
+            Dictionary with weight sharing information, or None if no inspector
+            or no sharing detected.
+        """
+        if not self._weight_inspector:
+            return None
+        
+        try:
+            shared_weights = self._weight_inspector.get_shared_weights()
+            
+            if not shared_weights:
+                return None
+            
+            # Build structured information about weight sharing
+            shared_groups = []
+            for layer_names in shared_weights.values():
+                if len(layer_names) < 2:
+                    continue
+                
+                # Get tensor info from first layer
+                first_layer = layer_names[0]
+                try:
+                    layer_info = self._weight_inspector.get_layer_weights(first_layer)
+                    tensor_shape = layer_info['shape']
+                    tensor_size = layer_info['num_parameters']
+                except:
+                    tensor_shape = None
+                    tensor_size = None
+                
+                # Determine implications
+                implications = self._describe_weight_sharing_implications(layer_names)
+                
+                shared_groups.append({
+                    'layers': layer_names,
+                    'tensor_shape': tensor_shape,
+                    'tensor_size': tensor_size,
+                    'implications': implications
+                })
+            
+            if not shared_groups:
+                return None
+            
+            # Generate summary
+            total_shared = sum(len(g['layers']) for g in shared_groups)
+            summary = (
+                f"Detected {len(shared_groups)} group(s) of weight sharing "
+                f"involving {total_shared} layer(s). "
+                f"This is typically used for parameter efficiency (e.g., tied embeddings)."
+            )
+            
+            return {
+                'detected': True,
+                'num_groups': len(shared_groups),
+                'total_layers_affected': total_shared,
+                'shared_groups': shared_groups,
+                'summary': summary,
+                'warning': (
+                    "⚠️ Modifying any layer in a shared group will affect ALL layers "
+                    "in that group, as they reference the same underlying tensor."
+                )
+            }
+        
+        except Exception as e:
+            # Graceful degradation - don't break if detection fails
+            return {
+                'detected': False,
+                'error': f"Could not detect weight sharing: {e}"
+            }
+    
+    def _describe_weight_sharing_implications(self, layer_names: List[str]) -> str:
+        """
+        Describe the implications of weight sharing for specific layers.
+        
+        Args:
+            layer_names: List of layer names that share weights
+            
+        Returns:
+            Natural language description of implications
+        """
+        # Try to identify common patterns
+        names_lower = [name.lower() for name in layer_names]
+        
+        # Check for embedding/output tying (common in language models)
+        has_embed = any('embed' in name for name in names_lower)
+        has_lm_head = any('lm_head' in name or 'output' in name for name in names_lower)
+        
+        if has_embed and has_lm_head:
+            return (
+                "Embedding and output head share weights (tied embeddings). "
+                "This is a common optimization in language models that reduces "
+                "parameters and can improve training. Modifying either layer "
+                "affects both input embeddings and output predictions."
+            )
+        
+        # Generic description
+        return (
+            f"These {len(layer_names)} layers share the same weight tensor. "
+            f"Modifying any one of them will affect all {len(layer_names)} layers. "
+            f"This architectural choice reduces parameters and enforces consistency."
+        )
     
     def _generate_model_description(
         self, 
