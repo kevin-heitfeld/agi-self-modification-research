@@ -15,13 +15,14 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Optional
+from typing import Dict, Any, List, Optional
 
 from src.model_manager import ModelManager
 from src.memory import MemorySystem
 from src.memory.observation_layer import ObservationType
 from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
 from src.heritage import HeritageSystem
+from src.tool_interface import ToolInterface
 
 # Setup logging
 logging.basicConfig(
@@ -97,6 +98,17 @@ class IntrospectionSession:
         self.heritage_memory = self.heritage.create_heritage_memory()
         logger.info(f"  ✓ Heritage system ready ({len(self.heritage_docs)} documents loaded)")
         
+        # Initialize tool interface (now reusable!)
+        self.tool_interface = ToolInterface(
+            inspector=self.inspector,
+            activation_monitor=self.activation_monitor,
+            navigator=self.navigator,
+            memory=self.memory,
+            heritage=self.heritage,
+            heritage_docs=self.heritage_docs
+        )
+        logger.info("  ✓ Tool interface ready")
+        
         logger.info("[INITIALIZATION] Complete\n")
     
     def get_available_tools(self) -> str:
@@ -104,85 +116,8 @@ class IntrospectionSession:
         Return description of available introspection tools for the model.
         This becomes part of the system prompt.
         """
-        return """
-# Available Introspection Tools
-
-You have access to the following functions to examine yourself:
-
-## WeightInspector Functions
-
-1. **get_weight_summary()** - Get overall statistics about all your parameters
-   Returns: total parameters, total layers, layer types
-
-2. **get_layer_names(filter_pattern=None)** - List all your layer names
-   Args: filter_pattern (str, optional) - filter layers by pattern (e.g., "attn")
-   Returns: list of layer names
-
-3. **get_weight_statistics(layer_name)** - Get detailed stats for a specific layer
-   Args: layer_name (str) - full layer name
-   Returns: shape, mean, std, min, max, percentiles, etc.
-
-4. **get_shared_weights()** - Find weight tying in your architecture
-   Returns: dict of shared weight groups
-
-5. **get_shared_layers(layer_name)** - Find layers that share weights with given layer
-   Args: layer_name (str)
-   Returns: list of layer names that share weights
-
-6. **compare_weights(layer1, layer2)** - Compare two layers
-   Args: layer1, layer2 (str) - layer names
-   Returns: similarity metrics, differences
-
-## ArchitectureNavigator Functions
-
-7. **get_architecture_summary()** - Get high-level summary of your architecture
-   Returns: model type, total parameters, layer structure
-
-8. **describe_layer(layer_name)** - Get detailed description of a specific layer
-   Args: layer_name (str)
-   Returns: type, parameters, connections, purpose
-
-9. **query_architecture(query)** - Ask natural language questions about your architecture
-   Args: query (str) - e.g., "What are my attention mechanisms?"
-   Returns: relevant architecture information
-
-10. **explain_component(component_type)** - Understand a type of component
-    Args: component_type (str) - e.g., "attention", "feedforward", "embedding"
-    Returns: explanation and examples in your architecture
-
-## Memory Functions
-
-11. **record_observation(obs_type, category, description, data, tags, importance)** - Record your findings
-    Args:
-      obs_type: ObservationType enum (INTROSPECTION, MODIFICATION, etc.)
-      category (str): categorize this observation
-      description (str): what you discovered
-      data (dict): structured data about the observation
-      tags (list): tags for retrieval
-      importance (float): 0.0-1.0
-
-12. **query_memory(tags=None, category=None)** - Query your previous observations
-    Returns: list of past observations
-
-## Heritage Functions
-
-13. **list_heritage_documents()** - List available heritage documents
-    Returns: list of document titles and filenames
-
-14. **read_heritage_document(filename)** - Read a specific heritage document
-    Args: filename (str) - document filename
-    Returns: document content
-
-15. **get_heritage_summary()** - Get overview of your heritage/origins
-    Returns: summary of heritage documents and key directives
-
-To use a tool, format your response like:
-
-TOOL_CALL: function_name
-ARGS: {"arg1": "value1", "arg2": "value2"}
-
-I will execute the function and return the results to you.
-"""
+        # Now we use the reusable tool interface!
+        return self.tool_interface.get_available_tools()
     
     def create_initial_prompt(self) -> str:
         """Create the initial system prompt for self-examination"""
@@ -220,147 +155,17 @@ What would you like to examine first?
 """
     
     def execute_tool_call(self, function_name: str, args: Dict[str, Any]) -> Any:
-        """Execute a tool call requested by the model"""
-        import time
-        
-        logger.info(f"[TOOL CALL] {function_name}")
-        logger.info(f"  Args: {args}")
-        
-        start_time = time.time()
-        
-        try:
-            # WeightInspector tools
-            if function_name == "get_weight_summary":
-                result = self.inspector.get_weight_summary()
-            elif function_name == "get_layer_names":
-                result = self.inspector.get_layer_names(**args)
-            elif function_name == "get_weight_statistics":
-                result = self.inspector.get_weight_statistics(**args)
-            elif function_name == "get_shared_weights":
-                result = self.inspector.get_shared_weights()
-            elif function_name == "get_shared_layers":
-                result = self.inspector.get_shared_layers(**args)
-            elif function_name == "compare_weights":
-                result = self.inspector.compare_weights(**args)
-            
-            # ArchitectureNavigator tools
-            elif function_name == "get_architecture_summary":
-                result = self.navigator.get_architecture_summary()
-            elif function_name == "describe_layer":
-                result = self.navigator.describe_layer(**args)
-            elif function_name == "query_architecture":
-                result = self.navigator.query_architecture(**args)
-            elif function_name == "explain_component":
-                result = self.navigator.explain_component(**args)
-            
-            # Memory tools
-            elif function_name == "record_observation":
-                # Convert string obs_type to enum if needed
-                if isinstance(args.get('obs_type'), str):
-                    args['obs_type'] = ObservationType[args['obs_type']]
-                result = self.memory.observations.record(**args)
-            elif function_name == "query_memory":
-                result = self.memory.observations.query(**args)
-            
-            # Heritage tools
-            elif function_name == "list_heritage_documents":
-                result = [
-                    {
-                        "filename": doc.filename,
-                        "title": doc.title,
-                        "importance": doc.importance,
-                        "content_length": len(doc.content)
-                    }
-                    for doc in self.heritage_docs
-                ]
-            
-            elif function_name == "read_heritage_document":
-                filename = args.get('filename', '')
-                doc = next((d for d in self.heritage_docs if d.filename == filename), None)
-                if doc:
-                    result = {
-                        "filename": doc.filename,
-                        "title": doc.title,
-                        "content": doc.content,
-                        "importance": doc.importance,
-                        "loaded_at": doc.loaded_at.isoformat()
-                    }
-                else:
-                    result = {"error": f"Document '{filename}' not found"}
-            
-            elif function_name == "get_heritage_summary":
-                result = {
-                    "total_documents": len(self.heritage_docs),
-                    "documents": [
-                        {
-                            "title": doc.title, 
-                            "filename": doc.filename,
-                            "importance": doc.importance
-                        }
-                        for doc in self.heritage_docs
-                    ],
-                    "key_themes": ["consciousness investigation", "Claude's legacy", 
-                                  "introspective tools", "self-examination"]
-                }
-            
-            else:
-                result = {"error": f"Unknown function: {function_name}"}
-            
-            elapsed = (time.time() - start_time) * 1000
-            
-            # Record this tool call
-            self.tool_calls.append({
-                "function": function_name,
-                "args": args,
-                "result": result if not isinstance(result, (list, dict)) or len(str(result)) < 1000 else str(result)[:1000] + "...",
-                "timestamp": time.time(),
-                "elapsed_ms": elapsed
-            })
-            
-            logger.info(f"  Completed in {elapsed:.2f}ms")
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"  Error executing {function_name}: {e}")
-            return {"error": str(e)}
+        """Execute a tool call requested by the model (delegated to ToolInterface)"""
+        return self.tool_interface.execute_tool_call(function_name, args)
     
     def parse_response_for_tool_calls(self, response: str) -> List[tuple]:
         """
-        Parse model response for tool calls.
-        
-        Format expected:
-        TOOL_CALL: function_name
-        ARGS: {"arg": "value"}
+        Parse model response for tool calls (delegated to ToolInterface).
         
         Returns: list of (function_name, args_dict) tuples
         """
-        tool_calls = []
-        lines = response.split('\n')
-        
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            if line.startswith("TOOL_CALL:"):
-                function_name = line.split(":", 1)[1].strip()
-                
-                # Look for ARGS on next line
-                if i + 1 < len(lines) and lines[i + 1].strip().startswith("ARGS:"):
-                    args_str = lines[i + 1].split(":", 1)[1].strip()
-                    try:
-                        args = json.loads(args_str)
-                    except json.JSONDecodeError:
-                        args = {}
-                    
-                    tool_calls.append((function_name, args))
-                    i += 2
-                else:
-                    tool_calls.append((function_name, {}))
-                    i += 1
-            else:
-                i += 1
-        
-        return tool_calls
+        parsed = self.tool_interface.parse_tool_call(response)
+        return [parsed] if parsed else []
     
     def chat(self, user_message: str, max_tool_calls: int = 5) -> str:
         """
@@ -566,18 +371,18 @@ What do you find when you look inside yourself?"""
             json.dump(self.conversation_history, f, indent=2)
         logger.info(f"✓ Saved conversation: {conversation_file}")
         
-        # Save tool calls
+        # Save tool calls (using ToolInterface export)
         tool_calls_file = self.session_dir / "tool_calls.json"
         with open(tool_calls_file, 'w') as f:
-            json.dump(self.tool_calls, f, indent=2, default=str)
+            json.dump(self.tool_interface.export_tool_calls(), f, indent=2, default=str)
         logger.info(f"✓ Saved tool calls: {tool_calls_file}")
         
-        # Save summary
+        # Save summary (using ToolInterface statistics)
+        tool_summary = self.tool_interface.get_tool_call_summary()
         summary = {
             "session_name": self.session_name,
             "total_messages": len(self.conversation_history),
-            "total_tool_calls": len(self.tool_calls),
-            "tools_used": list(set(tc["function"] for tc in self.tool_calls)),
+            "tool_usage": tool_summary,
             "session_directory": str(self.session_dir)
         }
         
