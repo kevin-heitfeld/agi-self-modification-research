@@ -169,6 +169,11 @@ class ObservationLayer:
 
         self.conn.commit()
 
+    def close(self):
+        """Close database connection."""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+
     def record(
         self,
         obs_type: ObservationType,

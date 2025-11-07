@@ -14,13 +14,12 @@ Date: November 7, 2025
 """
 
 import unittest
-import tempfile
-import shutil
 import time
 from pathlib import Path
 
 from src.memory.observation_layer import ObservationLayer, ObservationType
 from src.memory.pattern_layer import PatternLayer, PatternType
+from tests.test_utils import get_test_temp_dir, cleanup_temp_dir, close_memory_layers
 
 
 class TestPatternLayer(unittest.TestCase):
@@ -28,7 +27,7 @@ class TestPatternLayer(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.test_dir = tempfile.mkdtemp()
+        self.test_dir = get_test_temp_dir()
         
         # Create observation layer with test data
         obs_dir = Path(self.test_dir) / "observations"
@@ -40,14 +39,11 @@ class TestPatternLayer(unittest.TestCase):
     
     def tearDown(self):
         """Clean up test environment."""
-        # Close database connections (Windows file locking)
-        if hasattr(self, 'obs_layer') and hasattr(self.obs_layer, 'conn'):
-            self.obs_layer.conn.close()
-        if hasattr(self, 'pattern_layer') and hasattr(self.pattern_layer, 'observation_layer'):
-            if hasattr(self.pattern_layer.observation_layer, 'conn'):
-                self.pattern_layer.observation_layer.conn.close()
+        # Close all database connections
+        close_memory_layers(self.obs_layer, self.pattern_layer)
         
-        shutil.rmtree(self.test_dir)
+        # Clean up directory
+        cleanup_temp_dir(self.test_dir)
     
     def test_initialization(self):
         """Test pattern layer initialization."""

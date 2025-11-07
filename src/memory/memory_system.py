@@ -117,6 +117,17 @@ class MemorySystem:
         # Optional WeightInspector for coupled modification detection
         self._weight_inspector = None  # Optional WeightInspector instance
 
+    def close(self):
+        """Close all database connections."""
+        if hasattr(self, 'observations'):
+            self.observations.close()
+        if hasattr(self, 'patterns'):
+            self.patterns.close()
+        if hasattr(self, 'theories'):
+            self.theories.close()
+        if hasattr(self, 'beliefs'):
+            self.beliefs.close()
+
     # ===== High-level convenience methods =====
     
     def set_weight_inspector(self, inspector) -> None:

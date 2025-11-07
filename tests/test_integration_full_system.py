@@ -14,8 +14,6 @@ Date: November 7, 2025
 """
 
 import unittest
-import tempfile
-import shutil
 import time
 import gc
 from pathlib import Path
@@ -31,6 +29,7 @@ from src.introspection.activation_monitor import ActivationMonitor
 from src.introspection.architecture_navigator import ArchitectureNavigator
 from src.memory.memory_system import MemorySystem
 from src.memory.observation_layer import ObservationType
+from tests.test_utils import get_test_temp_dir, cleanup_temp_dir, close_memory_system
 
 
 class TestFullSystemIntegration(unittest.TestCase):
@@ -39,7 +38,7 @@ class TestFullSystemIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test environment once for all tests."""
-        cls.test_dir = tempfile.mkdtemp()
+        cls.test_dir = get_test_temp_dir()
 
         # Load the full model for testing (from local path)
         print("\nLoading model for integration tests...")
@@ -92,20 +91,13 @@ class TestFullSystemIntegration(unittest.TestCase):
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
             time.sleep(0.5)  # Give Windows time to release file handles
 
-        # Now clean up temp directory
-        try:
-            shutil.rmtree(cls.test_dir)
-        except PermissionError:
-            # On Windows, files may still be locked, try again after a delay
-            time.sleep(1)
-            try:
-                shutil.rmtree(cls.test_dir)
-            except:
-                print(f"Warning: Could not delete temp directory {cls.test_dir}")
+        # Clean up temp directory
+        cleanup_temp_dir(cls.test_dir)
 
     def setUp(self):
         """Set up for each test."""
         # Create unique directory for this test
+        import tempfile
         self.test_instance_dir = tempfile.mkdtemp(dir=self.test_dir)
         self.checkpoint_dir = Path(self.test_instance_dir) / "checkpoints"
         self.memory_dir = Path(self.test_instance_dir) / "memory"

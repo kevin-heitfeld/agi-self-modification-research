@@ -14,8 +14,6 @@ Date: November 7, 2025
 """
 
 import unittest
-import tempfile
-import shutil
 import time
 from pathlib import Path
 
@@ -24,6 +22,7 @@ from src.memory.observation_layer import (
     Observation,
     ObservationType
 )
+from tests.test_utils import get_test_temp_dir, cleanup_temp_dir, close_memory_layers
 
 
 class TestObservationLayer(unittest.TestCase):
@@ -31,16 +30,16 @@ class TestObservationLayer(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.test_dir = tempfile.mkdtemp()
+        self.test_dir = get_test_temp_dir()
         self.layer = ObservationLayer(self.test_dir)
     
     def tearDown(self):
         """Clean up test environment."""
-        # Explicitly close database connection before cleanup (Windows file locking)
-        if hasattr(self, 'layer') and hasattr(self.layer, 'conn'):
-            self.layer.conn.close()
+        # Close database connection
+        close_memory_layers(self.layer)
         
-        shutil.rmtree(self.test_dir)
+        # Clean up directory
+        cleanup_temp_dir(self.test_dir)
     
     def test_initialization(self):
         """Test layer initialization."""

@@ -1,7 +1,18 @@
 """
-Phase 1: First Weight Modification Experiment
+Demo: Weight Modification Workflow (Human-Driven)
+==================================================
 
-This script demonstrates a complete Phase 1 workflow:
+IMPORTANT: This is a DEMO/TUTORIAL script where WE (humans) perform a weight
+modification experiment following Phase 1 procedures. This is NOT the real
+Phase 1 experiment where the model examines itself.
+
+For the actual Phase 1 introspection experiment where the MODEL investigates
+consciousness, see:
+    scripts/experiments/phase1_introspection.py
+
+Purpose of This Demo:
+---------------------
+This script demonstrates a complete Phase 1 modification workflow:
 1. Load model and initialize systems
 2. Create baseline checkpoint
 3. Inspect target layer
@@ -9,6 +20,9 @@ This script demonstrates a complete Phase 1 workflow:
 5. Test the effects
 6. Record to human knowledge base
 7. Rollback if needed
+
+This shows the PROCESS and TOOLS available. It's educational - showing humans
+how to safely modify weights and use the safety systems.
 
 Author: AGI Self-Modification Research
 Date: November 7, 2025
@@ -83,13 +97,16 @@ def test_generation(model, tokenizer, prompt: str) -> str:
     return generated
 
 
-def run_phase1_experiment(
+def run_weight_modification_demo(
     target_layer: str = "model.layers.5.self_attn.q_proj",
     modification_delta: float = 0.01,
     test_prompts: Optional[List[str]] = None
 ):
     """
-    Run a Phase 1 weight modification experiment.
+    Run a weight modification demo/tutorial (human-controlled).
+
+    This demonstrates how to use the Phase 1 tools to safely modify weights.
+    A human controls every step and makes all decisions.
 
     Args:
         target_layer: Full path to the layer to modify (e.g., "model.layers.5.self_attn.q_proj")
@@ -105,7 +122,7 @@ def run_phase1_experiment(
         ]
 
     logger.info("=" * 80)
-    logger.info("PHASE 1: First Weight Modification Experiment")
+    logger.info("DEMO: Weight Modification Workflow (Human-Driven)")
     logger.info("=" * 80)
 
     # ===== STEP 1: Initialize all systems =====
@@ -387,14 +404,14 @@ if __name__ == "__main__":
     import time
     time.sleep(3)
 
-    # Run experiment
-    result = run_phase1_experiment(
+    # Run demo
+    result = run_weight_modification_demo(
         target_layer=layer,
         modification_delta=delta
     )
 
     if result:
-        print("\n✅ Experiment completed successfully!")
+        print("\n✅ Demo completed successfully!")
         print(f"Result: {'SUCCESS' if result['success'] else 'FAILURE'}")
         print(f"\nTo view your human knowledge base:")
         print(f"  from src.memory import MemorySystem")

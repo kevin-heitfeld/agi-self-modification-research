@@ -376,6 +376,11 @@ class PatternLayer:
         
         self.conn.commit()
 
+    def close(self):
+        """Close database connection."""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+
     def _save_pattern(self, pattern: Pattern):
         """Save a single pattern to database."""
         cursor = self.conn.cursor()

@@ -14,11 +14,11 @@ Demo scripts that showcase individual system components. These are for testing, 
 - `demo_safety_monitor.py` - Demonstrates safety monitoring features
 - `demo_weight_inspector.py` - Shows weight inspection capabilities
 - `demo_introspection_tools.py` - Human-driven demonstration of all introspection tools
+- `demo_weight_modification.py` - Tutorial showing complete weight modification workflow
 
 ### `experiments/`
 Research experiment scripts where the model examines itself. These are the core scientific investigations.
 
-- `phase1_experiment.py` - Early Phase 1 prototype (read-only introspection)
 - `phase1_introspection.py` - **Main Phase 1 script** - Model examines itself using introspection tools
 
 ### `setup/`

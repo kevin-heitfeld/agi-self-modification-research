@@ -355,6 +355,11 @@ class TheoryLayer:
 
         self.conn.commit()
 
+    def close(self):
+        """Close database connection."""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+
     def _save_theory(self, theory: Theory):
         """Save a single theory to the database."""
         cursor = self.conn.cursor()

@@ -250,6 +250,11 @@ class BeliefLayer:
 
         self.conn.commit()
 
+    def close(self):
+        """Close database connection."""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+
     def _save_belief(self, belief: Belief):
         """Save a single belief to the database."""
         cursor = self.conn.cursor()

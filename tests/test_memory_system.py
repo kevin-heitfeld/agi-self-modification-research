@@ -15,13 +15,12 @@ Date: November 7, 2025
 """
 
 import unittest
-import tempfile
-import shutil
 import time
 from pathlib import Path
 
 from src.memory.memory_system import MemorySystem
 from src.memory.observation_layer import ObservationType
+from tests.test_utils import get_test_temp_dir, cleanup_temp_dir, close_memory_system
 
 
 class TestMemorySystem(unittest.TestCase):
@@ -29,18 +28,16 @@ class TestMemorySystem(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.test_dir = tempfile.mkdtemp()
+        self.test_dir = get_test_temp_dir()
         self.memory = MemorySystem(self.test_dir)
     
     def tearDown(self):
         """Clean up test environment."""
-        # Close all database connections (Windows file locking)
-        if hasattr(self, 'memory'):
-            # Close observations layer connection
-            if hasattr(self.memory, 'observations') and hasattr(self.memory.observations, 'conn'):
-                self.memory.observations.conn.close()
+        # Close all database connections
+        close_memory_system(self.memory)
         
-        shutil.rmtree(self.test_dir)
+        # Clean up directory
+        cleanup_temp_dir(self.test_dir)
     
     def test_initialization(self):
         """Test memory system initialization."""
