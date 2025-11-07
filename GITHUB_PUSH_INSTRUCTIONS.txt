@@ -1,0 +1,33 @@
+# Commands to Push to GitHub
+
+# After creating the repository on GitHub, run these commands:
+
+# 1. Add GitHub as remote (replace YOUR_USERNAME with your actual GitHub username)
+git remote add origin https://github.com/YOUR_USERNAME/agi-self-modification-research.git
+
+# 2. Verify remote was added
+git remote -v
+
+# 3. Push all commits to GitHub
+git push -u origin master
+
+# That's it! Your repository is now on GitHub.
+
+# ---
+
+# If you want to use SSH instead of HTTPS:
+# git remote add origin git@github.com:YOUR_USERNAME/agi-self-modification-research.git
+
+# ---
+
+# After pushing, you can:
+# 1. View your repo at: https://github.com/YOUR_USERNAME/agi-self-modification-research
+# 2. Open the Colab notebook directly from GitHub
+# 3. Share the "Open in Colab" badge
+
+# ---
+
+# Note: If you want to keep the repo private:
+# - You can still use it with Colab
+# - Just need to authenticate in Colab when cloning
+# - Or upload the notebook directly to Colab instead of using GitHub link
