@@ -13,14 +13,16 @@
     "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
 
     // Pylance Settings
-    "python.analysis.typeCheckingMode": "off",  // Turn off strict type checking
+    "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.autoImportCompletions": true,
     "python.analysis.diagnosticSeverityOverrides": {
-        "reportGeneralTypeIssues": "none",
+        "reportGeneralTypeIssues": "warning",
         "reportOptionalMemberAccess": "none",
-        "reportUnboundVariable": "warning",
-        "reportUndefinedVariable": "warning"
+        "reportArgumentType": "warning",
+        "reportCallIssue": "warning",
+        "reportUnboundVariable": "error",
+        "reportUndefinedVariable": "error"
     },
 
     // Pylint Configuration - Disable overly strict rules
