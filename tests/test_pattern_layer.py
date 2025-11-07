@@ -48,7 +48,9 @@ class TestPatternLayer(unittest.TestCase):
     def test_initialization(self):
         """Test pattern layer initialization."""
         self.assertIsNotNone(self.pattern_layer.observation_layer)
-        self.assertEqual(len(self.pattern_layer.patterns), 0)
+        # Check patterns using get_patterns() method
+        all_patterns = self.pattern_layer.get_patterns()
+        self.assertEqual(len(all_patterns), 0)
     
     def test_sequential_pattern_detection(self):
         """Test detection of sequential patterns (A→B)."""

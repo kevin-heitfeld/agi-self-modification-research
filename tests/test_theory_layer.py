@@ -81,7 +81,9 @@ class TestTheoryLayer(unittest.TestCase):
         """Test theory layer initialization."""
         self.assertIsNotNone(self.theory_layer.pattern_layer)
         self.assertIsNotNone(self.theory_layer.observation_layer)
-        self.assertEqual(len(self.theory_layer.theories), 0)
+        # Check theories using get_theories() method
+        all_theories = self.theory_layer.get_theories()
+        self.assertEqual(len(all_theories), 0)
 
     def test_build_theories(self):
         """Test building theories from patterns."""

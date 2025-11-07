@@ -89,7 +89,9 @@ class TestBeliefLayer(unittest.TestCase):
     def test_initialization(self):
         """Test belief layer initialization."""
         self.assertIsNotNone(self.belief_layer.theory_layer)
-        self.assertGreater(len(self.belief_layer.beliefs), 0)  # Should have core beliefs
+        # Check core beliefs using get_beliefs() method
+        all_beliefs = self.belief_layer.get_beliefs()
+        self.assertGreater(len(all_beliefs), 0)  # Should have core beliefs
 
     def test_core_beliefs_present(self):
         """Test that core safety beliefs are initialized."""
