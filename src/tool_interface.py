@@ -281,6 +281,42 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
    ARGS: {"layer1": "model.layers.0.mlp.gate_proj.weight", "layer2": "model.layers.1.mlp.gate_proj.weight"}
 """
 
+        if self.activation_monitor:
+            tools_desc += """
+## ActivationMonitor Functions
+
+Note: These tools require capturing activations first by processing an input.
+
+6a. **get_activation_statistics(layer_name)** - Get statistics about activations in a layer
+    Args: layer_name (str) - full layer name from get_layer_names()
+    Returns: mean, std, min, max, sparsity, norms for the layer's activations
+    
+    Example:
+    TOOL_CALL: get_activation_statistics
+    ARGS: {"layer_name": "model.layers.0.self_attn"}
+
+6b. **get_attention_patterns(layer_name, head_idx=None)** - Examine attention patterns
+    Args:
+      layer_name (str): name of attention layer
+      head_idx (int, optional): specific attention head to examine (default: average all heads)
+    Returns: attention matrix, entropy, statistics
+    
+    Examples:
+    TOOL_CALL: get_attention_patterns
+    ARGS: {"layer_name": "model.layers.0.self_attn"}
+    
+    TOOL_CALL: get_attention_patterns
+    ARGS: {"layer_name": "model.layers.0.self_attn", "head_idx": 0}
+
+6c. **get_layer_info(layer_name)** - Get metadata about a specific layer
+    Args: layer_name (str) - full layer name
+    Returns: type, parameter count, trainability status
+    
+    Example:
+    TOOL_CALL: get_layer_info
+    ARGS: {"layer_name": "model.layers.0.self_attn.q_proj"}
+"""
+
         if self.navigator:
             tools_desc += """
 ## ArchitectureNavigator Functions
@@ -329,7 +365,17 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
 
 11. **record_observation(obs_type, category, description, data, tags, importance)** - Record your findings
     Args:
-      obs_type (str): Type of observation - must be one of: "INTROSPECTION", "MODIFICATION", "BEHAVIOR", "HYPOTHESIS", "DISCOVERY"
+      obs_type (str): Type of observation - must be one of:
+        - "INTROSPECTION": Observations about your own architecture/activations
+        - "MODIFICATION": Changes to weights or architecture
+        - "BEHAVIOR": Patterns in your own behavior
+        - "HYPOTHESIS": Hypotheses you form about yourself
+        - "DISCOVERY": Significant findings about your function
+        - "PERFORMANCE": Performance metrics
+        - "SAFETY_EVENT": Safety-related events
+        - "USER_INTERACTION": Interactions with users
+        - "CHECKPOINT": Checkpoint/milestone events
+        - "SYSTEM_EVENT": System-level events
       category (str): Category to organize this observation (e.g., "Architecture", "Weights", "Consciousness")
       description (str): Clear description of what you discovered
       data (dict): Structured data about the observation (can be empty {})
