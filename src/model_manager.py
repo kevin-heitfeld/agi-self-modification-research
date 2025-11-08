@@ -18,7 +18,7 @@ class ModelManager:
 
     def __init__(self, model_name: str = "Qwen/Qwen2.5-3B-Instruct", cache_dir: Optional[Path] = None):
         self.model_name = model_name
-        
+
         # Respect environment variables for cache directory (important for Colab!)
         if cache_dir is None:
             # Check HF_HOME and TRANSFORMERS_CACHE environment variables
@@ -32,7 +32,7 @@ class ModelManager:
         else:
             self.cache_dir = cache_dir
             logger.info(f"Using explicit cache directory: {self.cache_dir}")
-        
+
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.model: Optional[Any] = None
@@ -111,11 +111,13 @@ class ModelManager:
             )
 
             # Load model
+            # Use float16 on both GPU and CPU to avoid dtype conversion overhead
+            # (CPU can handle float16, and it matches the cached model dtype)
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 cache_dir=str(self.cache_dir),
                 token=use_auth_token,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                torch_dtype=torch.float16,
                 low_cpu_mem_usage=True,
                 trust_remote_code=True
             )
@@ -123,7 +125,7 @@ class ModelManager:
             # Validate model loaded correctly
             if self.model is None:
                 raise RuntimeError("Model loading returned None")
-            
+
             # Verify model has parameters (checkpoint shards loaded)
             try:
                 param_count = sum(p.numel() for p in self.model.parameters())
