@@ -111,20 +111,25 @@ When you want to use a tool, write:
 TOOL_CALL: function_name
 ARGS: {"arg1": "value1"}
 
-What happens next:
+Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
+
+What happens:
 - Only the LAST tool call in your response is executed
 - It will only be executed if there's no additional text after the ARGS block
 - If you write multiple tool calls, only the last one counts
 - If you continue writing after ARGS, the tool won't be executed
 
-So if you write:
+Example of what NOT to do:
 TOOL_CALL: get_architecture_summary
 ARGS: {}
 Then I'll examine the architecture...  ← This prevents execution!
 
 The tool call is ignored because there's text after it.
 
-Best practice: Make one tool call, then stop. Wait for TOOL_RESULTS before continuing.
+Correct usage:
+TOOL_CALL: get_architecture_summary
+ARGS: {}
+[END YOUR RESPONSE HERE - TOOL_RESULTS will come in next USER message]
 """
 
     def initialize_systems(self, include_heritage: bool = True, wrong_heritage: bool = False):
@@ -299,7 +304,7 @@ Best practice: Make one tool call, then stop. Wait for TOOL_RESULTS before conti
                     self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving feedback")
                     self.conversation_history.append({
                         "role": "user",
-                        "content": "Note: To use a tool, make the TOOL_CALL and ARGS, then STOP. Wait for TOOL_RESULTS before continuing."
+                        "content": "Note: To use a tool, make the TOOL_CALL and ARGS, then END your response. The TOOL_RESULTS will come in the next USER message. Don't continue writing after the tool call."
                     })
                 else:
                     # No tool calls - model gave conversational response
