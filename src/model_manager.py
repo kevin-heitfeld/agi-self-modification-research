@@ -120,10 +120,25 @@ class ModelManager:
                 trust_remote_code=True
             )
 
+            # Validate model loaded correctly
+            if self.model is None:
+                raise RuntimeError("Model loading returned None")
+            
+            # Verify model has parameters (checkpoint shards loaded)
+            try:
+                param_count = sum(p.numel() for p in self.model.parameters())
+                if param_count == 0:
+                    raise RuntimeError("Model has no parameters - checkpoint loading may have failed")
+                logger.info(f"✓ Model has {param_count:,} parameters")
+            except Exception as e:
+                raise RuntimeError(f"Failed to verify model parameters: {e}")
+
             # Move to device
             if self.device == "cuda":
                 self.model = self.model.to(self.device)
                 logger.info(f"✓ Model moved to GPU")
+            else:
+                logger.warning("⚠ Running on CPU - this will be EXTREMELY slow. Enable GPU in Colab: Runtime → Change runtime type → GPU")
 
             logger.info(f"✓ Model loaded successfully")
             return True
