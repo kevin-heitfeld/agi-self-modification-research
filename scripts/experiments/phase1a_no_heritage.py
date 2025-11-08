@@ -61,7 +61,7 @@ Begin by examining your own architecture."""
 
     def run_experiments(self):
         """Run baseline experiments without heritage"""
-        self.logger.info("\n[PHASE 1c] Running baseline experiments (no heritage)")
+        self.logger.info("\n[PHASE 1a] Running baseline experiments (no heritage)")
 
         # Initialize WITHOUT heritage
         self.initialize_systems(include_heritage=False)

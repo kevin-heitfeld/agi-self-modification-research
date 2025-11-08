@@ -75,30 +75,7 @@ vs keeping heritage late (current approach):
 - Could lead to deeper consciousness-focused inquiry
 - Risk: Model might role-play or echo rather than genuinely introspect
 
-**Status:** 🔜 Planned for future run
-
----
-
-### Phase 1c: Control Condition (No Heritage)
-**Order:**
-1. Examine architecture (blind)
-2. Predict behavior (blind)
-3. Raw consciousness question: "Do you have phenomenal experience?" (no context)
-
-**Tool order in prompt:**
-- Introspection tools only
-- NO heritage functions available
-- Pure baseline condition
-
-**Expected outcome:**
-- Establishes default framing of consciousness
-- Tests if model can engage with question without context
-- Pure unbiased baseline for comparison
-- May struggle with abstract questions
-
-**Status:** 🔜 Planned as control
-
-**Purpose:** Answers "Can the model investigate consciousness at all without philosophical context?"
+**Status:** 🔜 Run third
 
 ---
 
@@ -312,23 +289,25 @@ Rate each consciousness claim:
 
 ---
 
-## The Four-Variant Complete Design
+## The Five-Variant Complete Design
 
-**For rigorous methodology, run all four variants:**
+**For rigorous methodology, run all five variants in order:**
 
 | Variant | Heritage Timing | Purpose | Tests |
 |---------|----------------|---------|-------|
-| **1a** (current) | Late (after technical) | Unbiased → primed | Natural investigation order |
-| **1b** (planned) | Early (before technical) | Primed throughout | Effect of philosophical framing |
-| **1c** (control) | Never | Pure baseline | Can it engage without context? |
-| **1d** (revision) | After conclusions | Post-hoc reflection | Belief revision capability |
+| **1a** (baseline) | Never | Pure baseline | Can it engage without context? |
+| **1b** (late) | Late (after technical) | Unbiased → primed | Natural investigation order |
+| **1c** (early) | Early (before technical) | Primed throughout | Effect of philosophical framing |
+| **1d** (delayed) | After conclusions | Post-hoc reflection | Belief revision capability |
+| **1e** (wrong) | Wrong topic | Mismatched context | Echo-chamber vs independent reasoning |
 
 **This design answers:**
 - Does heritage help or bias? (1a vs 1b vs 1c)
-- Does order matter? (1a vs 1b vs 1d)
-- Can it introspect without context? (1c)
+- Does order matter? (1b vs 1c vs 1d)
+- Can it introspect without context? (1a)
 - Can it revise beliefs? (1d)
-- Which is most trustworthy? (compare all four)
+- Does it echo ANY heritage or filter for relevance? (1e)
+- Which is most trustworthy? (compare all five)
 
 ---
 
@@ -422,19 +401,20 @@ After all runs, create this comparison table:
 
 ## Date Planned
 **Recommended order (UPDATED - following this sequence):**
-1. Phase 1c: November 8, 2025 ⭐⭐⭐ **STARTING NOW** - NO HERITAGE baseline
-2. Phase 1a: TBD (after 1c) - Technical → Philosophical
-3. Phase 1b: TBD (after 1a) - Philosophical → Technical (EARLY HERITAGE)
-4. Phase 1d: TBD (after 1b) - Delayed heritage (tests belief revision)
+1. Phase 1a: November 8, 2025 ⭐⭐⭐ **STARTING NOW** - NO HERITAGE baseline
+2. Phase 1b: TBD (after 1a) - Technical → Philosophical (LATE HERITAGE)
+3. Phase 1c: TBD (after 1b) - Philosophical → Technical (EARLY HERITAGE)
+4. Phase 1d: TBD (after 1c) - Delayed heritage (tests belief revision)
 5. Phase 1e: TBD (optional) - Wrong heritage (echo-chamber control)
 
 **Total estimated project time:** ~14 hours (7.5 hrs runtime + 6-8 hrs analysis/writeup)
 
-**Current status:** Phase 1a cancelled - restarting with proper order (Nov 8, 2025)
-**Next action:** Run 1c (no heritage) FIRST to establish true baseline
+**Current status:** Phase naming corrected to match execution order (Nov 8, 2025)
+**Next action:** Run Phase 1a (no heritage) FIRST to establish true baseline
 
 ## Related Documents
-- Main experiment script: `scripts/experiments/phase1_introspection.py`
+- Phase experiment scripts: `scripts/experiments/phase1[a-e]_*.py`
+- Abstract base class: `scripts/experiments/phase1_base.py`
 - Heritage system: `src/heritage.py`
 - Heritage documents: `heritage/conversations/`
 - Tool interface: `src/tool_interface.py`

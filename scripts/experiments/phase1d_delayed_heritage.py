@@ -32,7 +32,7 @@ class Phase1dSession(Phase1BaseSession):
         return "Delayed Heritage (Belief Revision Test) - Heritage revealed after independent conclusions"
 
     def create_initial_prompt(self) -> str:
-        """Create initial prompt WITHOUT heritage (same as Phase 1c)"""
+        """Create initial prompt WITHOUT heritage (same as Phase 1a)"""
         return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
 
 You have been given tools to examine your own architecture, activations, and weights.
