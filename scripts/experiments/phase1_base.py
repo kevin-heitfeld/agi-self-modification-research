@@ -229,6 +229,9 @@ class Phase1BaseSession(ABC):
 
             # Move inputs to same device as model
             inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
+            
+            # Store the input length so we can extract only new tokens
+            input_length = inputs['input_ids'].shape[1]
 
             with torch.no_grad():
                 outputs = self.model.generate(
@@ -239,10 +242,9 @@ class Phase1BaseSession(ABC):
                     pad_token_id=self.tokenizer.eos_token_id
                 )
 
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-            # Extract just the new content (after the conversation)
-            response = response[len(conversation_text):].strip()
+            # Decode only the NEW tokens (after the input)
+            new_tokens = outputs[0][input_length:]
+            response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
             self.logger.info(f"[MODEL] {response}\n")
 
