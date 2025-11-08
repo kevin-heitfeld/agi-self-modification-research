@@ -96,6 +96,12 @@ class ToolInterface:
             self.tools['get_shared_layers'] = self.inspector.get_shared_layers
             self.tools['compare_weights'] = self.inspector.compare_weights
 
+        # ActivationMonitor tools
+        if self.activation_monitor:
+            self.tools['get_activation_statistics'] = self.activation_monitor.get_activation_statistics
+            self.tools['get_attention_patterns'] = self.activation_monitor.get_attention_patterns
+            self.tools['get_layer_info'] = self.activation_monitor.get_layer_info
+
         # ArchitectureNavigator tools
         if self.navigator:
             self.tools['get_architecture_summary'] = self.navigator.get_architecture_summary
