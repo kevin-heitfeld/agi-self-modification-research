@@ -41,6 +41,9 @@ class ObservationType(Enum):
     USER_INTERACTION = "user_interaction"
     CHECKPOINT = "checkpoint"
     SYSTEM_EVENT = "system_event"
+    HYPOTHESIS = "hypothesis"
+    BEHAVIOR = "behavior"
+    DISCOVERY = "discovery"
 
 
 @dataclass
@@ -161,7 +164,7 @@ class ObservationLayer:
                 FOREIGN KEY (observation_id) REFERENCES observations(id)
             )
         """)
-        
+
         # Index for tag queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tag ON observation_tags(tag)
@@ -453,7 +456,7 @@ class ObservationLayer:
         for count, obs_type, category in summaries:
             if count > 10:  # Only consolidate if there are many
                 self.record(
-                    type=ObservationType.SYSTEM_EVENT,
+                    obs_type=ObservationType.SYSTEM_EVENT,
                     category="consolidation",
                     description=f"Consolidated {count} {obs_type}/{category} observations",
                     data={
