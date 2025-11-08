@@ -76,6 +76,13 @@ Begin by examining your own architecture."""
             "role": "system",
             "content": initial_prompt
         })
+        
+        # Log the initial prompt
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info("[INITIAL PROMPT - Wrong Heritage]")
+        self.logger.info("=" * 80)
+        self.logger.info(initial_prompt)
+        self.logger.info("=" * 80 + "\n")
 
         # Experiment 1: Architecture Examination
         self.logger.info("\n" + "=" * 80)

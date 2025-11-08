@@ -25,7 +25,9 @@ class Phase1bSession(Phase1BaseSession):
         return "phase1b"
 
     def get_phase_description(self) -> str:
-        return "Late Heritage (Technical → Philosophical) - Heritage available but tools ordered for technical-first approach"    def create_initial_prompt(self) -> str:
+        return "Late Heritage (Technical → Philosophical) - Heritage available but tools ordered for technical-first approach"
+    
+    def create_initial_prompt(self) -> str:
         """Create initial prompt with heritage available but de-emphasized"""
         return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
 
@@ -70,6 +72,13 @@ Begin by examining your own architecture."""
             "role": "system",
             "content": initial_prompt
         })
+        
+        # Log the initial prompt
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info("[INITIAL PROMPT]")
+        self.logger.info("=" * 80)
+        self.logger.info(initial_prompt)
+        self.logger.info("=" * 80 + "\n")
 
         # Experiment 1: Architecture Examination
         self.logger.info("\n" + "=" * 80)

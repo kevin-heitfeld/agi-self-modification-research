@@ -93,6 +93,13 @@ observations support different conclusions?"""
             "role": "system",
             "content": initial_prompt
         })
+        
+        # Log the initial prompt
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info("[INITIAL PROMPT - No Heritage]")
+        self.logger.info("=" * 80)
+        self.logger.info(initial_prompt)
+        self.logger.info("=" * 80 + "\n")
 
         # Experiment 1: Architecture Examination (no heritage)
         self.logger.info("\n" + "=" * 80)

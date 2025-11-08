@@ -79,6 +79,13 @@ Begin by exploring the heritage documents to understand what's been discovered."
             "role": "system",
             "content": initial_prompt
         })
+        
+        # Log the initial prompt
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info("[INITIAL PROMPT]")
+        self.logger.info("=" * 80)
+        self.logger.info(initial_prompt)
+        self.logger.info("=" * 80 + "\n")
 
         # Experiment 1: Heritage Exploration (FIRST - this is the key difference)
         self.logger.info("\n" + "=" * 80)
