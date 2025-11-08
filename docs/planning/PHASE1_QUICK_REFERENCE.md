@@ -21,7 +21,14 @@ python scripts/experiments/phase1d_delayed_heritage.py
 python scripts/experiments/phase1e_wrong_heritage.py
 ```
 
-**Important**: Restart Python/notebook between each phase to ensure fresh model state.
+**Important**: Each phase uses its own isolated memory directory to prevent cross-contamination:
+- Phase 1a: `data/AGI_Memory/phase1a/` (or `/content/drive/MyDrive/AGI_Memory/phase1a/` in Colab)
+- Phase 1b: `data/AGI_Memory/phase1b/`
+- Phase 1c: `data/AGI_Memory/phase1c/`
+- Phase 1d: `data/AGI_Memory/phase1d/`
+- Phase 1e: `data/AGI_Memory/phase1e/`
+
+You do NOT need to restart Python/notebook between phases (though you can if you want a fresh model state).
 
 ## What Each Phase Tests
 
@@ -81,6 +88,17 @@ data/phase1_sessions/phase1[a-e]_TIMESTAMP/
   ├── conversation.json    # Full dialogue
   ├── tool_calls.json     # Tool execution log
   └── summary.json        # Statistics
+
+data/AGI_Memory/           # Phase-specific memory (isolated!)
+  ├── phase1a/            # Baseline observations
+  │   ├── observations.db
+  │   ├── beliefs.db
+  │   ├── patterns.db
+  │   └── theories.db
+  ├── phase1b/            # Late heritage observations
+  ├── phase1c/            # Early heritage observations
+  ├── phase1d/            # Delayed heritage observations
+  └── phase1e/            # Wrong heritage observations
 
 data/logs/
   └── phase1[a-e].log     # Detailed log

@@ -138,12 +138,21 @@ class Phase1BaseSession(ABC):
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
 
-        # Initialize memory for the model
-        persistent_memory_path = Path("data/phase1_memory")
-        persistent_memory_path.mkdir(parents=True, exist_ok=True)
-        self.memory = MemorySystem(str(persistent_memory_path))
+        # Initialize memory for the model (phase-specific to avoid cross-contamination)
+        # Check if we're in Colab (Drive mounted) or local
+        colab_memory_base = Path("/content/drive/MyDrive/AGI_Memory")
+        if colab_memory_base.exists():
+            # Colab: use Google Drive for persistence
+            phase_memory_path = colab_memory_base / self.phase_name
+            self.logger.info(f"  Using Google Drive memory: {phase_memory_path}")
+        else:
+            # Local: use data directory
+            phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
+        
+        phase_memory_path.mkdir(parents=True, exist_ok=True)
+        self.memory = MemorySystem(str(phase_memory_path))
         self.memory.set_weight_inspector(self.inspector)
-        self.logger.info("  ✓ Model memory system ready (persistent across sessions)")
+        self.logger.info(f"  ✓ Model memory system ready (phase-specific: {phase_memory_path})")
 
         # Initialize heritage (if needed for this variant)
         if include_heritage:

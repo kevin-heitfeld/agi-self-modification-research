@@ -66,7 +66,16 @@ All 5 variants inherit from `Phase1BaseSession` and override:
 4. Phase 1d (delayed heritage)
 5. Phase 1e (wrong heritage) - optional but recommended
 
-Each phase should use a FRESH model instance (restart notebook between phases).
+**Memory Isolation**: Each phase uses its own isolated memory directory:
+- `data/AGI_Memory/phase1a/` - Phase 1a observations (baseline)
+- `data/AGI_Memory/phase1b/` - Phase 1b observations (late heritage)
+- `data/AGI_Memory/phase1c/` - Phase 1c observations (early heritage)
+- `data/AGI_Memory/phase1d/` - Phase 1d observations (delayed heritage)
+- `data/AGI_Memory/phase1e/` - Phase 1e observations (wrong heritage)
+
+In Google Colab, these are stored in `/content/drive/MyDrive/AGI_Memory/phase1[a-e]/` for persistence.
+
+This prevents observations from one phase affecting another phase's investigation.
 
 ## Usage
 
