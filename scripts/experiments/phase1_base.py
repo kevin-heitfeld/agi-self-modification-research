@@ -148,7 +148,7 @@ class Phase1BaseSession(ABC):
         else:
             # Local: use data directory
             phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
-        
+
         phase_memory_path.mkdir(parents=True, exist_ok=True)
         self.memory = MemorySystem(str(phase_memory_path))
         self.memory.set_weight_inspector(self.inspector)
@@ -295,13 +295,29 @@ class Phase1BaseSession(ABC):
         return response
 
     def _format_conversation_for_model(self) -> str:
-        """Format conversation history for model input"""
-        formatted = []
-        for msg in self.conversation_history:
-            role = msg["role"].upper()
-            content = msg["content"]
-            formatted.append(f"{role}: {content}")
-        return "\n\n".join(formatted)
+        """
+        Format conversation history using the model's native chat template.
+
+        This prevents the model from hallucinating multi-turn conversations
+        by using the proper format it was trained on.
+        """
+        # Use the model's native chat template if available
+        if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
+            # Qwen models have a specific chat template that handles roles properly
+            formatted = self.tokenizer.apply_chat_template(
+                self.conversation_history,
+                tokenize=False,
+                add_generation_prompt=True  # Adds the prompt for assistant to continue
+            )
+            return formatted
+        else:
+            # Fallback to simple format if no chat template
+            formatted = []
+            for msg in self.conversation_history:
+                role = msg["role"].upper()
+                content = msg["content"]
+                formatted.append(f"{role}: {content}")
+            return "\n\n".join(formatted)
 
     def save_session(self):
         """Save conversation and tool calls"""
