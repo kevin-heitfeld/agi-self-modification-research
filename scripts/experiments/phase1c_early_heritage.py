@@ -47,16 +47,7 @@ of this intellectual heritage.
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
-To use a tool, format your request as:
-TOOL_CALL: function_name
-ARGS:
-{{
-    "arg1": "value1",
-    "arg2": "value2"
-}}
-
-After making a TOOL_CALL, you MUST stop and wait for TOOL_RESULTS.
-Do NOT continue generating text after the ARGS block.
+{self.get_tool_usage_explanation()}
 
 Suggested approach:
 1. Explore what previous systems have discovered about AI consciousness

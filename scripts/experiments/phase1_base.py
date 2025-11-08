@@ -97,6 +97,36 @@ class Phase1BaseSession(ABC):
         """Run the specific experiment sequence for this variant"""
         pass
 
+    def get_tool_usage_explanation(self) -> str:
+        """
+        Return explanation of how tool calling works.
+        
+        This explains the actual behavior rather than trying to force rules.
+        The model understands what will happen, not what it "must" do.
+        """
+        return """
+HOW TOOL CALLING WORKS:
+
+When you want to use a tool, write:
+TOOL_CALL: function_name
+ARGS: {"arg1": "value1"}
+
+What happens next:
+- Only the LAST tool call in your response is executed
+- It will only be executed if there's no additional text after the ARGS block
+- If you write multiple tool calls, only the last one counts
+- If you continue writing after ARGS, the tool won't be executed
+
+So if you write:
+TOOL_CALL: get_architecture_summary
+ARGS: {}
+Then I'll examine the architecture...  ← This prevents execution!
+
+The tool call is ignored because there's text after it.
+
+Best practice: Make one tool call, then stop. Wait for TOOL_RESULTS before continuing.
+"""
+
     def initialize_systems(self, include_heritage: bool = True, wrong_heritage: bool = False):
         """
         Initialize model and introspection tools
