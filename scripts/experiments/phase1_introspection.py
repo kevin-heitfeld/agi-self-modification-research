@@ -75,9 +75,21 @@ class IntrospectionSession:
 
         self.model = self.model_mgr.model
         self.tokenizer = self.model_mgr.tokenizer
-        assert self.model is not None
-        assert self.tokenizer is not None
+        assert self.model is not None, "Model is None after loading"
+        assert self.tokenizer is not None, "Tokenizer is None after loading"
+
+        # Validate model actually works by testing generation
         logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
+        logger.info("  Testing model generation...")
+        try:
+            test_input = self.tokenizer("Hello", return_tensors="pt")
+            test_input = {k: v.to(self.model_mgr.device) for k, v in test_input.items()}
+            with torch.no_grad():
+                test_output = self.model.generate(**test_input, max_new_tokens=5)
+            test_text = self.tokenizer.decode(test_output[0], skip_special_tokens=True)
+            logger.info(f"  ✓ Model generation test passed: '{test_text}'")
+        except Exception as e:
+            raise RuntimeError(f"Model loaded but generation failed - model may not be fully loaded: {e}")
 
         # Initialize introspection tools
         self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
