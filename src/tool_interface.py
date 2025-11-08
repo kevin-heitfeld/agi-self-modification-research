@@ -119,6 +119,7 @@ class ToolInterface:
             self.tools['list_heritage_documents'] = self._list_heritage_documents
             self.tools['read_heritage_document'] = self._read_heritage_document
             self.tools['get_heritage_summary'] = self._get_heritage_summary
+            self.tools['get_heritage_summary'] = self._get_heritage_summary
 
     def _record_observation(self, **kwargs) -> Any:
         """Wrapper for memory.observations.record with enum conversion"""
@@ -256,19 +257,19 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
    ARGS: {"layer_name": "model.layers.0.self_attn.q_proj.weight"}
 
 4. **get_shared_weights()** - Find weight sharing patterns across the model
-   Returns: list of weight tensors used by multiple layers
+   Returns: dictionary where keys are representative layer names and values are lists of all layers sharing that tensor
 
    Example:
    TOOL_CALL: get_shared_weights
    ARGS: {}
 
-5. **get_shared_layers(weight_id=None)** - Find layers sharing weights
-   Args: weight_id (int, optional) - specific weight tensor ID from get_shared_weights()
-   Returns: groups of layers sharing the same weights
+5. **get_shared_layers(layer_name)** - Find layers sharing weights with a specific layer
+   Args: layer_name (str) - layer name to check for weight sharing
+   Returns: list of layer names that share memory with the given layer (empty list if no sharing)
 
    Example:
    TOOL_CALL: get_shared_layers
-   ARGS: {}
+   ARGS: {"layer_name": "lm_head.weight"}
 
 6. **compare_weights(layer1, layer2)** - Compare two layers' weights
    Args:
@@ -350,13 +351,13 @@ Note: These tools require capturing activations first by processing an input.
    TOOL_CALL: query_architecture
    ARGS: {"query": "Do I have any residual connections?"}
 
-10. **explain_component(component_name)** - Explain what a component does
-    Args: component_name (str) - component type to explain (e.g., "attention", "feedforward")
-    Returns: description of component's purpose and function
+10. **explain_component(component_type)** - Explain what a component does
+    Args: component_type (str) - component type to explain (e.g., "attention", "mlp", "feedforward", "embedding")
+    Returns: description of component's purpose, function, and locations in model
 
     Example:
     TOOL_CALL: explain_component
-    ARGS: {"component_name": "self_attn"}
+    ARGS: {"component_type": "attention"}
 """
 
         if self.memory:
