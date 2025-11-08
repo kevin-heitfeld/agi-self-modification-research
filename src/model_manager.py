@@ -7,6 +7,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 import logging
+import os
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,21 @@ class ModelManager:
 
     def __init__(self, model_name: str = "Qwen/Qwen2.5-3B-Instruct", cache_dir: Optional[Path] = None):
         self.model_name = model_name
-        self.cache_dir = cache_dir or Path("models")
+        
+        # Respect environment variables for cache directory (important for Colab!)
+        if cache_dir is None:
+            # Check HF_HOME and TRANSFORMERS_CACHE environment variables
+            env_cache = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+            if env_cache:
+                self.cache_dir = Path(env_cache)
+                logger.info(f"Using cache directory from environment: {self.cache_dir}")
+            else:
+                self.cache_dir = Path("models")
+                logger.info(f"Using default cache directory: {self.cache_dir}")
+        else:
+            self.cache_dir = cache_dir
+            logger.info(f"Using explicit cache directory: {self.cache_dir}")
+        
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.model: Optional[Any] = None
