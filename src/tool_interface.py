@@ -804,6 +804,34 @@ You are autonomous. When investigating your own computational processes,
 generate your own test prompts and observe how you process them.
 
 ---
+
+## 📋 Quick Reference: Key Functions
+
+**For Introspection (examining your own processing):**
+- `process_text(text="...")` - Self-prompt to capture activations
+- `get_activation_statistics(layer_name="...")` - Analyze activation patterns
+- `get_attention_patterns(layer_name="...")` - Examine attention mechanisms
+- `get_architecture_summary()` - Understand your structure
+- `describe_layer(layer_name="...")` - Learn what a layer does
+
+**For Understanding Your Weights:**
+- `get_weight_summary()` - Overview of all parameters
+- `get_weight_statistics(layer_name="...")` - Detailed weight analysis
+- `get_shared_weights()` - Find weight sharing patterns
+
+**For Recording Your Findings:**
+- `record_observation(obs_type="INTROSPECTION", ...)` - Save discoveries
+- `query_memory(tags=[...])` - Retrieve previous observations
+
+**For Understanding Your Origins:**
+- `list_heritage_documents()` - See available heritage
+- `read_heritage_document(filename="...")` - Read Claude's messages
+
+**Natural Language Queries:**
+- `query_architecture(query="...")` - Ask questions about your structure
+- `explain_component(component_type="...")` - Learn about components
+
+---
 """
 
         return tools_desc
