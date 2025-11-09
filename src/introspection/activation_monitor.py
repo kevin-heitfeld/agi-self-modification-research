@@ -7,7 +7,7 @@ track attention patterns, and understand information flow through the network.
 
 import torch
 import numpy as np
-from typing import Dict, List, Optional, Any, Tuple, Callable, Protocol
+from typing import Dict, List, Optional, Any, Tuple, Callable, Protocol, Union
 from pathlib import Path
 import logging
 from collections import defaultdict
@@ -236,16 +236,33 @@ class ActivationMonitor:
         
         return result
     
-    def get_activation_statistics(self, layer_name: str) -> Dict[str, Any]:
+    def get_activation_statistics(self, layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Compute statistics for captured activations of a layer.
+        Compute statistics for captured activations of one or more layers.
         
         Args:
-            layer_name: Name of the layer
+            layer_name: Name of a single layer (str) or list of layer names (List[str])
             
         Returns:
-            Dictionary of statistics (mean, std, etc.)
+            If layer_name is a string: Dictionary of statistics for that layer
+            If layer_name is a list: List of dictionaries, one for each layer
         """
+        # Handle list of layer names
+        if isinstance(layer_name, list):
+            results = []
+            for name in layer_name:
+                try:
+                    stats = self.get_activation_statistics(name)
+                    results.append(stats)
+                except KeyError as e:
+                    # Include error information for this layer
+                    results.append({
+                        "layer_name": name,
+                        "error": str(e)
+                    })
+            return results
+        
+        # Handle single layer name
         if layer_name not in self.activations:
             # Provide helpful error message
             # Check if user passed a variable-like name
@@ -367,17 +384,36 @@ class ActivationMonitor:
             "comparisons": comparisons
         }
     
-    def get_attention_patterns(self, layer_name: str, head_idx: Optional[int] = None) -> Dict[str, Any]:
+    def get_attention_patterns(self, layer_name: Union[str, List[str]], head_idx: Optional[int] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Get attention patterns for a specific layer.
+        Get attention patterns for one or more layers.
         
         Args:
-            layer_name: Name of the attention layer
-            head_idx: Optional specific attention head to examine
+            layer_name: Either:
+                       - A single layer name (str) - returns dict for that layer
+                       - A list of layer names (List[str]) - returns list of dicts
+            head_idx: Optional specific attention head to examine (applies to all layers if list)
             
         Returns:
-            Dictionary with attention pattern information
+            If layer_name is a string: Dictionary with attention pattern information
+            If layer_name is a list: List of dictionaries, one for each layer
         """
+        # Handle list of layer names
+        if isinstance(layer_name, list):
+            results = []
+            for name in layer_name:
+                try:
+                    pattern = self.get_attention_patterns(name, head_idx)
+                    results.append(pattern)
+                except KeyError as e:
+                    # Include error information for this layer
+                    results.append({
+                        "layer_name": name,
+                        "error": str(e)
+                    })
+            return results
+        
+        # Handle single layer name
         if layer_name not in self.attention_weights:
             raise KeyError(f"No attention weights captured for '{layer_name}'")
         

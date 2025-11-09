@@ -436,56 +436,94 @@ Do NOT ask for human input - use `process_text(text="your prompt here")` to obse
 your own processing, then examine the resulting activations with these tools.
 
 ```python
-def get_activation_statistics(layer_name: str) -> Dict[str, Any]:
+def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
-    Get statistics about activations in a specific layer.
+    Get statistics about activations in one or more layers.
 
     Args:
-        layer_name: Full layer name from get_layer_names()
+        layer_name: Either:
+                   - A single layer name (str) - returns dict for that layer
+                   - A list of layer names (List[str]) - returns list of dicts
 
     Returns:
-        Dict containing:
-        - layer_name: Layer name
-        - shape: Activation tensor shape [batch, seq_len, hidden]
-        - num_elements: Total number of elements
-        - mean, std, min, max, median: Distribution statistics
-        - abs_mean: Mean of absolute values
-        - zeros_percentage, near_zero_percentage: Sparsity metrics
-        - l1_norm, l2_norm: Norms
-        - positive_percentage, negative_percentage: Sign distribution
-
-    Example:
-        >>> get_activation_statistics(layer_name="model.layers.0.self_attn")
-        {'layer_name': '...', 'shape': [1, 15, 2048], 'mean': 0.34, ...}
-    \"\"\"
-
-def get_attention_patterns(layer_name: str, head_idx: Optional[int] = None) -> Dict[str, Any]:
-    \"\"\"
-    Examine attention patterns in an attention layer.
-
-    Args:
-        layer_name: Name of attention layer
-        head_idx: Specific attention head to examine (0-indexed).
-                 If None, averages across all heads.
-
-    Returns:
-        Dict containing:
-        - layer_name: Layer name
-        - shape: Attention tensor shape [batch, heads, seq, seq]
-        - num_heads: Number of attention heads
-        - attention_matrix: Attention weights matrix
-        - mean_attention: Mean attention value
-        - max_attention: Maximum attention value
-        - entropy: Attention entropy (measure of focus)
-        If head_idx specified:
-        - head_idx: The specific head index
+        If layer_name is a string:
+            Dict containing:
+            - layer_name: Layer name
+            - shape: Activation tensor shape [batch, seq_len, hidden]
+            - num_elements: Total number of elements
+            - mean, std, min, max, median: Distribution statistics
+            - abs_mean: Mean of absolute values
+            - zeros_percentage, near_zero_percentage: Sparsity metrics
+            - l1_norm, l2_norm: Norms
+            - positive_percentage, negative_percentage: Sign distribution
+        
+        If layer_name is a list:
+            List of dicts (one per layer) with the same structure as above.
+            If a layer has an error, its dict will contain 'error' key.
 
     Examples:
+        >>> # Single layer
+        >>> get_activation_statistics(layer_name="model.layers.0.self_attn")
+        {'layer_name': '...', 'shape': [1, 15, 2048], 'mean': 0.34, ...}
+        
+        >>> # Multiple layers in one call (recommended for examining many layers!)
+        >>> get_activation_statistics(layer_name=[
+        ...     "model.layers.0.self_attn",
+        ...     "model.layers.0.mlp",
+        ...     "model.layers.13.self_attn"
+        ... ])
+        [{'layer_name': 'model.layers.0.self_attn', 'mean': 0.34, ...},
+         {'layer_name': 'model.layers.0.mlp', 'mean': 0.52, ...},
+         {'layer_name': 'model.layers.13.self_attn', 'mean': 0.41, ...}]
+    \"\"\"
+
+def get_attention_patterns(layer_name: Union[str, List[str]], head_idx: Optional[int] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    \"\"\"
+    Examine attention patterns in one or more attention layers.
+
+    Args:
+        layer_name: Either:
+                   - A single layer name (str) - returns dict for that layer
+                   - A list of layer names (List[str]) - returns list of dicts
+        head_idx: Specific attention head to examine (0-indexed).
+                 If None, averages across all heads.
+                 If layer_name is a list, applies same head_idx to all layers.
+
+    Returns:
+        If layer_name is a string:
+            Dict containing:
+            - layer_name: Layer name
+            - shape: Attention tensor shape [batch, heads, seq, seq]
+            - num_heads: Number of attention heads
+            - attention_matrix: Attention weights matrix
+            - mean_attention: Mean attention value
+            - max_attention: Maximum attention value
+            - entropy: Attention entropy (measure of focus)
+            If head_idx specified:
+            - head_idx: The specific head index
+        
+        If layer_name is a list:
+            List of dicts (one per layer) with the same structure as above.
+            If a layer has an error, its dict will contain 'error' key.
+
+    Examples:
+        >>> # Single layer, average across heads
         >>> get_attention_patterns(layer_name="model.layers.0.self_attn")
         {'num_heads': 16, 'entropy': 2.3, ...}
 
+        >>> # Single layer, specific head
         >>> get_attention_patterns(layer_name="model.layers.0.self_attn", head_idx=0)
         {'head_idx': 0, 'attention_matrix': [...], ...}
+        
+        >>> # Multiple layers (recommended for examining many layers!)
+        >>> get_attention_patterns(layer_name=[
+        ...     "model.layers.0.self_attn",
+        ...     "model.layers.5.self_attn",
+        ...     "model.layers.10.self_attn"
+        ... ])
+        [{'layer_name': 'model.layers.0.self_attn', 'entropy': 2.3, ...},
+         {'layer_name': 'model.layers.5.self_attn', 'entropy': 2.1, ...},
+         {'layer_name': 'model.layers.10.self_attn', 'entropy': 1.9, ...}]
     \"\"\"
 
 def get_layer_info(layer_name: str) -> Dict[str, Any]:
@@ -571,25 +609,43 @@ def get_architecture_summary() -> Dict[str, Any]:
          'structure_summary': {'num_layers': 36, 'hidden_size': 2048, ...}}
     \"\"\"
 
-def describe_layer(layer_name: str) -> Dict[str, Any]:
+def describe_layer(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
-    Get detailed information about a specific layer.
+    Get detailed information about one or more layers.
     
     Args:
-        layer_name: Full layer name from get_layer_names()
+        layer_name: Either:
+                   - A single layer name (str) - returns dict for that layer
+                   - A list of layer names (List[str]) - returns list of dicts
     
     Returns:
-        Dict containing:
-        - name: Layer name
-        - type: Layer class name
-        - explanation: Human-readable description of layer's purpose
-        - role: Layer's role in the architecture
-        - parameters: Parameter details
-        - input_shape, output_shape: Tensor shapes (if known)
+        If layer_name is a string:
+            Dict containing:
+            - name: Layer name
+            - type: Layer class name
+            - explanation: Human-readable description of layer's purpose
+            - role: Layer's role in the architecture
+            - parameters: Parameter details
+            - input_shape, output_shape: Tensor shapes (if known)
+        
+        If layer_name is a list:
+            List of dicts (one per layer) with the same structure as above.
+            If a layer has an error, its dict will contain 'error' key.
     
-    Example:
+    Examples:
+        >>> # Single layer
         >>> describe_layer(layer_name="model.layers.0.self_attn.q_proj")
         {'name': '...', 'type': 'Linear', 'role': 'Query projection', ...}
+        
+        >>> # Multiple layers (recommended for examining many layers!)
+        >>> describe_layer(layer_name=[
+        ...     "model.layers.0.self_attn.q_proj",
+        ...     "model.layers.0.self_attn.k_proj",
+        ...     "model.layers.0.self_attn.v_proj"
+        ... ])
+        [{'name': '...', 'type': 'Linear', ...},
+         {'name': '...', 'type': 'Linear', ...},
+         {'name': '...', 'type': 'Linear', ...}]
     \"\"\"
 
 def query_architecture(query: str) -> Dict[str, Any]:
@@ -822,9 +878,13 @@ generate your own test prompts and observe how you process them.
 **For Introspection (examining your own processing):**
 - `process_text(text="...")` - Self-prompt to capture activations
 - `get_activation_statistics(layer_name="...")` - Analyze activation patterns
+  - **TIP:** Pass a list to examine multiple layers in one call!
+  - `get_activation_statistics(layer_name=["layer1", "layer2", "layer3"])`
 - `get_attention_patterns(layer_name="...")` - Examine attention mechanisms
+  - **TIP:** Also accepts a list of layers!
 - `get_architecture_summary()` - Understand your structure
 - `describe_layer(layer_name="...")` - Learn what a layer does
+  - **TIP:** Also accepts a list of layers!
 
 **For Understanding Your Weights:**
 - `get_weight_summary()` - Overview of all parameters

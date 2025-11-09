@@ -13,7 +13,7 @@ Date: November 6, 2025
 
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Set, Tuple, Any, Union
 from collections import defaultdict
 import re
 
@@ -146,28 +146,52 @@ class ArchitectureNavigator:
         
         return summary
     
-    def describe_layer(self, layer_name: str) -> Dict[str, Any]:
+    def describe_layer(self, layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Describe a specific layer in natural language.
+        Describe one or more specific layers in natural language.
         
         Args:
-            layer_name: Name of the layer to describe
+            layer_name: Either:
+                       - A single layer name (str) - returns dict for that layer
+                       - A list of layer names (List[str]) - returns list of dicts
             
         Returns:
-            Dictionary containing:
-            - name: Layer name
-            - type: Layer type (Linear, LayerNorm, etc.)
-            - explanation: Natural language explanation
-            - parameters: Parameter count and details
-            - input_shape: Expected input shape (if determinable)
-            - output_shape: Expected output shape (if determinable)
-            - role: What this layer does in the model
-            - connections: What layers connect to this one
+            If layer_name is a string:
+                Dictionary containing:
+                - name: Layer name
+                - type: Layer type (Linear, LayerNorm, etc.)
+                - explanation: Natural language explanation
+                - parameters: Parameter count and details
+                - input_shape: Expected input shape (if determinable)
+                - output_shape: Expected output shape (if determinable)
+                - role: What this layer does in the model
+                - connections: What layers connect to this one
+            
+            If layer_name is a list:
+                List of dicts (one per layer) with the same structure as above.
+                If a layer has an error, its dict will contain 'error' key.
         
-        Example:
+        Examples:
+            >>> # Single layer
             >>> info = navigator.describe_layer('model.layers.0.self_attn.q_proj')
             >>> print(info['explanation'])
+            
+            >>> # Multiple layers (recommended for examining many layers!)
+            >>> infos = navigator.describe_layer([
+            ...     'model.layers.0.self_attn',
+            ...     'model.layers.0.mlp',
+            ...     'model.layers.1.self_attn'
+            ... ])
         """
+        # Handle list of layer names
+        if isinstance(layer_name, list):
+            results = []
+            for name in layer_name:
+                result = self.describe_layer(name)
+                results.append(result)
+            return results
+        
+        # Handle single layer name
         # Check cache
         if layer_name in self._layer_cache:
             return self._layer_cache[layer_name]
