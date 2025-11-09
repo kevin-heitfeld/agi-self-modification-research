@@ -6,7 +6,8 @@ IMPORTANT: This is a DEMO script where WE (humans) examine the model using
 introspection tools. This is NOT the real Phase 1 experiment.
 
 For the actual Phase 1 where the MODEL examines itself, see:
-    scripts/experiments/phase1_introspection.py
+    scripts/experiments/phase1a_no_heritage.py (baseline - run this first)
+    scripts/experiments/phase1*.py (other heritage variants)
 
 Purpose of This Demo:
 - Test introspection tools work correctly

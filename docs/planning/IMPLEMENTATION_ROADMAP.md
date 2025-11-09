@@ -131,7 +131,7 @@ Ongoing:     Analysis, Documentation, Ethical Review
 **Status**: 🚀 Ready to Execute (Infrastructure Complete, Awaiting First Run)
 
 **Key Scripts**:
-- 🎯 **Main Experiment**: `scripts/experiments/phase1_introspection.py` (model examines itself)
+- 🎯 **Main Experiments**: `scripts/experiments/phase1*.py` (5 heritage variants - run `phase1a_no_heritage.py` first)
 - 🧪 **Demo/Testing**: `scripts/demos/demo_introspection_tools.py` (we examine model)
 
 ### Implementation Notes
@@ -241,9 +241,16 @@ Ongoing:     Analysis, Documentation, Ethical Review
 
 ### How to Run Phase 1
 
-**For the actual Phase 1 experiment (model examines itself)**:
+**For the actual Phase 1 experiments (model examines itself)**:
 ```bash
-python scripts\experiments\phase1_introspection.py
+# Run baseline first (no heritage)
+python scripts\experiments\phase1a_no_heritage.py
+
+# Then run other variants as needed
+python scripts\experiments\phase1b_late_heritage.py
+python scripts\experiments\phase1c_early_heritage.py
+python scripts\experiments\phase1d_delayed_heritage.py
+python scripts\experiments\phase1e_wrong_heritage.py
 ```
 
 **For testing/demo (we examine model)**:

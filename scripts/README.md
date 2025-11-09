@@ -19,7 +19,12 @@ Demo scripts that showcase individual system components. These are for testing, 
 ### `experiments/`
 Research experiment scripts where the model examines itself. These are the core scientific investigations.
 
-- `phase1_introspection.py` - **Main Phase 1 script** - Model examines itself using introspection tools
+- `phase1a_no_heritage.py` - **Baseline** - No heritage context (run this first)
+- `phase1b_late_heritage.py` - Heritage available, technical tools listed first
+- `phase1c_early_heritage.py` - Heritage emphasized early
+- `phase1d_delayed_heritage.py` - Heritage revealed after independent conclusions
+- `phase1e_wrong_heritage.py` - Mismatched heritage (control for echo effects)
+- `phase1_base.py` - Base class for all Phase 1 variants
 
 ### `setup/`
 Scripts for initial environment setup and preparation.
@@ -43,7 +48,7 @@ python demo_weight_inspector.py
 ### Running Phase 1 (Main Experiment)
 ```cmd
 cd experiments
-python phase1_introspection.py
+python phase1a_no_heritage.py
 ```
 
 ### Setup
@@ -79,7 +84,7 @@ python download_model.py
 
 ## Phase 1 Details
 
-The main experiment (`experiments/phase1_introspection.py`) implements:
+The main experiments (`experiments/phase1*.py`) implement a 5-variant design:
 
 1. **Tool-calling interface** - Model requests tools via Python function calls:
    ```

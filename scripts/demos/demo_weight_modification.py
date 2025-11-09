@@ -8,7 +8,8 @@ Phase 1 experiment where the model examines itself.
 
 For the actual Phase 1 introspection experiment where the MODEL investigates
 consciousness, see:
-    scripts/experiments/phase1_introspection.py
+    scripts/experiments/phase1a_no_heritage.py (baseline - run this first)
+    scripts/experiments/phase1*.py (other heritage variants)
 
 Purpose of This Demo:
 ---------------------
