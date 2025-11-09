@@ -349,11 +349,36 @@ class Phase1BaseSession(ABC):
                 })
 
                 # Check if there were tool calls but model didn't stop
-                if re.search(r'\w+\s*\([^)]*\)', response):
+                function_call_pattern = r'\w+\s*\([^)]*\)'
+                function_calls = re.findall(function_call_pattern, response)
+                
+                if function_calls:
                     # Detect specific problematic patterns and give targeted feedback
                     
-                    # Pattern 1: Variable assignment (x = function(...))
-                    if re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
+                    # Pattern 1: Multiple function calls
+                    if len(function_calls) > 1:
+                        feedback_msg = f"""INCORRECT: You tried to call multiple functions. Only the LAST one is executed.
+
+You called {len(function_calls)} functions:
+{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(function_calls))}
+
+Only "{function_calls[-1]}" was executed!
+
+❌ WRONG:
+```
+get_layer_info(layer_name="model.layers.5")
+get_activation_statistics(layer_name="model.layers.5")
+```
+
+✅ CORRECT:
+```
+get_layer_info(layer_name="model.layers.5")
+```
+
+Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
+                    
+                    # Pattern 2: Variable assignment (x = function(...))
+                    elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
                         feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
 
 ❌ WRONG:
@@ -369,7 +394,7 @@ get_layer_info(layer_name="model.layers.5")
 
 Just call the function with NO variable assignment, NO extra lines, then STOP. The TOOL_RESULTS will appear in the next message."""
                     
-                    # Pattern 2: Text after the function call
+                    # Pattern 3: Text after the function call
                     elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', response):
                         feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
 
@@ -385,23 +410,6 @@ get_layer_info(layer_name="model.layers.5")
 ```
 
 Call the function, then immediately STOP generating. The results will come in the next USER message."""
-                    
-                    # Pattern 3: Multiple function calls
-                    elif len(re.findall(r'\w+\s*\([^)]*\)', response)) > 1:
-                        feedback_msg = """INCORRECT: You tried to call multiple functions. Only the LAST one counts.
-
-❌ WRONG:
-```
-get_layer_info(layer_name="model.layers.5")
-get_activation_statistics(layer_name="model.layers.5")
-```
-
-✅ CORRECT:
-```
-get_layer_info(layer_name="model.layers.5")
-```
-
-Call ONE function, then STOP. Wait for results before making another call."""
                     
                     else:
                         # Generic feedback

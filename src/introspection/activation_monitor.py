@@ -414,20 +414,33 @@ class ActivationMonitor:
             return results
         
         # Handle single layer name
+        # Auto-redirect decoder layers to their self_attn sublayers for attention patterns
+        original_layer_name = layer_name
+        if layer_name not in self.attention_weights:
+            # Try appending .self_attn if this looks like a decoder layer
+            if ".layers." in layer_name and not layer_name.endswith(".self_attn"):
+                self_attn_layer = f"{layer_name}.self_attn"
+                if self_attn_layer in self.attention_weights:
+                    layer_name = self_attn_layer
+                    logger.info(f"Auto-redirected '{original_layer_name}' to '{layer_name}' for attention patterns")
+        
         if layer_name not in self.attention_weights:
             # Check if it's because no activations were captured at all
             if not self.attention_weights:
                 raise KeyError(
-                    f"No attention weights captured for '{layer_name}'. "
+                    f"No attention weights captured for '{original_layer_name}'. "
                     f"You must first capture activations by calling process_text(text='your prompt here') "
                     f"before examining attention patterns."
                 )
             else:
                 # Some layers were captured but not this one
                 available = list(self.attention_weights.keys())
+                hint = ""
+                if ".layers." in original_layer_name and not original_layer_name.endswith(".self_attn"):
+                    hint = f"\n\nHINT: For attention patterns from decoder layers, specify the attention sublayer: '{original_layer_name}.self_attn'"
                 raise KeyError(
-                    f"No attention weights captured for '{layer_name}'. "
-                    f"Available layers with attention: {available[:5]}{'...' if len(available) > 5 else ''}"
+                    f"No attention weights captured for '{original_layer_name}'. "
+                    f"Available layers with attention: {available[:5]}{'...' if len(available) > 5 else ''}{hint}"
                 )
         
         attn = self.attention_weights[layer_name]
