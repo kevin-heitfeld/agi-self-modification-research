@@ -97,38 +97,6 @@ class Phase1BaseSession(ABC):
         """Run the specific experiment sequence for this variant"""
         pass
 
-    def get_tool_usage_explanation(self) -> str:
-        """
-        Return explanation of how tool calling works.
-
-        This explains the actual behavior rather than trying to force rules.
-        The model understands what will happen, not what it "must" do.
-        """
-        return """
-HOW TOOL CALLING WORKS:
-
-When you want to use a tool, call it like a Python function:
-function_name(arg1="value1", arg2="value2")
-
-Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
-
-What happens:
-- Only the LAST function call in your response is executed
-- It will only be executed if there's no additional text after the function call
-- If you write multiple function calls, only the last one counts
-- If you continue writing after the call, the tool won't be executed
-
-Example of what NOT to do:
-get_architecture_summary()
-Then I'll examine the architecture...  ← This prevents execution!
-
-The tool call is ignored because there's text after it.
-
-Correct usage:
-get_architecture_summary()
-[END YOUR RESPONSE HERE - TOOL_RESULTS will come in next USER message]
-"""
-
     def initialize_systems(self, include_heritage: bool = True, wrong_heritage: bool = False):
         """
         Initialize model and introspection tools

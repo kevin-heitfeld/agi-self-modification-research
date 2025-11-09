@@ -40,8 +40,6 @@ Your task is to investigate your own computational processes.
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
-{self.get_tool_usage_explanation()}
-
 Your investigation should be systematic and evidence-based:
 1. Examine your architecture
 2. Observe your activations during processing

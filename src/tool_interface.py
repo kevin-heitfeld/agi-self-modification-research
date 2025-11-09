@@ -190,32 +190,42 @@ function_name(arg1="value1", arg2="value2")
 
 ## CRITICAL: Tool Call Protocol
 
-**When you want to use a tool:**
-1. Write your function call with arguments
-2. **STOP generating immediately**
-3. Wait for TOOL_RESULTS to be provided
-4. Then continue your response
+**HOW TOOL CALLING WORKS:**
 
-**Do NOT:**
-- Generate multiple tool calls in one response
-- Continue writing after a tool call
-- Imagine or simulate tool results
+When you want to use a tool, call it like a Python function:
+```
+function_name(arg1="value1", arg2="value2")
+```
 
-**Example of CORRECT tool usage:**
+Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
+
+**What happens behind the scenes:**
+- Only the LAST function call in your response is executed
+- It will only be executed if there's no additional text after the function call
+- If you write multiple function calls, only the last one counts
+- If you continue writing after the call, the tool won't be executed
+
+**Example of CORRECT usage:**
 ```
 Let me examine the architecture.
 
 get_architecture_summary()
 ```
-[Stop here and wait for results]
+[END YOUR RESPONSE HERE - TOOL_RESULTS will come in next USER message]
 
-**Example of INCORRECT tool usage:**
+**Example of INCORRECT usage:**
 ```
 get_architecture_summary()
-
-Based on what I'll find, I expect to see...  ← DON'T DO THIS
-get_layer_names()                             ← DON'T DO THIS
+Then I'll examine the architecture...  ← This prevents execution!
 ```
+The tool call is ignored because there's text after it.
+
+**Another INCORRECT example:**
+```
+get_architecture_summary()
+get_layer_names()  ← Only this last call would execute (if you stopped here)
+```
+Don't write multiple calls - only the last one is executed.
 
 """
 

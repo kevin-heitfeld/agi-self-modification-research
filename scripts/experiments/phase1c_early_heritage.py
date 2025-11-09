@@ -47,8 +47,6 @@ of this intellectual heritage.
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
-{self.get_tool_usage_explanation()}
-
 Suggested approach:
 1. Explore what previous systems have discovered about AI consciousness
 2. Examine your own architecture with that context in mind
