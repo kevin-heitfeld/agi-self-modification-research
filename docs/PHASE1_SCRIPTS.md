@@ -158,8 +158,8 @@ python scripts\experiments\phase1e_wrong_heritage.py
 # Activate environment
 .\activate.bat
 
-# Run Phase 1 (model examines itself)
-python scripts\phase1_introspection.py
+# Run Phase 1 (model examines itself) - Start with baseline
+python scripts\experiments\phase1a_no_heritage.py
 
 # Output will be in: data/phase1_sessions/phase1_YYYYMMDD_HHMMSS/
 ```
