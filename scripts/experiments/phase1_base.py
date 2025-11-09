@@ -350,10 +350,71 @@ class Phase1BaseSession(ABC):
 
                 # Check if there were tool calls but model didn't stop
                 if re.search(r'\w+\s*\([^)]*\)', response):
-                    # Give feedback to teach correct behavior
-                    feedback_msg = "Note: To use a tool, call the function, then END your response. The TOOL_RESULTS will come in the next USER message. Don't continue writing after the function call."
+                    # Detect specific problematic patterns and give targeted feedback
+                    
+                    # Pattern 1: Variable assignment (x = function(...))
+                    if re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
+                        feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
 
-                    self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving feedback")
+❌ WRONG:
+```python
+result = get_layer_info(layer_name="model.layers.5")
+result
+```
+
+✅ CORRECT:
+```
+get_layer_info(layer_name="model.layers.5")
+```
+
+Just call the function with NO variable assignment, NO extra lines, then STOP. The TOOL_RESULTS will appear in the next message."""
+                    
+                    # Pattern 2: Text after the function call
+                    elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', response):
+                        feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
+
+❌ WRONG:
+```
+get_layer_info(layer_name="model.layers.5")
+Then we'll examine the activations...
+```
+
+✅ CORRECT:
+```
+get_layer_info(layer_name="model.layers.5")
+```
+
+Call the function, then immediately STOP generating. The results will come in the next USER message."""
+                    
+                    # Pattern 3: Multiple function calls
+                    elif len(re.findall(r'\w+\s*\([^)]*\)', response)) > 1:
+                        feedback_msg = """INCORRECT: You tried to call multiple functions. Only the LAST one counts.
+
+❌ WRONG:
+```
+get_layer_info(layer_name="model.layers.5")
+get_activation_statistics(layer_name="model.layers.5")
+```
+
+✅ CORRECT:
+```
+get_layer_info(layer_name="model.layers.5")
+```
+
+Call ONE function, then STOP. Wait for results before making another call."""
+                    
+                    else:
+                        # Generic feedback
+                        feedback_msg = """INCORRECT: To use a tool, call the function then immediately STOP.
+
+✅ CORRECT format:
+```
+function_name(arg1="value1", arg2="value2")
+```
+
+Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
+
+                    self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving targeted feedback")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
                     self.conversation_history.append({
