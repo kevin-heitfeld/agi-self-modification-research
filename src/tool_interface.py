@@ -37,6 +37,8 @@ if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
+    # Prevent propagation to avoid duplicate logs
+    logger.propagate = False
 
 
 @dataclass
