@@ -431,7 +431,9 @@ def compare_weights(layer1: str, layer2: str) -> Dict[str, Any]:
             tools_desc += """
 ## ActivationMonitor Functions
 
-**Note:** These tools require capturing activations first by processing an input.
+**IMPORTANT:** To use these tools, first capture activations by calling `process_text()`.
+Do NOT ask for human input - use `process_text(text="your prompt here")` to observe
+your own processing, then examine the resulting activations with these tools.
 
 ```python
 def get_activation_statistics(layer_name: str) -> Dict[str, Any]:

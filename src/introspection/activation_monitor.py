@@ -248,6 +248,16 @@ class ActivationMonitor:
         """
         if layer_name not in self.activations:
             # Provide helpful error message
+            # Check if user passed a variable-like name
+            variable_like_names = ['layer_name', 'layer', 'name', 'x', 'l', 'layer_id']
+            variable_hint = ""
+            if layer_name in variable_like_names:
+                variable_hint = (
+                    f"\n\n⚠️  WARNING: You passed '{layer_name}' which looks like a variable name. "
+                    f"Remember: You CANNOT use variables! You must call the function with a "
+                    f"literal layer name like: get_activation_statistics(layer_name=\"model.layers.0.self_attn\")"
+                )
+            
             if self.activations:
                 available_layers = list(self.activations.keys())
                 error_msg = (
@@ -255,12 +265,14 @@ class ActivationMonitor:
                     f"Activations are available for: {available_layers[:10]}. "
                     f"Use process_text() with layer_names=[...] to capture activations for specific layers, "
                     f"or use get_layer_info() to see which layers were captured."
+                    f"{variable_hint}"
                 )
             else:
                 error_msg = (
                     f"No activations captured for '{layer_name}'. "
                     f"No activations have been captured yet. "
                     f"Use process_text() to capture activations first."
+                    f"{variable_hint}"
                 )
             raise KeyError(error_msg)
         
