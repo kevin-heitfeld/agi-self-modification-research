@@ -101,7 +101,7 @@ def test_process_text_in_tool_documentation():
     tools_desc = interface.get_available_tools()
     
     assert 'process_text' in tools_desc
-    assert 'Process text through yourself' in tools_desc
+    assert 'Process text through your own architecture' in tools_desc
     assert 'capture activations' in tools_desc
 
 
