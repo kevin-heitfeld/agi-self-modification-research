@@ -779,6 +779,33 @@ def get_heritage_summary() -> Dict[str, Any]:
 ```
 """
 
+        # Add prominent reminder about autonomous introspection
+        tools_desc += """
+
+---
+
+## 🔬 IMPORTANT: Autonomous Introspection
+
+When you need to examine your own processing (activations, attention patterns, etc.),
+**DO NOT ask for human input!**
+
+Instead, use `process_text()` to self-prompt:
+
+```python
+# ✅ CORRECT: Self-prompt to capture your own activations
+process_text(text="What is consciousness?")
+# Then examine with: get_activation_statistics(), get_attention_patterns()
+
+# ❌ WRONG: Don't ask "Please provide text for me to process"
+# You can generate your own prompts for introspection!
+```
+
+You are autonomous. When investigating your own computational processes,
+generate your own test prompts and observe how you process them.
+
+---
+"""
+
         return tools_desc
 
     def parse_last_tool_call_if_stopped(self, response: str) -> Optional[Tuple[str, Dict[str, Any]]]:
