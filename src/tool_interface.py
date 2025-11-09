@@ -31,6 +31,13 @@ if TYPE_CHECKING:
 # Use standard Python logging for library code
 logger = logging.getLogger(__name__)
 
+# Ensure logger outputs to console (needed when parent logger has propagate=False)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(handler)
+
 
 @dataclass
 class ToolCall:
