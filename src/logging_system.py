@@ -254,6 +254,10 @@ class ExperimentLogger:
         self.close()
 
 
+# Global registry for logger instances
+_logger_registry: Dict[str, ExperimentLogger] = {}
+
+
 def get_logger(
     name: str = "agi_research",
     phase: int = 0,
@@ -261,7 +265,7 @@ def get_logger(
     week: int = 1
 ) -> ExperimentLogger:
     """
-    Get an experiment logger.
+    Get an experiment logger. Reuses existing loggers with the same configuration.
     
     Args:
         name: Logger name
@@ -270,9 +274,19 @@ def get_logger(
         week: Current week (1-4)
     
     Returns:
-        ExperimentLogger instance
+        ExperimentLogger instance (may be reused from registry)
     """
-    return ExperimentLogger(name, phase=phase, month=month, week=week)
+    # Create a key based on logger configuration
+    key = f"{name}_{phase}_{month}_{week}"
+    
+    # Return existing logger if available
+    if key in _logger_registry:
+        return _logger_registry[key]
+    
+    # Create new logger and register it
+    logger = ExperimentLogger(name, phase=phase, month=month, week=week)
+    _logger_registry[key] = logger
+    return logger
 
 
 if __name__ == "__main__":

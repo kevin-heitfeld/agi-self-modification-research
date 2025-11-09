@@ -11,19 +11,20 @@ And executes the requested function, returning formatted results.
 """
 
 import json
+import logging
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from src.logging_system import get_logger
 from src.introspection.weight_inspector import WeightInspector
 from src.introspection.activation_monitor import ActivationMonitor
 from src.introspection.architecture_navigator import ArchitectureNavigator
 from src.memory.memory_system import MemorySystem, ObservationType
 from src.heritage import HeritageSystem, HeritageDocument
 
-logger = get_logger(__name__)
+# Use standard Python logging for library code
+logger = logging.getLogger(__name__)
 
 
 @dataclass
