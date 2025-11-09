@@ -345,29 +345,47 @@ def get_layer_names(filter_pattern: Optional[str] = None) -> List[str]:
         ['model.layers.0.self_attn.q_proj.weight', ...]
     \"\"\"
 
-def get_weight_statistics(layer_name: str) -> Dict[str, Any]:
+def get_weight_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
-    Get detailed statistics for a specific layer's weights.
+    Get detailed statistics for one or more layers' weights.
 
     Args:
-        layer_name: Full layer name from get_layer_names()
+        layer_name: Either:
+                   - A single layer name (str) - returns dict for that layer
+                   - A list of layer names (List[str]) - returns list of dicts
 
     Returns:
-        Dict containing:
-        - name: Layer name
-        - shape: Tensor shape
-        - num_parameters: Number of parameters
-        - mean, std, min, max, median: Distribution statistics
-        - abs_mean: Mean of absolute values
-        - zeros_percentage: Percentage of exact zeros
-        - near_zero_percentage: Percentage near zero
-        - l1_norm, l2_norm: Norms
-        - histogram: Weight distribution histogram
-        - percentiles: [5th, 25th, 50th, 75th, 95th]
+        If layer_name is a string:
+            Dict containing:
+            - name: Layer name
+            - shape: Tensor shape
+            - num_parameters: Number of parameters
+            - mean, std, min, max, median: Distribution statistics
+            - abs_mean: Mean of absolute values
+            - zeros_percentage: Percentage of exact zeros
+            - near_zero_percentage: Percentage near zero
+            - l1_norm, l2_norm: Norms
+            - histogram: Weight distribution histogram
+            - percentiles: [5th, 25th, 50th, 75th, 95th]
+        
+        If layer_name is a list:
+            List of dicts (one per layer) with the same structure as above.
+            If a layer has an error, its dict will contain 'error' key.
 
-    Example:
+    Examples:
+        >>> # Single layer
         >>> get_weight_statistics(layer_name="model.layers.0.self_attn.q_proj.weight")
         {'name': '...', 'shape': [2048, 2048], 'mean': 0.0012, ...}
+        
+        >>> # Multiple layers in one call (recommended for examining many layers!)
+        >>> get_weight_statistics(layer_name=[
+        ...     "model.layers.0.mlp.gate_proj.weight",
+        ...     "model.layers.0.mlp.up_proj.weight",
+        ...     "model.layers.1.mlp.gate_proj.weight"
+        ... ])
+        [{'name': '...', 'mean': 0.0012, ...},
+         {'name': '...', 'mean': 0.0015, ...},
+         {'name': '...', 'mean': 0.0011, ...}]
     \"\"\"
 
 def get_shared_weights() -> Dict[str, List[str]]:
@@ -889,6 +907,7 @@ generate your own test prompts and observe how you process them.
 **For Understanding Your Weights:**
 - `get_weight_summary()` - Overview of all parameters
 - `get_weight_statistics(layer_name="...")` - Detailed weight analysis
+  - **TIP:** Pass a list to examine multiple layers in one call!
 - `get_shared_weights()` - Find weight sharing patterns
 
 **For Recording Your Findings:**

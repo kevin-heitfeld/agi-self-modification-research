@@ -7,7 +7,7 @@ compare layers, and track weight changes over time.
 
 import torch
 import numpy as np
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from pathlib import Path
 import logging
 from collections import defaultdict
@@ -220,16 +220,22 @@ class WeightInspector:
             "data": param.detach().clone()  # Safe copy
         }
     
-    def get_weight_statistics(self, layer_name: str, use_cache: bool = True) -> Dict[str, Any]:
+    def get_weight_statistics(self, layer_name: Union[str, List[str]], use_cache: bool = True) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        Compute statistical properties of a layer's weights.
+        Compute statistical properties of one or more layers' weights.
         
         Args:
-            layer_name: Name of the layer to analyze
+            layer_name: Either:
+                       - A single layer name (str) - returns dict for that layer
+                       - A list of layer names (List[str]) - returns list of dicts
             use_cache: Whether to use cached statistics (default: True)
             
         Returns:
-            Dictionary containing:
+            If layer_name is a string:
+                Dictionary containing:
+                - name: Layer name
+                - shape: Weight tensor shape
+                - num_parameters: Number of parameters
                 - mean: Mean of all weights
                 - std: Standard deviation
                 - min: Minimum weight value
@@ -241,7 +247,45 @@ class WeightInspector:
                 - l1_norm: L1 norm of weights
                 - l2_norm: L2 norm of weights
                 - histogram: Histogram of weight values (bins and counts)
+                - percentiles: [5th, 25th, 50th, 75th, 95th]
+                - shared_with: List of layers sharing weights (if applicable)
+            
+            If layer_name is a list:
+                List of dicts (one per layer) with the same structure as above.
+                If a layer has an error, its dict will contain 'error' key.
+                
+        Examples:
+            >>> # Single layer
+            >>> get_weight_statistics(layer_name="model.layers.0.mlp.gate_proj.weight")
+            {'name': '...', 'shape': (5632, 2048), 'mean': 0.0012, ...}
+            
+            >>> # Multiple layers in one call
+            >>> get_weight_statistics(layer_name=[
+            ...     "model.layers.0.mlp.gate_proj.weight",
+            ...     "model.layers.0.mlp.up_proj.weight",
+            ...     "model.layers.1.mlp.gate_proj.weight"
+            ... ])
+            [{'name': '...', 'mean': 0.0012, ...},
+             {'name': '...', 'mean': 0.0015, ...},
+             {'name': '...', 'mean': 0.0011, ...}]
         """
+        # If layer_name is a list, recursively call for each layer
+        if isinstance(layer_name, list):
+            results = []
+            for single_layer in layer_name:
+                try:
+                    result = self.get_weight_statistics(single_layer, use_cache=use_cache)
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Error getting statistics for layer '{single_layer}': {e}")
+                    results.append({
+                        "layer_name": single_layer,
+                        "error": str(e),
+                        "available_layers": self.get_layer_names()[:10]  # Show first 10 as hint
+                    })
+            return results
+        
+        # Single layer case
         # Check cache first
         if use_cache and layer_name in self._stats_cache:
             return self._stats_cache[layer_name]
