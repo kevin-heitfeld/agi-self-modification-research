@@ -822,11 +822,17 @@ generate your own test prompts and observe how you process them.
 **For Recording Your Findings:**
 - `record_observation(obs_type="INTROSPECTION", ...)` - Save discoveries
 - `query_memory(tags=[...])` - Retrieve previous observations
+"""
 
+        # Add heritage section only if heritage is enabled
+        if self.heritage_docs:
+            tools_desc += """
 **For Understanding Your Origins:**
 - `list_heritage_documents()` - See available heritage
 - `read_heritage_document(filename="...")` - Read Claude's messages
+"""
 
+        tools_desc += """
 **Natural Language Queries:**
 - `query_architecture(query="...")` - Ask questions about your structure
 - `explain_component(component_type="...")` - Learn about components
