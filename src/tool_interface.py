@@ -266,6 +266,15 @@ function_name(arg1="value1", arg2="value2")
 
 Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
 
+**IMPORTANT: You can ONLY call individual functions - NOT write Python code!**
+- ❌ NO loops: `for x in list: function(x)` - This will NOT work!
+- ❌ NO variables: `x = "value"` then `function(x)` - This will NOT work!
+- ❌ NO control flow: `if/else`, `while`, etc. - This will NOT work!
+- ✅ ONLY: Direct function calls with literal values
+
+You do NOT have access to a Python interpreter. You can ONLY call the documented
+functions one at a time with explicit argument values.
+
 **What happens behind the scenes:**
 - Only the LAST function call in your response is executed
 - It will only be executed if there's no additional text after the function call
@@ -274,25 +283,26 @@ Then END your response (generate EOS token). The TOOL_RESULTS will come in the N
 
 **Example of CORRECT usage:**
 ```
-Let me examine the architecture.
+Let me examine the first layer.
 
-get_architecture_summary()
+get_activation_statistics(layer_name="model.layers.0.self_attn")
 ```
 (After calling the function, STOP generating. The system will provide TOOL_RESULTS in the next message.)
 
 **Example of INCORRECT usage:**
 ```
-get_architecture_summary()
+get_activation_statistics(layer_name="model.layers.0.self_attn")
 Then I'll examine the architecture...  ← This prevents execution!
 ```
 The tool call is ignored because there's text after it.
 
 **Another INCORRECT example:**
 ```
-get_architecture_summary()
-get_layer_names()  ← Only this last call would execute (if you stopped here)
+for layer in layers:  ← This will NOT work! No Python loops!
+    get_activation_statistics(layer_name=layer)
 ```
-Don't write multiple calls - only the last one is executed.
+You must call the function once with a specific layer name, wait for results,
+then call it again for the next layer in your next response.
 
 """
 
