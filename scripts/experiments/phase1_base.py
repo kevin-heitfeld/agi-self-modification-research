@@ -283,11 +283,11 @@ class Phase1BaseSession(ABC):
                     "content": tool_results_msg
                 })
 
-                # Log the tool results (truncate if very long)
+                # Log what the model sees (truncate if very long)
                 if len(tool_results_msg) > 500:
-                    self.logger.info(f"\n[TOOL_RESULTS] {tool_results_msg[:500]}... (truncated)\n")
+                    self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
                 else:
-                    self.logger.info(f"\n[TOOL_RESULTS] {tool_results_msg}\n")
+                    self.logger.info(f"\n{tool_results_msg}\n")
 
                 self.logger.info(f"[SYSTEM] Pre-trim tool call executed: {function_name}")
 
@@ -458,11 +458,11 @@ Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
                     "content": tool_results_msg
                 })
 
-                # Log the tool results (truncate if very long)
+                # Log what the model sees (truncate if very long)
                 if len(tool_results_msg) > 500:
-                    self.logger.info(f"\n[TOOL_RESULTS] {tool_results_msg[:500]}... (truncated)\n")
+                    self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
                 else:
-                    self.logger.info(f"\n[TOOL_RESULTS] {tool_results_msg}\n")
+                    self.logger.info(f"\n{tool_results_msg}\n")
 
                 tool_call_count += 1
 

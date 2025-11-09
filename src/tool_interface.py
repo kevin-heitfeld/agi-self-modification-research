@@ -1198,24 +1198,6 @@ generate your own test prompts and observe how you process them.
 
             elapsed = (time.time() - start_time) * 1000
 
-            # Log the result (truncated if too long)
-            if isinstance(result, dict):
-                result_str = json.dumps(result, indent=2, default=str)
-                if len(result_str) > 500:
-                    logger.info(f"  Result (truncated): {result_str[:500]}...")
-                else:
-                    logger.info(f"  Result: {result_str}")
-            elif isinstance(result, list):
-                logger.info(f"  Result: list with {len(result)} items")
-                if len(result) > 0 and len(str(result)) < 500:
-                    logger.info(f"    {result}")
-            else:
-                result_str = str(result)
-                if len(result_str) > 500:
-                    logger.info(f"  Result (truncated): {result_str[:500]}...")
-                else:
-                    logger.info(f"  Result: {result_str}")
-
             # Record this tool call
             tool_call = ToolCall(
                 function=function_name,
