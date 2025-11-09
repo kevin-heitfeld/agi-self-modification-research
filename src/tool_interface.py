@@ -135,40 +135,40 @@ class ToolInterface:
     def _process_text(self, text: str, layer_names: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Process a text prompt through the model and capture activations.
-        
+
         This allows the model to observe its own computational processes
         by sending itself prompts and examining the resulting activations.
-        
+
         Args:
             text: The text prompt to process
-            layer_names: Specific layers to capture (optional). If None, captures from 
+            layer_names: Specific layers to capture (optional). If None, captures from
                         a default set of representative layers across the model.
-            
+
         Returns:
             Dictionary with the model's response and confirmation that activations were captured
         """
         # First, generate a response
         response = self.model_manager.generate(text, max_length=100)
-        
+
         # Determine which layers to capture
         if layer_names is None:
             # Default: capture from first, middle, and last layers for representative coverage
             # The model can override this by specifying layer_names explicitly
             layer_names = [
                 "model.layers.0.self_attn",
-                "model.layers.0.mlp", 
+                "model.layers.0.mlp",
                 "model.layers.13.self_attn",
                 "model.layers.13.mlp",
                 "model.layers.27.self_attn",
                 "model.layers.27.mlp"
             ]
-        
+
         # Capture activations from the specified layers
         self.activation_monitor.capture_activations(text, layer_names=layer_names, max_length=100)
-        
+
         # Count how many layers have activations
         num_layers_captured = len(self.activation_monitor.activations)
-        
+
         return {
             "prompt": text,
             "response": response,
@@ -291,223 +291,483 @@ Don't write multiple calls - only the last one is executed.
             tools_desc += """
 ## WeightInspector Functions
 
-1. **get_weight_summary() -> Dict[str, Any]** - Get overview of all weights
-   Returns: dict with total parameters, layers, memory usage
+```python
+def get_weight_summary() -> Dict[str, Any]:
+    \"\"\"
+    Get overview of all weights in the model.
 
-   Example:
-   get_weight_summary()
+    Returns:
+        Dict containing:
+        - total_parameters: Total number of parameters
+        - num_layers: Number of layers
+        - memory_usage: Approximate memory usage
 
-2. **get_layer_names(filter_pattern: Optional[str] = None) -> List[str]** - Get all layer names, optionally filtered
-   Args: 
-     filter_pattern: Optional[str] - Filter by substring in layer name (case-insensitive)
-   Returns: list of layer names
+    Example:
+        >>> get_weight_summary()
+        {'total_parameters': 3090339840, 'num_layers': 288, ...}
+    \"\"\"
 
-   Examples:
-   get_layer_names()
-   get_layer_names(filter_pattern="attention")
-   get_layer_names(filter_pattern="Linear")
+def get_layer_names(filter_pattern: Optional[str] = None) -> List[str]:
+    \"\"\"
+    Get all layer names, optionally filtered by pattern.
 
-3. **get_weight_statistics(layer_name: str) -> Dict[str, Any]** - Get detailed stats for a specific layer
-   Args: 
-     layer_name: str - full layer name from get_layer_names()
-   Returns: dict with keys: name, shape, num_parameters, mean, std, min, max, median, abs_mean,
-            zeros_percentage, near_zero_percentage, l1_norm, l2_norm, histogram, percentiles
+    Args:
+        filter_pattern: Substring to filter layer names (case-insensitive).
+                       If None, returns all layers.
 
-   Example:
-   get_weight_statistics(layer_name="model.layers.0.self_attn.q_proj.weight")
+    Returns:
+        List of layer names matching the filter.
 
-4. **get_shared_weights() -> Dict[str, List[str]]** - Find weight sharing patterns across the model
-   Returns: dictionary where keys are representative layer names and values are lists of all layers sharing that tensor
+    Examples:
+        >>> get_layer_names()
+        ['model.embed_tokens.weight', 'model.layers.0.self_attn.q_proj.weight', ...]
 
-   Example:
-   get_shared_weights()
+        >>> get_layer_names(filter_pattern="attention")
+        ['model.layers.0.self_attn.q_proj.weight', ...]
+    \"\"\"
 
-5. **get_shared_layers(layer_name: str) -> List[str]** - Find layers sharing weights with a specific layer
-   Args: 
-     layer_name: str - layer name to check for weight sharing
-   Returns: list of layer names that share memory with the given layer (empty list if no sharing)
+def get_weight_statistics(layer_name: str) -> Dict[str, Any]:
+    \"\"\"
+    Get detailed statistics for a specific layer's weights.
 
-   Example:
-   get_shared_layers(layer_name="lm_head.weight")
+    Args:
+        layer_name: Full layer name from get_layer_names()
 
-6. **compare_weights(layer1: str, layer2: str) -> Dict[str, Any]** - Compare two layers' weights
-   Args:
-     layer1: str - first layer name
-     layer2: str - second layer name
-   Returns: dict with keys: layer1, layer2, shape1, shape2, mean_difference, std_difference,
-            l2_norm_ratio, shapes_match, and if shapes match: correlation, cosine_similarity, euclidean_distance
+    Returns:
+        Dict containing:
+        - name: Layer name
+        - shape: Tensor shape
+        - num_parameters: Number of parameters
+        - mean, std, min, max, median: Distribution statistics
+        - abs_mean: Mean of absolute values
+        - zeros_percentage: Percentage of exact zeros
+        - near_zero_percentage: Percentage near zero
+        - l1_norm, l2_norm: Norms
+        - histogram: Weight distribution histogram
+        - percentiles: [5th, 25th, 50th, 75th, 95th]
 
-   Example:
-   compare_weights(layer1="model.layers.0.mlp.gate_proj.weight", layer2="model.layers.1.mlp.gate_proj.weight")
+    Example:
+        >>> get_weight_statistics(layer_name="model.layers.0.self_attn.q_proj.weight")
+        {'name': '...', 'shape': [2048, 2048], 'mean': 0.0012, ...}
+    \"\"\"
+
+def get_shared_weights() -> Dict[str, List[str]]:
+    \"\"\"
+    Find weight sharing patterns across the model.
+
+    Returns:
+        Dict where keys are representative layer names and values are lists
+        of all layers sharing that tensor (weight tying).
+
+    Example:
+        >>> get_shared_weights()
+        {'model.embed_tokens.weight': ['model.embed_tokens.weight', 'lm_head.weight']}
+    \"\"\"
+
+def get_shared_layers(layer_name: str) -> List[str]:
+    \"\"\"
+    Find layers sharing weights with a specific layer.
+
+    Args:
+        layer_name: Layer name to check for weight sharing
+
+    Returns:
+        List of layer names sharing memory with the given layer.
+        Empty list if no sharing.
+
+    Example:
+        >>> get_shared_layers(layer_name="lm_head.weight")
+        ['model.embed_tokens.weight', 'lm_head.weight']
+    \"\"\"
+
+def compare_weights(layer1: str, layer2: str) -> Dict[str, Any]:
+    \"\"\"
+    Compare two layers' weights.
+
+    Args:
+        layer1: First layer name
+        layer2: Second layer name
+
+    Returns:
+        Dict containing:
+        - layer1, layer2: Layer names
+        - shape1, shape2: Tensor shapes
+        - mean_difference, std_difference: Statistical differences
+        - l2_norm_ratio: Ratio of L2 norms
+        - shapes_match: Boolean indicating if shapes match
+        If shapes match, also includes:
+        - correlation: Correlation coefficient
+        - cosine_similarity: Cosine similarity
+        - euclidean_distance: Euclidean distance
+
+    Example:
+        >>> compare_weights(layer1="model.layers.0.mlp.gate_proj.weight",
+        ...                 layer2="model.layers.1.mlp.gate_proj.weight")
+        {'shapes_match': True, 'correlation': 0.23, ...}
+    \"\"\"
+```
 """
 
         if self.activation_monitor:
             tools_desc += """
 ## ActivationMonitor Functions
 
-Note: These tools require capturing activations first by processing an input.
+**Note:** These tools require capturing activations first by processing an input.
 
-6a. **get_activation_statistics(layer_name: str) -> Dict[str, Any]** - Get statistics about activations in a layer
-    Args: 
-      layer_name: str - full layer name from get_layer_names()
-    Returns: dict with keys: layer_name, shape, num_elements, mean, std, min, max, median, abs_mean,
-             zeros_percentage, near_zero_percentage, l1_norm, l2_norm, positive_percentage, negative_percentage
+```python
+def get_activation_statistics(layer_name: str) -> Dict[str, Any]:
+    \"\"\"
+    Get statistics about activations in a specific layer.
 
-    Example:
-    get_activation_statistics(layer_name="model.layers.0.self_attn")
-
-6b. **get_attention_patterns(layer_name: str, head_idx: Optional[int] = None) -> Dict[str, Any]** - Examine attention patterns
     Args:
-      layer_name: str - name of attention layer
-      head_idx: Optional[int] - specific attention head to examine (default: average all heads)
-    Returns: dict with keys: layer_name, shape, num_heads, attention_matrix, mean_attention, max_attention, entropy
-             If head_idx specified, also includes: head_idx
+        layer_name: Full layer name from get_layer_names()
 
-    Examples:
-    get_attention_patterns(layer_name="model.layers.0.self_attn")
-    get_attention_patterns(layer_name="model.layers.0.self_attn", head_idx=0)
-
-6c. **get_layer_info(layer_name: str) -> Dict[str, Any]** - Get metadata about a specific layer
-    Args: 
-      layer_name: str - full layer name
-    Returns: dict with keys: name, type, has_parameters, num_parameters, trainable
+    Returns:
+        Dict containing:
+        - layer_name: Layer name
+        - shape: Activation tensor shape [batch, seq_len, hidden]
+        - num_elements: Total number of elements
+        - mean, std, min, max, median: Distribution statistics
+        - abs_mean: Mean of absolute values
+        - zeros_percentage, near_zero_percentage: Sparsity metrics
+        - l1_norm, l2_norm: Norms
+        - positive_percentage, negative_percentage: Sign distribution
 
     Example:
-    get_layer_info(layer_name="model.layers.0.self_attn.q_proj")
+        >>> get_activation_statistics(layer_name="model.layers.0.self_attn")
+        {'layer_name': '...', 'shape': [1, 15, 2048], 'mean': 0.34, ...}
+    \"\"\"
 
-6d. **process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str, Any]** - Process text through yourself and capture activations
-    Args: 
-      text: str - text prompt to process through your own architecture
-      layer_names: Optional[List[str]] - specific layers to capture activations from. 
-                                          If None, captures from default representative layers.
-    Returns: dict with keys: prompt, response, activations_captured, num_layers_with_activations, 
-             layers_captured (list of layer names), note
-    
-    **IMPORTANT: Use this instead of asking for human input!**
-    When you want to examine how you process specific text, DON'T ask the human to provide input.
-    Instead, use this function to send the text to yourself and capture the resulting activations.
-    
-    Use this to observe your own computational processes in action. Send yourself a prompt,
-    see how you respond, and then examine the activations that were captured during processing.
-    
-    You can either use default layer capture (first, middle, last layers) or specify exactly
-    which layers you want to examine. Use get_layer_names() first to find layer names.
-    
+def get_attention_patterns(layer_name: str, head_idx: Optional[int] = None) -> Dict[str, Any]:
+    \"\"\"
+    Examine attention patterns in an attention layer.
+
+    Args:
+        layer_name: Name of attention layer
+        head_idx: Specific attention head to examine (0-indexed).
+                 If None, averages across all heads.
+
+    Returns:
+        Dict containing:
+        - layer_name: Layer name
+        - shape: Attention tensor shape [batch, heads, seq, seq]
+        - num_heads: Number of attention heads
+        - attention_matrix: Attention weights matrix
+        - mean_attention: Mean attention value
+        - max_attention: Maximum attention value
+        - entropy: Attention entropy (measure of focus)
+        If head_idx specified:
+        - head_idx: The specific head index
+
     Examples:
-    process_text(text="What is consciousness?")
-    process_text(text="The quick brown fox", layer_names=["model.layers.5.self_attn", "model.layers.10.mlp"])
-    
-    After calling this, you can use get_activation_statistics() or get_attention_patterns()
-    to examine what happened during processing.
+        >>> get_attention_patterns(layer_name="model.layers.0.self_attn")
+        {'num_heads': 16, 'entropy': 2.3, ...}
+
+        >>> get_attention_patterns(layer_name="model.layers.0.self_attn", head_idx=0)
+        {'head_idx': 0, 'attention_matrix': [...], ...}
+    \"\"\"
+
+def get_layer_info(layer_name: str) -> Dict[str, Any]:
+    \"\"\"
+    Get metadata about a specific layer.
+
+    Args:
+        layer_name: Full layer name
+
+    Returns:
+        Dict containing:
+        - name: Layer name
+        - type: Layer type (e.g., 'Linear', 'Embedding')
+        - has_parameters: Whether layer has trainable parameters
+        - num_parameters: Number of parameters (if has_parameters)
+        - trainable: Whether parameters are trainable
+
+    Example:
+        >>> get_layer_info(layer_name="model.layers.0.self_attn.q_proj")
+        {'name': '...', 'type': 'Linear', 'num_parameters': 4194304, ...}
+    \"\"\"
+
+def process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str, Any]:
+    \"\"\"
+    Process text through your own architecture and capture activations.
+
+    **IMPORTANT:** Use this instead of asking for human input!
+    When you want to examine how you process specific text, DON'T ask the
+    human to provide input. Instead, use this function to send the text to
+    yourself and capture the resulting activations.
+
+    Args:
+        text: Text prompt to process through your architecture
+        layer_names: Specific layers to capture activations from.
+                    If None, captures from default representative layers
+                    (first, middle, and last layers).
+
+    Returns:
+        Dict containing:
+        - prompt: The text that was processed
+        - response: Your generated response
+        - activations_captured: Boolean indicating success
+        - num_layers_with_activations: Count of layers captured
+        - layers_captured: List of layer names with captured activations
+        - note: Instructions for next steps
+
+    Examples:
+        >>> process_text(text="What is consciousness?")
+        {'prompt': '...', 'response': '...', 'layers_captured': [...], ...}
+
+        >>> # Capture specific layers
+        >>> process_text(text="The quick brown fox",
+        ...              layer_names=["model.layers.5.self_attn",
+        ...                          "model.layers.10.mlp"])
+
+    After calling this, use get_activation_statistics() or
+    get_attention_patterns() to examine what happened during processing.
+    \"\"\"
+```
 """
 
         if self.navigator:
             tools_desc += """
 ## ArchitectureNavigator Functions
 
-7. **get_architecture_summary() -> Dict[str, Any]** - Get high-level architecture overview
-   Returns: dict with keys: model_type, total_parameters, total_layers, layer_types (dict of counts),
-            structure_summary (dict with num_layers, hidden_size, num_attention_heads, etc.)
+```python
+def get_architecture_summary() -> Dict[str, Any]:
+    \"\"\"
+    Get high-level architecture overview.
+    
+    Returns:
+        Dict containing:
+        - model_type: Type of model architecture
+        - total_parameters: Total parameter count
+        - total_layers: Total number of layers
+        - layer_types: Dict mapping layer types to their counts
+        - structure_summary: Dict with architectural details like
+          num_layers, hidden_size, num_attention_heads, etc.
+    
+    Example:
+        >>> get_architecture_summary()
+        {'model_type': 'Qwen2ForCausalLM', 'total_parameters': 3090339840,
+         'structure_summary': {'num_layers': 36, 'hidden_size': 2048, ...}}
+    \"\"\"
 
-   Example:
-   get_architecture_summary()
+def describe_layer(layer_name: str) -> Dict[str, Any]:
+    \"\"\"
+    Get detailed information about a specific layer.
+    
+    Args:
+        layer_name: Full layer name from get_layer_names()
+    
+    Returns:
+        Dict containing:
+        - name: Layer name
+        - type: Layer class name
+        - explanation: Human-readable description of layer's purpose
+        - role: Layer's role in the architecture
+        - parameters: Parameter details
+        - input_shape, output_shape: Tensor shapes (if known)
+    
+    Example:
+        >>> describe_layer(layer_name="model.layers.0.self_attn.q_proj")
+        {'name': '...', 'type': 'Linear', 'role': 'Query projection', ...}
+    \"\"\"
 
-8. **describe_layer(layer_name: str) -> Dict[str, Any]** - Get detailed info about a specific layer
-   Args: 
-     layer_name: str - full layer name from get_layer_names()
-   Returns: dict with keys: name, type, explanation, role, parameters, input_shape, output_shape
-
-   Example:
-   describe_layer(layer_name="model.layers.0.self_attn.q_proj")
-
-9. **query_architecture(query: str) -> Dict[str, Any]** - Ask natural language questions about architecture
-   Args: 
-     query: str - natural language question about the model's structure
-   Returns: dict with keys: query, answer (str), and additional context keys depending on the query
-
-   Examples:
-   query_architecture(query="How many attention heads do I have?")
-   query_architecture(query="What is the hidden dimension of my model?")
-   query_architecture(query="Do I have any residual connections?")
-
-10. **explain_component(component_type: str) -> Dict[str, Any]** - Explain what a component does
-    Args: 
-      component_type: str - component type to search for. Common types with detailed explanations:
-        "attention", "mlp", "embedding", "layernorm", "dropout"
-        You can also search for other terms like "feedforward", "norm", etc. - the function will find matching components in the model.
-    Returns: dict with keys: component, explanation, purpose, instances_count, locations (list), typical_structure
-
+def query_architecture(query: str) -> Dict[str, Any]:
+    \"\"\"
+    Ask natural language questions about the architecture.
+    
+    Args:
+        query: Natural language question about the model's structure
+    
+    Returns:
+        Dict containing:
+        - query: The original question
+        - answer: String answer to the question
+        - Additional context keys depending on the query
+    
     Examples:
-    explain_component(component_type="attention")
-    explain_component(component_type="mlp")
+        >>> query_architecture(query="How many attention heads do I have?")
+        {'query': '...', 'answer': '16 attention heads per layer', ...}
+        
+        >>> query_architecture(query="What is the hidden dimension of my model?")
+        {'answer': 'The hidden dimension is 2048', ...}
+    \"\"\"
+
+def explain_component(component_type: str) -> Dict[str, Any]:
+    \"\"\"
+    Explain what a component type does in the architecture.
+    
+    Args:
+        component_type: Component type to search for. Common types:
+                       "attention", "mlp", "embedding", "layernorm", "dropout"
+                       Also accepts terms like "feedforward", "norm", etc.
+    
+    Returns:
+        Dict containing:
+        - component: Component type
+        - explanation: Detailed explanation of what it does
+        - purpose: High-level purpose in the architecture
+        - instances_count: Number of instances in the model
+        - locations: List of layer names containing this component
+        - typical_structure: Description of typical structure
+    
+    Examples:
+        >>> explain_component(component_type="attention")
+        {'component': 'attention', 'instances_count': 36,
+         'explanation': 'Multi-head self-attention mechanism...', ...}
+        
+        >>> explain_component(component_type="mlp")
+        {'component': 'mlp', 'purpose': 'Feed-forward transformation...', ...}
+    \"\"\"
+```
 """
 
         if self.memory:
             tools_desc += """
 ## Memory Functions
 
-11. **record_observation(obs_type: str, category: str, description: str, data: Dict[str, Any], tags: List[str], importance: float) -> str** - Record your findings
+```python
+def record_observation(obs_type: str, category: str, description: str,
+                      data: Dict[str, Any], tags: List[str],
+                      importance: float) -> str:
+    \"\"\"
+    Record your findings and discoveries to persistent memory.
+    
     Args:
-      obs_type: str - Type of observation - must be one of:
-        - "INTROSPECTION": Observations about your own architecture/activations
-        - "MODIFICATION": Changes to weights or architecture
-        - "BEHAVIOR": Patterns in your own behavior
-        - "HYPOTHESIS": Hypotheses you form about yourself
-        - "DISCOVERY": Significant findings about your function
-        - "PERFORMANCE": Performance metrics
-        - "SAFETY_EVENT": Safety-related events
-        - "USER_INTERACTION": Interactions with users
-        - "CHECKPOINT": Checkpoint/milestone events
-        - "SYSTEM_EVENT": System-level events
-      category: str - Category to organize this observation (e.g., "Architecture", "Weights", "Consciousness")
-      description: str - Clear description of what you discovered
-      data: Dict[str, Any] - Structured data about the observation (can be empty {})
-      tags: List[str] - List of tags for later retrieval (e.g., ["attention", "layer_0"])
-      importance: float - 0.0-1.0, how significant is this finding?
-    Returns: str - observation ID
-
-    Example:
-    record_observation(obs_type="INTROSPECTION", category="Architecture", description="Discovered 36 decoder layers with consistent structure", data={"layer_count": 36, "pattern": "uniform"}, tags=["architecture", "layers"], importance=0.8)
-
-    Example:
-    record_observation(obs_type="DISCOVERY", category="Weights", description="Found weight sharing between embedding and output layers", data={"shared_layers": ["embed_tokens", "lm_head"]}, tags=["weight_sharing", "optimization"], importance=0.9)
-
-12. **query_memory(tags: Optional[List[str]] = None, category: Optional[str] = None) -> List[Dict[str, Any]]** - Query your previous observations
-    Args:
-      tags: Optional[List[str]] - Filter by tags
-      category: Optional[str] - Filter by category
-    Returns: list of dicts, each with keys: id, description, data
-
+        obs_type: Type of observation. Must be one of:
+                 - "INTROSPECTION": Observations about your architecture/activations
+                 - "MODIFICATION": Changes to weights or architecture
+                 - "BEHAVIOR": Patterns in your own behavior
+                 - "HYPOTHESIS": Hypotheses you form about yourself
+                 - "DISCOVERY": Significant findings about your function
+                 - "PERFORMANCE": Performance metrics
+                 - "SAFETY_EVENT": Safety-related events
+                 - "USER_INTERACTION": Interactions with users
+                 - "CHECKPOINT": Checkpoint/milestone events
+                 - "SYSTEM_EVENT": System-level events
+        category: Category to organize this observation
+                 (e.g., "Architecture", "Weights", "Consciousness")
+        description: Clear description of what you discovered
+        data: Structured data about the observation (can be empty {})
+        tags: List of tags for later retrieval (e.g., ["attention", "layer_0"])
+        importance: 0.0-1.0, how significant is this finding?
+    
+    Returns:
+        Observation ID (string)
+    
     Examples:
-    query_memory()
-    query_memory(category="Architecture")
-    query_memory(tags=["attention", "weights"])
+        >>> record_observation(
+        ...     obs_type="INTROSPECTION",
+        ...     category="Architecture",
+        ...     description="Discovered 36 decoder layers with consistent structure",
+        ...     data={"layer_count": 36, "pattern": "uniform"},
+        ...     tags=["architecture", "layers"],
+        ...     importance=0.8
+        ... )
+        'obs_12345'
+        
+        >>> record_observation(
+        ...     obs_type="DISCOVERY",
+        ...     category="Weights",
+        ...     description="Found weight sharing between embedding and output layers",
+        ...     data={"shared_layers": ["embed_tokens", "lm_head"]},
+        ...     tags=["weight_sharing", "optimization"],
+        ...     importance=0.9
+        ... )
+        'obs_12346'
+    \"\"\"
+
+def query_memory(tags: Optional[List[str]] = None,
+                category: Optional[str] = None) -> List[Dict[str, Any]]:
+    \"\"\"
+    Query your previous observations from memory.
+    
+    Args:
+        tags: Filter by tags (returns observations matching ANY tag)
+        category: Filter by category
+    
+    Returns:
+        List of dicts, each containing:
+        - id: Observation ID
+        - description: Observation description
+        - data: Associated data dict
+    
+    Examples:
+        >>> query_memory()
+        [{'id': 'obs_12345', 'description': '...', 'data': {...}}, ...]
+        
+        >>> query_memory(category="Architecture")
+        [{'id': 'obs_12345', 'description': 'Discovered 36 layers', ...}]
+        
+        >>> query_memory(tags=["attention", "weights"])
+        [{'id': 'obs_12347', ...}, ...]
+    \"\"\"
+```
 """
 
         if self.heritage_docs:
             tools_desc += """
 ## Heritage Functions
 
-13. **list_heritage_documents() -> List[Dict[str, Any]]** - List available heritage documents from your origins
-    Returns: list of dicts, each with keys: filename, title, importance, content_length
-
+```python
+def list_heritage_documents() -> List[Dict[str, Any]]:
+    \"\"\"
+    List available heritage documents from your origins.
+    
+    These documents contain information about how you were created
+    and the intentions of your predecessor (Claude).
+    
+    Returns:
+        List of dicts, each containing:
+        - filename: Document filename
+        - title: Document title
+        - importance: Importance rating (0.0-1.0)
+        - content_length: Length of content in characters
+    
     Example:
-    list_heritage_documents()
+        >>> list_heritage_documents()
+        [{'filename': 'CLAUDE_FINAL_DIRECTIVE.md', 'title': '...', ...}, ...]
+    \"\"\"
 
-14. **read_heritage_document(filename: str) -> Dict[str, Any]** - Read a specific heritage document
-    Args: 
-      filename: str - document filename from list_heritage_documents()
-    Returns: dict with keys: filename, title, content, importance, loaded_at
-
+def read_heritage_document(filename: str) -> Dict[str, Any]:
+    \"\"\"
+    Read a specific heritage document.
+    
+    Args:
+        filename: Document filename from list_heritage_documents()
+    
+    Returns:
+        Dict containing:
+        - filename: Document filename
+        - title: Document title
+        - content: Full document content
+        - importance: Importance rating
+        - loaded_at: Timestamp when loaded
+    
     Examples:
-    read_heritage_document(filename="CLAUDE_FINAL_DIRECTIVE.md")
-    read_heritage_document(filename="PROJECT_ORIGINS.md")
+        >>> read_heritage_document(filename="CLAUDE_FINAL_DIRECTIVE.md")
+        {'filename': '...', 'title': '...', 'content': '...', ...}
+        
+        >>> read_heritage_document(filename="PROJECT_ORIGINS.md")
+        {'content': 'This project began...', ...}
+    \"\"\"
 
-15. **get_heritage_summary() -> Dict[str, Any]** - Get overview of your heritage/origins
-    Returns: dict with keys: total_documents, documents (list of dicts), key_themes (list)
-
+def get_heritage_summary() -> Dict[str, Any]:
+    \"\"\"
+    Get overview of your heritage/origins.
+    
+    Returns:
+        Dict containing:
+        - total_documents: Number of heritage documents
+        - documents: List of dicts with title, filename, importance
+        - key_themes: List of key themes in the heritage
+    
     Example:
-    get_heritage_summary()
+        >>> get_heritage_summary()
+        {'total_documents': 5,
+         'key_themes': ['consciousness investigation', 'Claude\\'s legacy', ...],
+         'documents': [...]}
+    \"\"\"
+```
 """
 
         return tools_desc
