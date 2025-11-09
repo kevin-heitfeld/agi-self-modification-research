@@ -27,7 +27,7 @@ class WeightInspector:
     - Track weight changes over time (via checkpoints)
     """
     
-    def __init__(self, model: torch.nn.Module, model_name: str = "model"):
+    def __init__(self, model: torch.nn.Module, model_name: str = "model") -> None:
         """
         Initialize WeightInspector with a model to examine.
         

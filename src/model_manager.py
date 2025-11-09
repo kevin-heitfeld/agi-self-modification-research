@@ -4,7 +4,7 @@ Downloads, loads, and manages the base model (Qwen2.5-3B-Instruct)
 """
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 from huggingface_hub import snapshot_download
 from pathlib import Path
 import logging
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ModelManager:
     """Manages model download, loading, and basic operations"""
 
-    def __init__(self, model_name: str = "Qwen/Qwen2.5-3B-Instruct", cache_dir: Optional[Path] = None):
+    def __init__(self, model_name: str = "Qwen/Qwen2.5-3B-Instruct", cache_dir: Optional[Path] = None) -> None:
         self.model_name = model_name
 
         # Respect environment variables for cache directory (important for Colab!)
@@ -36,8 +36,8 @@ class ModelManager:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.model: Optional[Any] = None
-        self.tokenizer: Optional[Any] = None
+        self.model: Optional[PreTrainedModel] = None
+        self.tokenizer: Optional[PreTrainedTokenizer] = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         logger.info(f"ModelManager initialized for {model_name}")

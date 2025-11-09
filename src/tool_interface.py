@@ -23,6 +23,11 @@ from src.introspection.architecture_navigator import ArchitectureNavigator
 from src.memory.memory_system import MemorySystem, ObservationType
 from src.heritage import HeritageSystem, HeritageDocument
 
+# Import for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.model_manager import ModelManager
+
 # Use standard Python logging for library code
 logger = logging.getLogger(__name__)
 
@@ -58,8 +63,8 @@ class ToolInterface:
         memory: Optional[MemorySystem] = None,
         heritage: Optional[HeritageSystem] = None,
         heritage_docs: Optional[List[HeritageDocument]] = None,
-        model_manager: Optional[Any] = None
-    ):
+        model_manager: Optional['ModelManager'] = None
+    ) -> None:
         """
         Initialize tool interface with available tools.
 
@@ -86,7 +91,7 @@ class ToolInterface:
         # Register available tools
         self._register_tools()
 
-    def _register_tools(self):
+    def _register_tools(self) -> None:
         """Register all available tool functions"""
         self.tools: Dict[str, Callable] = {}
 

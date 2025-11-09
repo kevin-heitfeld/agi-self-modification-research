@@ -7,12 +7,19 @@ track attention patterns, and understand information flow through the network.
 
 import torch
 import numpy as np
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple, Callable, Protocol
 from pathlib import Path
 import logging
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
+
+
+class TokenizerProtocol(Protocol):
+    """Protocol defining the interface we need from a tokenizer"""
+    def __call__(self, text: str, return_tensors: str, **kwargs: Any) -> Dict[str, torch.Tensor]: ...
+    def decode(self, token_ids: List[int], **kwargs: Any) -> str: ...
+    def batch_decode(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]: ...
 
 
 class ActivationMonitor:
@@ -27,7 +34,7 @@ class ActivationMonitor:
     - Understand how specific inputs are processed
     """
     
-    def __init__(self, model: torch.nn.Module, tokenizer: Any, model_name: str = "model"):
+    def __init__(self, model: torch.nn.Module, tokenizer: TokenizerProtocol, model_name: str = "model") -> None:
         """
         Initialize ActivationMonitor with a model to observe.
         
