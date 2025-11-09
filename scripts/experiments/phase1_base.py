@@ -38,6 +38,9 @@ def setup_logging(phase_name: str):
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     
+    # Prevent propagation to root logger (prevents duplicate logs)
+    logger.propagate = False
+    
     # Only add handlers if none exist yet (prevents duplicates)
     if not logger.handlers:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
