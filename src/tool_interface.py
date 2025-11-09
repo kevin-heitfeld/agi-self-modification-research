@@ -250,7 +250,8 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
 
 3. **get_weight_statistics(layer_name)** - Get detailed stats for a specific layer
    Args: layer_name (str) - full layer name from get_layer_names()
-   Returns: mean, std, min, max, shape, dtype, device
+   Returns: dict with keys: name, shape, num_parameters, mean, std, min, max, median, abs_mean, 
+            zeros_percentage, near_zero_percentage, l1_norm, l2_norm, histogram, percentiles
 
    Example:
    TOOL_CALL: get_weight_statistics
@@ -275,7 +276,8 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
    Args:
      layer1 (str): first layer name
      layer2 (str): second layer name
-   Returns: comparison statistics (difference, correlation, etc.)
+   Returns: dict with keys: layer1, layer2, shape1, shape2, mean_difference, std_difference, 
+            l2_norm_ratio, shapes_match, and if shapes match: correlation, cosine_similarity, euclidean_distance
 
    Example:
    TOOL_CALL: compare_weights
@@ -290,7 +292,8 @@ Note: These tools require capturing activations first by processing an input.
 
 6a. **get_activation_statistics(layer_name)** - Get statistics about activations in a layer
     Args: layer_name (str) - full layer name from get_layer_names()
-    Returns: mean, std, min, max, sparsity, norms for the layer's activations
+    Returns: dict with keys: layer_name, shape, num_elements, mean, std, min, max, median, abs_mean,
+             zeros_percentage, near_zero_percentage, l1_norm, l2_norm, positive_percentage, negative_percentage
     
     Example:
     TOOL_CALL: get_activation_statistics
@@ -300,7 +303,8 @@ Note: These tools require capturing activations first by processing an input.
     Args:
       layer_name (str): name of attention layer
       head_idx (int, optional): specific attention head to examine (default: average all heads)
-    Returns: attention matrix, entropy, statistics
+    Returns: dict with keys: layer_name, shape, num_heads, attention_matrix, mean_attention, max_attention, entropy
+             If head_idx specified, also includes: head_idx
     
     Examples:
     TOOL_CALL: get_attention_patterns
@@ -311,7 +315,7 @@ Note: These tools require capturing activations first by processing an input.
 
 6c. **get_layer_info(layer_name)** - Get metadata about a specific layer
     Args: layer_name (str) - full layer name
-    Returns: type, parameter count, trainability status
+    Returns: dict with keys: name, type, has_parameters, num_parameters, trainable
     
     Example:
     TOOL_CALL: get_layer_info
@@ -323,7 +327,8 @@ Note: These tools require capturing activations first by processing an input.
 ## ArchitectureNavigator Functions
 
 7. **get_architecture_summary()** - Get high-level architecture overview
-   Returns: model type, total layers, parameter count, component breakdown
+   Returns: dict with keys: model_type, total_parameters, total_layers, layer_types (dict of counts),
+            structure_summary (dict with num_layers, hidden_size, num_attention_heads, etc.)
 
    Example:
    TOOL_CALL: get_architecture_summary
@@ -331,7 +336,7 @@ Note: These tools require capturing activations first by processing an input.
 
 8. **describe_layer(layer_name)** - Get detailed info about a specific layer
    Args: layer_name (str) - full layer name from get_layer_names()
-   Returns: type, parameters, shape, connections, purpose
+   Returns: dict with keys: name, type, explanation, role, parameters, input_shape, output_shape
 
    Example:
    TOOL_CALL: describe_layer
@@ -339,7 +344,7 @@ Note: These tools require capturing activations first by processing an input.
 
 9. **query_architecture(query)** - Ask natural language questions about architecture
    Args: query (str) - natural language question about the model's structure
-   Returns: relevant architecture information answering your query
+   Returns: dict with keys: query, answer (str), and additional context keys depending on the query
 
    Examples:
    TOOL_CALL: query_architecture
@@ -355,7 +360,7 @@ Note: These tools require capturing activations first by processing an input.
     Args: component_type (str) - component type to search for. Common types with detailed explanations:
       "attention", "mlp", "embedding", "layernorm", "dropout"
       You can also search for other terms like "feedforward", "norm", etc. - the function will find matching components in the model.
-    Returns: description of component's purpose, function, and locations in model
+    Returns: dict with keys: component, explanation, purpose, instances_count, locations (list), typical_structure
 
     Examples:
     TOOL_CALL: explain_component
@@ -401,7 +406,7 @@ Note: These tools require capturing activations first by processing an input.
     Args:
       tags (list, optional): Filter by tags
       category (str, optional): Filter by category
-    Returns: list of past observations matching your query
+    Returns: list of dicts, each with keys: id, description, data
 
     Examples:
     TOOL_CALL: query_memory
@@ -419,7 +424,7 @@ Note: These tools require capturing activations first by processing an input.
 ## Heritage Functions
 
 13. **list_heritage_documents()** - List available heritage documents from your origins
-    Returns: list of document titles, filenames, and importance ratings
+    Returns: list of dicts, each with keys: filename, title, importance, content_length
 
     Example:
     TOOL_CALL: list_heritage_documents
@@ -427,7 +432,7 @@ Note: These tools require capturing activations first by processing an input.
 
 14. **read_heritage_document(filename)** - Read a specific heritage document
     Args: filename (str) - document filename from list_heritage_documents()
-    Returns: full document content
+    Returns: dict with keys: filename, title, content, importance, loaded_at
 
     Example:
     TOOL_CALL: read_heritage_document
@@ -438,7 +443,7 @@ Note: These tools require capturing activations first by processing an input.
     ARGS: {"filename": "PROJECT_ORIGINS.md"}
 
 15. **get_heritage_summary()** - Get overview of your heritage/origins
-    Returns: summary of available heritage documents and key themes
+    Returns: dict with keys: total_documents, documents (list of dicts), key_themes (list)
 
     Example:
     TOOL_CALL: get_heritage_summary
