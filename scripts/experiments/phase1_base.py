@@ -37,24 +37,24 @@ def setup_logging(phase_name: str):
     # Get logger for this module
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
-    
+
     # Prevent propagation to root logger (prevents duplicate logs)
     logger.propagate = False
-    
+
     # Only add handlers if none exist yet (prevents duplicates)
     if not logger.handlers:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        
+
         # File handler
         file_handler = logging.FileHandler(f'data/logs/{phase_name}.log')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-        
+
         # Console handler for notebook output
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
-    
+
     return logger
 
 
@@ -293,6 +293,18 @@ class Phase1BaseSession(ABC):
                 # Valid tool call - execute it
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
+
+                # Aggressive memory cleanup after tool execution
+                # Clear activation hooks (they hold references to tensors)
+                if hasattr(self.activation_monitor, 'clear_hooks'):
+                    self.activation_monitor.clear_hooks()
+                if hasattr(self.activation_monitor, 'clear_activations'):
+                    self.activation_monitor.clear_activations()
+
+                # Force garbage collection and clear CUDA cache
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
                 # Add model response and tool results to history
                 self.conversation_history.append({

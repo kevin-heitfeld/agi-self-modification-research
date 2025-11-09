@@ -228,6 +228,12 @@ class ActivationMonitor:
             "monitored_layers": list(self.activations.keys())
         }
         
+        # Clear the outputs tensor to free memory immediately
+        del outputs
+        del inputs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         return result
     
     def get_activation_statistics(self, layer_name: str) -> Dict[str, Any]:
