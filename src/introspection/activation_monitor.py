@@ -406,7 +406,7 @@ class ActivationMonitor:
                     pattern = self.get_attention_patterns(name, head_idx)
                     results.append(pattern)
                 except KeyError as e:
-                    # Include error information for this layer
+                    # Include the full error message (which has the helpful hint)
                     results.append({
                         "layer_name": name,
                         "error": str(e)
@@ -415,7 +415,20 @@ class ActivationMonitor:
         
         # Handle single layer name
         if layer_name not in self.attention_weights:
-            raise KeyError(f"No attention weights captured for '{layer_name}'")
+            # Check if it's because no activations were captured at all
+            if not self.attention_weights:
+                raise KeyError(
+                    f"No attention weights captured for '{layer_name}'. "
+                    f"You must first capture activations by calling process_text(text='your prompt here') "
+                    f"before examining attention patterns."
+                )
+            else:
+                # Some layers were captured but not this one
+                available = list(self.attention_weights.keys())
+                raise KeyError(
+                    f"No attention weights captured for '{layer_name}'. "
+                    f"Available layers with attention: {available[:5]}{'...' if len(available) > 5 else ''}"
+                )
         
         attn = self.attention_weights[layer_name]
         
