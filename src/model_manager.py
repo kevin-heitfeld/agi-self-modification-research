@@ -108,13 +108,15 @@ class ModelManager:
             # Load model
             # Use float16 on both GPU and CPU to avoid dtype conversion overhead
             # (CPU can handle float16, and it matches the cached model dtype)
+            # Use eager attention implementation to enable capturing attention patterns
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 cache_dir=str(self.cache_dir),
                 token=use_auth_token,
                 torch_dtype=torch.float16,
                 low_cpu_mem_usage=True,
-                trust_remote_code=True
+                trust_remote_code=True,
+                attn_implementation="eager"  # Required for output_attentions=True
             )
 
             # Validate model loaded correctly
