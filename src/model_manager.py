@@ -5,6 +5,7 @@ Downloads, loads, and manages the base model (Qwen2.5-3B-Instruct)
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from huggingface_hub import snapshot_download
 from pathlib import Path
 import logging
 import os
@@ -44,7 +45,10 @@ class ModelManager:
 
     def download_model(self, use_auth_token: Optional[str] = None) -> bool:
         """
-        Download model and tokenizer from HuggingFace
+        Download model files from HuggingFace without loading into memory.
+        
+        This is more efficient than load_model() for just downloading,
+        as it doesn't load the checkpoint shards into memory.
 
         Args:
             use_auth_token: HuggingFace authentication token (optional for Qwen models)
@@ -57,27 +61,18 @@ class ModelManager:
             logger.info(f"Cache directory: {self.cache_dir}")
             logger.info("This may take several minutes for a ~6GB model...")
 
-            # Download tokenizer
-            logger.info("Downloading tokenizer...")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
+            # Use snapshot_download to only download files without loading into memory
+            logger.info("Downloading model files (no loading into memory)...")
+            snapshot_download(
+                repo_id=self.model_name,
                 cache_dir=str(self.cache_dir),
                 token=use_auth_token,
-                trust_remote_code=True
+                ignore_patterns=["*.msgpack", "*.h5", "*.ot"],  # Skip unnecessary files
+                resume_download=True
             )
 
-            # Download model
-            logger.info("Downloading model weights...")
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=str(self.cache_dir),
-                token=use_auth_token,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                low_cpu_mem_usage=True,
-                trust_remote_code=True
-            )
-
-            logger.info(f"✓ Model downloaded successfully to {self.cache_dir}")
+            logger.info(f"✓ Model files downloaded successfully to {self.cache_dir}")
+            logger.info("Note: Model not loaded into memory. Use load_model() when ready to use it.")
             return True
 
         except Exception as e:
