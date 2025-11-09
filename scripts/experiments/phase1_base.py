@@ -100,35 +100,32 @@ class Phase1BaseSession(ABC):
     def get_tool_usage_explanation(self) -> str:
         """
         Return explanation of how tool calling works.
-        
+
         This explains the actual behavior rather than trying to force rules.
         The model understands what will happen, not what it "must" do.
         """
         return """
 HOW TOOL CALLING WORKS:
 
-When you want to use a tool, write:
-TOOL_CALL: function_name
-ARGS: {"arg1": "value1"}
+When you want to use a tool, call it like a Python function:
+function_name(arg1="value1", arg2="value2")
 
 Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
 
 What happens:
-- Only the LAST tool call in your response is executed
-- It will only be executed if there's no additional text after the ARGS block
-- If you write multiple tool calls, only the last one counts
-- If you continue writing after ARGS, the tool won't be executed
+- Only the LAST function call in your response is executed
+- It will only be executed if there's no additional text after the function call
+- If you write multiple function calls, only the last one counts
+- If you continue writing after the call, the tool won't be executed
 
 Example of what NOT to do:
-TOOL_CALL: get_architecture_summary
-ARGS: {}
+get_architecture_summary()
 Then I'll examine the architecture...  ← This prevents execution!
 
 The tool call is ignored because there's text after it.
 
 Correct usage:
-TOOL_CALL: get_architecture_summary
-ARGS: {}
+get_architecture_summary()
 [END YOUR RESPONSE HERE - TOOL_RESULTS will come in next USER message]
 """
 
@@ -264,7 +261,7 @@ ARGS: {}
 
             # Move inputs to same device as model
             inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
-            
+
             # Store the input length so we can extract only new tokens
             input_length = inputs['input_ids'].shape[1]
 
@@ -299,12 +296,12 @@ ARGS: {}
                 })
 
                 # Check if there were tool calls but model didn't stop
-                if re.search(r'TOOL_CALL:', response, re.IGNORECASE):
+                if re.search(r'\w+\s*\([^)]*\)', response):
                     # Give feedback to teach correct behavior
                     self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving feedback")
                     self.conversation_history.append({
                         "role": "user",
-                        "content": "Note: To use a tool, make the TOOL_CALL and ARGS, then END your response. The TOOL_RESULTS will come in the next USER message. Don't continue writing after the tool call."
+                        "content": "Note: To use a tool, call the function, then END your response. The TOOL_RESULTS will come in the next USER message. Don't continue writing after the function call."
                     })
                 else:
                     # No tool calls - model gave conversational response

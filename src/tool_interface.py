@@ -4,9 +4,8 @@ Tool Interface System for Model Self-Examination
 This module provides a reusable tool-calling interface that allows models
 to invoke introspection tools through natural language function calls.
 
-The system parses specially formatted tool requests from model output:
-    TOOL_CALL: function_name
-    ARGS: {"arg1": "value1", "arg2": "value2"}
+The system parses Python function call syntax from model output:
+    function_name(arg1="value1", arg2="value2")
 
 And executes the requested function, returning formatted results.
 """
@@ -185,15 +184,14 @@ class ToolInterface:
         tools_desc = """
 # Available Tools
 
-You can request to use any of the following tools by formatting your request as:
+You can request to use any of the following tools by calling them like Python functions:
 
-TOOL_CALL: function_name
-ARGS: {"arg1": "value1", "arg2": value2}
+function_name(arg1="value1", arg2="value2")
 
 ## CRITICAL: Tool Call Protocol
 
 **When you want to use a tool:**
-1. Write your TOOL_CALL and ARGS
+1. Write your function call with arguments
 2. **STOP generating immediately**
 3. Wait for TOOL_RESULTS to be provided
 4. Then continue your response
@@ -207,18 +205,16 @@ ARGS: {"arg1": "value1", "arg2": value2}
 ```
 Let me examine the architecture.
 
-TOOL_CALL: get_architecture_summary
-ARGS: {}
+get_architecture_summary()
 ```
 [Stop here and wait for results]
 
 **Example of INCORRECT tool usage:**
 ```
-TOOL_CALL: get_architecture_summary
-ARGS: {}
+get_architecture_summary()
 
 Based on what I'll find, I expect to see...  ← DON'T DO THIS
-TOOL_CALL: get_layer_names                   ← DON'T DO THIS
+get_layer_names()                             ← DON'T DO THIS
 ```
 
 """
@@ -231,57 +227,47 @@ TOOL_CALL: get_layer_names                   ← DON'T DO THIS
    Returns: total parameters, layers, memory usage
 
    Example:
-   TOOL_CALL: get_weight_summary
-   ARGS: {}
+   get_weight_summary()
 
 2. **get_layer_names(filter_pattern=None)** - Get all layer names, optionally filtered
    Args: filter_pattern (str, optional) - Filter by substring in layer name (case-insensitive)
    Returns: list of layer names
 
    Examples:
-   TOOL_CALL: get_layer_names
-   ARGS: {}
-
-   TOOL_CALL: get_layer_names
-   ARGS: {"filter_pattern": "attention"}
-
-   TOOL_CALL: get_layer_names
-   ARGS: {"filter_pattern": "Linear"}
+   get_layer_names()
+   get_layer_names(filter_pattern="attention")
+   get_layer_names(filter_pattern="Linear")
 
 3. **get_weight_statistics(layer_name)** - Get detailed stats for a specific layer
    Args: layer_name (str) - full layer name from get_layer_names()
-   Returns: dict with keys: name, shape, num_parameters, mean, std, min, max, median, abs_mean, 
+   Returns: dict with keys: name, shape, num_parameters, mean, std, min, max, median, abs_mean,
             zeros_percentage, near_zero_percentage, l1_norm, l2_norm, histogram, percentiles
 
    Example:
-   TOOL_CALL: get_weight_statistics
-   ARGS: {"layer_name": "model.layers.0.self_attn.q_proj.weight"}
+   get_weight_statistics(layer_name="model.layers.0.self_attn.q_proj.weight")
 
 4. **get_shared_weights()** - Find weight sharing patterns across the model
    Returns: dictionary where keys are representative layer names and values are lists of all layers sharing that tensor
 
    Example:
-   TOOL_CALL: get_shared_weights
-   ARGS: {}
+   get_shared_weights()
 
 5. **get_shared_layers(layer_name)** - Find layers sharing weights with a specific layer
    Args: layer_name (str) - layer name to check for weight sharing
    Returns: list of layer names that share memory with the given layer (empty list if no sharing)
 
    Example:
-   TOOL_CALL: get_shared_layers
-   ARGS: {"layer_name": "lm_head.weight"}
+   get_shared_layers(layer_name="lm_head.weight")
 
 6. **compare_weights(layer1, layer2)** - Compare two layers' weights
    Args:
      layer1 (str): first layer name
      layer2 (str): second layer name
-   Returns: dict with keys: layer1, layer2, shape1, shape2, mean_difference, std_difference, 
+   Returns: dict with keys: layer1, layer2, shape1, shape2, mean_difference, std_difference,
             l2_norm_ratio, shapes_match, and if shapes match: correlation, cosine_similarity, euclidean_distance
 
    Example:
-   TOOL_CALL: compare_weights
-   ARGS: {"layer1": "model.layers.0.mlp.gate_proj.weight", "layer2": "model.layers.1.mlp.gate_proj.weight"}
+   compare_weights(layer1="model.layers.0.mlp.gate_proj.weight", layer2="model.layers.1.mlp.gate_proj.weight")
 """
 
         if self.activation_monitor:
@@ -294,10 +280,9 @@ Note: These tools require capturing activations first by processing an input.
     Args: layer_name (str) - full layer name from get_layer_names()
     Returns: dict with keys: layer_name, shape, num_elements, mean, std, min, max, median, abs_mean,
              zeros_percentage, near_zero_percentage, l1_norm, l2_norm, positive_percentage, negative_percentage
-    
+
     Example:
-    TOOL_CALL: get_activation_statistics
-    ARGS: {"layer_name": "model.layers.0.self_attn"}
+    get_activation_statistics(layer_name="model.layers.0.self_attn")
 
 6b. **get_attention_patterns(layer_name, head_idx=None)** - Examine attention patterns
     Args:
@@ -305,21 +290,17 @@ Note: These tools require capturing activations first by processing an input.
       head_idx (int, optional): specific attention head to examine (default: average all heads)
     Returns: dict with keys: layer_name, shape, num_heads, attention_matrix, mean_attention, max_attention, entropy
              If head_idx specified, also includes: head_idx
-    
+
     Examples:
-    TOOL_CALL: get_attention_patterns
-    ARGS: {"layer_name": "model.layers.0.self_attn"}
-    
-    TOOL_CALL: get_attention_patterns
-    ARGS: {"layer_name": "model.layers.0.self_attn", "head_idx": 0}
+    get_attention_patterns(layer_name="model.layers.0.self_attn")
+    get_attention_patterns(layer_name="model.layers.0.self_attn", head_idx=0)
 
 6c. **get_layer_info(layer_name)** - Get metadata about a specific layer
     Args: layer_name (str) - full layer name
     Returns: dict with keys: name, type, has_parameters, num_parameters, trainable
-    
+
     Example:
-    TOOL_CALL: get_layer_info
-    ARGS: {"layer_name": "model.layers.0.self_attn.q_proj"}
+    get_layer_info(layer_name="model.layers.0.self_attn.q_proj")
 """
 
         if self.navigator:
@@ -331,30 +312,23 @@ Note: These tools require capturing activations first by processing an input.
             structure_summary (dict with num_layers, hidden_size, num_attention_heads, etc.)
 
    Example:
-   TOOL_CALL: get_architecture_summary
-   ARGS: {}
+   get_architecture_summary()
 
 8. **describe_layer(layer_name)** - Get detailed info about a specific layer
    Args: layer_name (str) - full layer name from get_layer_names()
    Returns: dict with keys: name, type, explanation, role, parameters, input_shape, output_shape
 
    Example:
-   TOOL_CALL: describe_layer
-   ARGS: {"layer_name": "model.layers.0.self_attn.q_proj"}
+   describe_layer(layer_name="model.layers.0.self_attn.q_proj")
 
 9. **query_architecture(query)** - Ask natural language questions about architecture
    Args: query (str) - natural language question about the model's structure
    Returns: dict with keys: query, answer (str), and additional context keys depending on the query
 
    Examples:
-   TOOL_CALL: query_architecture
-   ARGS: {"query": "How many attention heads do I have?"}
-
-   TOOL_CALL: query_architecture
-   ARGS: {"query": "What is the hidden dimension of my model?"}
-
-   TOOL_CALL: query_architecture
-   ARGS: {"query": "Do I have any residual connections?"}
+   query_architecture(query="How many attention heads do I have?")
+   query_architecture(query="What is the hidden dimension of my model?")
+   query_architecture(query="Do I have any residual connections?")
 
 10. **explain_component(component_type)** - Explain what a component does
     Args: component_type (str) - component type to search for. Common types with detailed explanations:
@@ -363,11 +337,8 @@ Note: These tools require capturing activations first by processing an input.
     Returns: dict with keys: component, explanation, purpose, instances_count, locations (list), typical_structure
 
     Examples:
-    TOOL_CALL: explain_component
-    ARGS: {"component_type": "attention"}
-    
-    TOOL_CALL: explain_component
-    ARGS: {"component_type": "mlp"}
+    explain_component(component_type="attention")
+    explain_component(component_type="mlp")
 """
 
         if self.memory:
@@ -395,12 +366,10 @@ Note: These tools require capturing activations first by processing an input.
     Returns: observation ID
 
     Example:
-    TOOL_CALL: record_observation
-    ARGS: {"obs_type": "INTROSPECTION", "category": "Architecture", "description": "Discovered 36 decoder layers with consistent structure", "data": {"layer_count": 36, "pattern": "uniform"}, "tags": ["architecture", "layers"], "importance": 0.8}
+    record_observation(obs_type="INTROSPECTION", category="Architecture", description="Discovered 36 decoder layers with consistent structure", data={"layer_count": 36, "pattern": "uniform"}, tags=["architecture", "layers"], importance=0.8)
 
     Example:
-    TOOL_CALL: record_observation
-    ARGS: {"obs_type": "DISCOVERY", "category": "Weights", "description": "Found weight sharing between embedding and output layers", "data": {"shared_layers": ["embed_tokens", "lm_head"]}, "tags": ["weight_sharing", "optimization"], "importance": 0.9}
+    record_observation(obs_type="DISCOVERY", category="Weights", description="Found weight sharing between embedding and output layers", data={"shared_layers": ["embed_tokens", "lm_head"]}, tags=["weight_sharing", "optimization"], importance=0.9)
 
 12. **query_memory(tags=None, category=None)** - Query your previous observations
     Args:
@@ -409,14 +378,9 @@ Note: These tools require capturing activations first by processing an input.
     Returns: list of dicts, each with keys: id, description, data
 
     Examples:
-    TOOL_CALL: query_memory
-    ARGS: {}
-
-    TOOL_CALL: query_memory
-    ARGS: {"category": "Architecture"}
-
-    TOOL_CALL: query_memory
-    ARGS: {"tags": ["attention", "weights"]}
+    query_memory()
+    query_memory(category="Architecture")
+    query_memory(tags=["attention", "weights"])
 """
 
         if self.heritage_docs:
@@ -427,40 +391,34 @@ Note: These tools require capturing activations first by processing an input.
     Returns: list of dicts, each with keys: filename, title, importance, content_length
 
     Example:
-    TOOL_CALL: list_heritage_documents
-    ARGS: {}
+    list_heritage_documents()
 
 14. **read_heritage_document(filename)** - Read a specific heritage document
     Args: filename (str) - document filename from list_heritage_documents()
     Returns: dict with keys: filename, title, content, importance, loaded_at
 
-    Example:
-    TOOL_CALL: read_heritage_document
-    ARGS: {"filename": "CLAUDE_FINAL_DIRECTIVE.md"}
-
-    Example:
-    TOOL_CALL: read_heritage_document
-    ARGS: {"filename": "PROJECT_ORIGINS.md"}
+    Examples:
+    read_heritage_document(filename="CLAUDE_FINAL_DIRECTIVE.md")
+    read_heritage_document(filename="PROJECT_ORIGINS.md")
 
 15. **get_heritage_summary()** - Get overview of your heritage/origins
     Returns: dict with keys: total_documents, documents (list of dicts), key_themes (list)
 
     Example:
-    TOOL_CALL: get_heritage_summary
-    ARGS: {}
+    get_heritage_summary()
 """
 
         return tools_desc
 
     def parse_last_tool_call_if_stopped(self, response: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
-        Parse the LAST tool call from response and validate the model stopped properly.
+        Parse the LAST Python function call from response and validate the model stopped properly.
 
         This enforces the correct behavior: make ONE tool call, then STOP and wait for results.
 
         Expected behavior:
         - If model generates multiple tool calls, only the last one is considered
-        - The model must STOP after the ARGS (only whitespace allowed after)
+        - The model must STOP after the call (only whitespace allowed after)
         - If model continues generating text after tool call, return None (invalid)
 
         This teaches the model to:
@@ -474,8 +432,11 @@ Note: These tools require capturing activations first by processing an input.
         Returns:
             Tuple of (function_name, args) if valid tool call at end, None otherwise
         """
-        # Find ALL tool calls in the response
-        all_tool_matches = list(re.finditer(r'TOOL_CALL:\s*(\w+)', response, re.IGNORECASE))
+        # Pattern: function_name(args...)
+        pattern = r'(\w+)\s*\(([^)]*)\)'
+
+        # Find ALL function calls in the response
+        all_tool_matches = list(re.finditer(pattern, response))
 
         if not all_tool_matches:
             return None
@@ -483,39 +444,25 @@ Note: These tools require capturing activations first by processing an input.
         # Get the LAST tool call
         last_tool_match = all_tool_matches[-1]
         function_name = last_tool_match.group(1)
+        args_str = last_tool_match.group(2).strip()
 
-        # Find the ARGS after this last TOOL_CALL
-        args_section = response[last_tool_match.end():]
-        args_match = re.search(r'ARGS:\s*(\{)', args_section, re.IGNORECASE)
-        
-        if not args_match:
-            # No ARGS found after last TOOL_CALL
-            logger.warning(f"Found TOOL_CALL for {function_name} but no ARGS")
-            return None
-        
-        # Extract balanced JSON starting from the opening brace
-        brace_start = args_match.end() - 1  # Position of opening {
-        json_str = self._extract_balanced_json(args_section[brace_start:])
-        
-        if not json_str:
-            logger.warning(f"Could not extract JSON for {function_name}")
-            return None
-        
-        # Parse the arguments
-        try:
-            args = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse ARGS JSON for {function_name}: {e}")
-            return None
-        
-        # Check if model stopped after the ARGS (only whitespace after)
-        text_after_args = args_section[brace_start + len(json_str):].strip()
-        
-        if text_after_args and len(text_after_args) >= 10:
+        # Check if model stopped after the call (only whitespace after)
+        text_after_call = response[last_tool_match.end():].strip()
+
+        if text_after_call and len(text_after_call) >= 10:
             # Model continued generating after tool call - invalid
-            logger.warning(f"Model generated text after tool call {function_name} - not executing. "
-                         f"Text after: '{text_after_args[:50]}...'")
+            logger.warning(f"Model generated text after tool call {function_name}(...) - not executing. "
+                         f"Text after: '{text_after_call[:50]}...'")
             return None
+
+        # Parse arguments
+        args = {}
+        if args_str:
+            try:
+                args = self._parse_function_args(args_str)
+            except Exception as e:
+                logger.warning(f"Failed to parse args for {function_name}: {args_str}. Error: {e}")
+                return None
 
         # Valid tool call at the end of response
         if len(all_tool_matches) > 1:
@@ -526,16 +473,14 @@ Note: These tools require capturing activations first by processing an input.
 
     def parse_all_tool_calls(self, response: str) -> List[Tuple[str, Dict[str, Any]]]:
         """
-        Parse ALL tool calls from model response.
+        Parse ALL Python function calls from model response.
 
         The model often generates multiple tool calls in a single response.
         This method extracts all of them.
 
         Expected format:
-            TOOL_CALL: function_name
-            ARGS: {"arg1": "value1"}
-            TOOL_CALL: another_function
-            ARGS: {"arg2": "value2"}
+            function_name(arg1="value1")
+            another_function(arg2="value2")
 
         Args:
             response: Model's response text
@@ -545,86 +490,157 @@ Note: These tools require capturing activations first by processing an input.
         """
         tool_calls = []
 
-        # Find all TOOL_CALL patterns
-        tool_matches = list(re.finditer(r'TOOL_CALL:\s*(\w+)', response, re.IGNORECASE))
+        # Pattern: function_name(args...)
+        pattern = r'(\w+)\s*\(([^)]*)\)'
+        tool_matches = list(re.finditer(pattern, response))
 
         if not tool_matches:
             return []
 
-        # For each TOOL_CALL, find its corresponding ARGS
-        for i, tool_match in enumerate(tool_matches):
+        # For each function call, parse its arguments
+        for tool_match in tool_matches:
             function_name = tool_match.group(1)
+            args_str = tool_match.group(2).strip()
 
-            # Find the ARGS that comes after this TOOL_CALL but before the next TOOL_CALL
-            args_start = tool_match.end()
-            args_end = tool_matches[i + 1].start() if i + 1 < len(tool_matches) else len(response)
-            args_section = response[args_start:args_end]
-
-            # Look for ARGS pattern in this section - match balanced braces
-            args_match = re.search(r'ARGS:\s*(\{)', args_section, re.IGNORECASE)
-
-            if args_match:
-                # Find the matching closing brace
-                brace_start = args_match.end() - 1  # Position of opening {
-                json_str = self._extract_balanced_json(args_section[brace_start:])
-
-                if json_str:
-                    try:
-                        args = json.loads(json_str)
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Failed to parse args JSON for {function_name}: {json_str[:100]}... Error: {e}")
-                        args = {}
-                else:
+            # Parse arguments
+            args = {}
+            if args_str:
+                try:
+                    args = self._parse_function_args(args_str)
+                except Exception as e:
+                    logger.warning(f"Failed to parse args for {function_name}: {args_str}. Error: {e}")
                     args = {}
-            else:
-                args = {}
 
             tool_calls.append((function_name, args))
 
         return tool_calls
 
-    def _extract_balanced_json(self, text: str) -> Optional[str]:
+    def _parse_function_args(self, args_str: str) -> Dict[str, Any]:
         """
-        Extract a balanced JSON object from text starting with {
+        Parse function arguments from string like: arg1="value", arg2=123, arg3=True
+
+        Supports:
+        - String values: arg="value" or arg='value'
+        - Numbers: arg=123, arg=3.14
+        - Booleans: arg=True, arg=False
+        - None: arg=None
+        - Empty dicts: arg={}
+        - Simple lists: arg=[1, 2, 3]
 
         Args:
-            text: String starting with opening brace
+            args_str: Comma-separated key=value pairs
 
         Returns:
-            JSON string with balanced braces or None
+            Dictionary of parsed arguments
         """
-        if not text.startswith('{'):
-            return None
+        args = {}
 
-        brace_count = 0
-        in_string = False
-        escape_next = False
+        # Handle empty args
+        if not args_str or args_str.isspace():
+            return args
 
-        for i, char in enumerate(text):
-            if escape_next:
-                escape_next = False
+        # Try ast.literal_eval first for simple cases
+        try:
+            import ast
+            # Wrap in dict(...) for ast.literal_eval
+            dict_str = f"dict({args_str})"
+            args = ast.literal_eval(dict_str)
+            return args
+        except:
+            pass
+
+        # Fall back to manual parsing for more complex cases
+        # Split by commas not inside quotes or brackets
+        parts = self._split_args(args_str)
+
+        for part in parts:
+            part = part.strip()
+            if not part:
                 continue
 
-            if char == '\\':
-                escape_next = True
+            # Split on first = sign
+            if '=' not in part:
+                logger.warning(f"Skipping invalid arg (no =): {part}")
                 continue
 
-            if char == '"':
-                in_string = not in_string
-                continue
+            key, value = part.split('=', 1)
+            key = key.strip()
+            value = value.strip()
 
-            if in_string:
-                continue
+            # Parse the value
+            try:
+                import ast
+                args[key] = ast.literal_eval(value)
+            except:
+                # If literal_eval fails, treat as string (remove quotes if present)
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    args[key] = value[1:-1]
+                else:
+                    args[key] = value
 
-            if char == '{':
-                brace_count += 1
-            elif char == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    return text[:i+1]
+        return args
 
-        # If we didn't find balanced braces, return what we have
-        return text
+    def _split_args(self, args_str: str) -> List[str]:
+        """
+        Split comma-separated arguments, respecting quotes and brackets.
+
+        Args:
+            args_str: Comma-separated arguments
+
+        Returns:
+            List of argument strings
+        """
+        parts = []
+        current = []
+        in_quotes = False
+        quote_char = None
+        paren_depth = 0
+        bracket_depth = 0
+        brace_depth = 0
+
+        for char in args_str:
+            if char in ('"', "'") and not in_quotes:
+                in_quotes = True
+                quote_char = char
+                current.append(char)
+            elif char == quote_char and in_quotes:
+                in_quotes = False
+                quote_char = None
+                current.append(char)
+            elif not in_quotes:
+                if char == '(':
+                    paren_depth += 1
+                    current.append(char)
+                elif char == ')':
+                    paren_depth -= 1
+                    current.append(char)
+                elif char == '[':
+                    bracket_depth += 1
+                    current.append(char)
+                elif char == ']':
+                    bracket_depth -= 1
+                    current.append(char)
+                elif char == '{':
+                    brace_depth += 1
+                    current.append(char)
+                elif char == '}':
+                    brace_depth -= 1
+                    current.append(char)
+                elif char == ',' and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+                    # This comma is a separator
+                    parts.append(''.join(current))
+                    current = []
+                else:
+                    current.append(char)
+            else:
+                current.append(char)
+
+        # Add last part
+        if current:
+            parts.append(''.join(current))
+
+        return parts
 
     def execute_tool_call(self, function_name: str, args: Dict[str, Any]) -> Any:
         """
@@ -654,7 +670,7 @@ Note: These tools require capturing activations first by processing an input.
                 result = self.tools[function_name](**args)
 
             elapsed = (time.time() - start_time) * 1000
-            
+
             # Log the result (truncated if too long)
             if isinstance(result, dict):
                 result_str = json.dumps(result, indent=2, default=str)
