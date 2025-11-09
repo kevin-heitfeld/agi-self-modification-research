@@ -34,15 +34,25 @@ def setup_logging(phase_name: str):
     log_dir = Path("data/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(f'data/logs/{phase_name}.log'),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger(__name__)
+    # Get logger for this module
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    
+    # Only add handlers if none exist yet (prevents duplicates)
+    if not logger.handlers:
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        
+        # File handler
+        file_handler = logging.FileHandler(f'data/logs/{phase_name}.log')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
+        # Console handler for notebook output
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+    
+    return logger
 
 
 class Phase1BaseSession(ABC):
