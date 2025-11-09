@@ -81,10 +81,9 @@ python download_model.py
 
 The main experiment (`experiments/phase1_introspection.py`) implements:
 
-1. **Tool-calling interface** - Model requests tools via:
+1. **Tool-calling interface** - Model requests tools via Python function calls:
    ```
-   TOOL_CALL: function_name
-   ARGS: {"arg": "value"}
+   function_name(arg="value")
    ```
 
 2. **Three experiments**:

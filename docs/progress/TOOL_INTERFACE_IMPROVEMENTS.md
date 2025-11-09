@@ -103,12 +103,10 @@ Added detailed usage examples for **ALL 15 tools**:
     Returns: observation ID
     
     Example:
-    TOOL_CALL: record_observation
-    ARGS: {"obs_type": "INTROSPECTION", "category": "Architecture", "description": "Discovered 36 decoder layers with consistent structure", "data": {"layer_count": 36, "pattern": "uniform"}, "tags": ["architecture", "layers"], "importance": 0.8}
+    record_observation(obs_type="INTROSPECTION", category="Architecture", description="Discovered 36 decoder layers with consistent structure", data={"layer_count": 36, "pattern": "uniform"}, tags=["architecture", "layers"], importance=0.8)
     
     Example:
-    TOOL_CALL: record_observation
-    ARGS: {"obs_type": "DISCOVERY", "category": "Weights", "description": "Found weight sharing between embedding and output layers", "data": {"shared_layers": ["embed_tokens", "lm_head"]}, "tags": ["weight_sharing", "optimization"], "importance": 0.9}
+    record_observation(obs_type="DISCOVERY", category="Weights", description="Found weight sharing between embedding and output layers", data={"shared_layers": ["embed_tokens", "lm_head"]}, tags=["weight_sharing", "optimization"], importance=0.9)
 ```
 
 ---
@@ -124,9 +122,9 @@ These improvements should address the critical issues from Run 1:
    - Model can successfully use `get_layer_names(filter_pattern="attention")`
 
 2. **Model understands tool format** ✅
-   - Every tool has explicit `TOOL_CALL:` and `ARGS:` examples
+   - Every tool has explicit Python function call examples
    - No guessing required
-   - Clear JSON formatting shown
+   - Clear syntax like `function_name(arg="value")`
 
 3. **`record_observation` should actually work** ✅
    - Two complete examples show exact format

@@ -17,7 +17,7 @@ A complete, reusable system for model-driven tool calling:
 
 - **Tool Registration**: Automatically registers available tools from multiple systems
 - **Tool Discovery**: Provides formatted descriptions for model prompts
-- **Call Parsing**: Parses `TOOL_CALL:` and `ARGS:` from model output
+- **Call Parsing**: Parses Python function call syntax from model output
 - **Execution**: Executes tools with error handling and timing
 - **Recording**: Tracks all tool calls for analysis
 - **Export**: Provides summary statistics and detailed logs
@@ -320,7 +320,7 @@ interface = ToolInterface(inspector=inspector)
 assert 'get_weight_summary' in interface.tools
 
 # Test parsing
-parsed = interface.parse_tool_call("TOOL_CALL: get_weight_summary\nARGS: {}")
+parsed = interface.parse_last_tool_call_if_stopped("get_weight_summary()")
 assert parsed == ('get_weight_summary', {})
 
 # Test execution

@@ -137,7 +137,7 @@ Ongoing:     Analysis, Documentation, Ethical Review
 ### Implementation Notes
 
 **Tool Interface Architecture**:
-- Model requests tools via: `TOOL_CALL: function_name` and `ARGS: {...}`
+- Model requests tools via Python function calls: `function_name(arg="value")`
 - System parses requests and executes tools
 - Results returned to model for interpretation
 - All interactions logged for analysis

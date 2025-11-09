@@ -74,15 +74,13 @@ user_message = "Examine yourself using the introspection tools"
 
 # Model generates:
 "I'd like to understand my architecture. 
-TOOL_CALL: get_weight_summary
-ARGS: {}"
+get_weight_summary()"
 
 # We execute and return results
 # Model generates:
 "Interesting! I have 3.09B parameters across 36 layers. 
 Let me examine the attention mechanisms next.
-TOOL_CALL: get_layer_names
-ARGS: {'filter_pattern': 'attn'}"
+get_layer_names(filter_pattern='attn')"
 
 # Model decides what to examine
 # Model interprets the results
