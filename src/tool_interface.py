@@ -269,7 +269,7 @@ Let me examine the architecture.
 
 get_architecture_summary()
 ```
-[END YOUR RESPONSE HERE - TOOL_RESULTS will come in next USER message]
+(After calling the function, STOP generating. The system will provide TOOL_RESULTS in the next message.)
 
 **Example of INCORRECT usage:**
 ```
