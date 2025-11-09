@@ -224,6 +224,62 @@ class Phase1BaseSession(ABC):
         The model can call tools, we execute them, and return results.
         This continues until the model stops calling tools or limit reached.
         """
+        # Check if we're about to trim history and warn the model first
+        MAX_RECENT_TURNS = 8
+        if len(self.conversation_history) >= MAX_RECENT_TURNS:
+            num_turns_will_lose = len(self.conversation_history) - MAX_RECENT_TURNS + 1  # +1 for the message we're about to add
+            self.logger.info(f"[SYSTEM] Conversation history approaching limit. Will trim to last {MAX_RECENT_TURNS} turns after this exchange.")
+            
+            # Give model a chance to save important info before trimming
+            self.conversation_history.append({
+                "role": "user",
+                "content": f"[SYSTEM WARNING] Your conversation history will be trimmed after this turn to prevent memory overflow. Approximately {num_turns_will_lose} older messages will be removed. If you've made important discoveries that aren't yet saved to memory, use `record_observation()` now to preserve them before they're lost."
+            })
+            
+            # Let model respond to warning and potentially save observations
+            self.logger.info("[SYSTEM] Giving model a turn to save observations before trimming...")
+            conversation_text = self._format_conversation_for_model()
+            
+            assert self.tokenizer is not None
+            inputs = self.tokenizer(conversation_text, return_tensors="pt")
+            inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
+            input_length = inputs['input_ids'].shape[1]
+            
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=1000,
+                    temperature=0.7,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+            
+            new_tokens = outputs[0][input_length:]
+            response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            self.logger.info(f"[MODEL PRE-TRIM RESPONSE] {response}\n")
+            
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": response
+            })
+            
+            # Parse and execute any tool calls (likely record_observation)
+            tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
+            if tool_call is not None:
+                function_name, args = tool_call
+                result = self.tool_interface.execute_tool_call(function_name, args)
+                
+                self.conversation_history.append({
+                    "role": "user",
+                    "content": f"TOOL_RESULTS:\n{json.dumps(result, indent=2, default=str)}"
+                })
+                
+                self.logger.info(f"[SYSTEM] Pre-trim tool call executed: {function_name}")
+        
         # Add user message to history
         self.conversation_history.append({
             "role": "user",
@@ -338,13 +394,17 @@ class Phase1BaseSession(ABC):
         by using the proper format it was trained on.
 
         To prevent OOM, keeps only the most recent turns (system prompt + last N exchanges).
+        Warning about trimming is sent proactively in chat() before it happens.
         """
         # Keep conversation manageable to prevent OOM
         # Keep: system message + last 8 turns (4 user-assistant pairs)
         MAX_RECENT_TURNS = 8
 
         if len(self.conversation_history) > MAX_RECENT_TURNS + 1:
-            # Always keep first message (system/initial prompt) + recent turns
+            num_turns_lost = len(self.conversation_history) - MAX_RECENT_TURNS - 1
+            self.logger.info(f"[SYSTEM] Trimming conversation history: keeping initial prompt + last {MAX_RECENT_TURNS} turns ({num_turns_lost} older turns removed)")
+            
+            # Keep system/initial prompt + recent turns (model was warned beforehand)
             trimmed_history = [self.conversation_history[0]] + self.conversation_history[-(MAX_RECENT_TURNS):]
         else:
             trimmed_history = self.conversation_history
