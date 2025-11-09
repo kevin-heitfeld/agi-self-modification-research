@@ -247,7 +247,22 @@ class ActivationMonitor:
             Dictionary of statistics (mean, std, etc.)
         """
         if layer_name not in self.activations:
-            raise KeyError(f"No activations captured for '{layer_name}'. Call capture_activations() first.")
+            # Provide helpful error message
+            if self.activations:
+                available_layers = list(self.activations.keys())
+                error_msg = (
+                    f"No activations captured for '{layer_name}'. "
+                    f"Activations are available for: {available_layers[:10]}. "
+                    f"Use process_text() with layer_names=[...] to capture activations for specific layers, "
+                    f"or use get_layer_info() to see which layers were captured."
+                )
+            else:
+                error_msg = (
+                    f"No activations captured for '{layer_name}'. "
+                    f"No activations have been captured yet. "
+                    f"Use process_text() to capture activations first."
+                )
+            raise KeyError(error_msg)
         
         activation = self.activations[layer_name]
         act_flat = activation.flatten().float()
