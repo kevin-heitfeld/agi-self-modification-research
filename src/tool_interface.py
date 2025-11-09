@@ -127,7 +127,7 @@ class ToolInterface:
         if self.model_manager and self.activation_monitor:
             self.tools['process_text'] = self._process_text
 
-    def _process_text(self, text: str) -> Dict[str, Any]:
+    def _process_text(self, text: str, layer_names: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Process a text prompt through the model and capture activations.
         
@@ -136,21 +136,40 @@ class ToolInterface:
         
         Args:
             text: The text prompt to process
+            layer_names: Specific layers to capture (optional). If None, captures from 
+                        a default set of representative layers across the model.
             
         Returns:
             Dictionary with the model's response and confirmation that activations were captured
         """
-        # Generate response and capture activations
+        # First, generate a response
         response = self.model_manager.generate(text, max_length=100)
         
-        # Activations are now captured in the activation_monitor
-        num_layers_captured = len(self.activation_monitor.activations) if hasattr(self.activation_monitor, 'activations') else 0
+        # Determine which layers to capture
+        if layer_names is None:
+            # Default: capture from first, middle, and last layers for representative coverage
+            # The model can override this by specifying layer_names explicitly
+            layer_names = [
+                "model.layers.0.self_attn",
+                "model.layers.0.mlp", 
+                "model.layers.13.self_attn",
+                "model.layers.13.mlp",
+                "model.layers.27.self_attn",
+                "model.layers.27.mlp"
+            ]
+        
+        # Capture activations from the specified layers
+        self.activation_monitor.capture_activations(text, layer_names=layer_names, max_length=100)
+        
+        # Count how many layers have activations
+        num_layers_captured = len(self.activation_monitor.activations)
         
         return {
             "prompt": text,
             "response": response,
             "activations_captured": num_layers_captured > 0,
             "num_layers_with_activations": num_layers_captured,
+            "layers_captured": list(self.activation_monitor.activations.keys()) if num_layers_captured > 0 else [],
             "note": "Activations have been captured. You can now use get_activation_statistics() or get_attention_patterns() to examine them."
         }
 
@@ -346,16 +365,27 @@ Note: These tools require capturing activations first by processing an input.
     Example:
     get_layer_info(layer_name="model.layers.0.self_attn.q_proj")
 
-6d. **process_text(text)** - Process text through yourself and capture activations
-    Args: text (str) - text prompt to process through your own architecture
-    Returns: dict with keys: prompt, response, activations_captured, num_layers_with_activations, note
+6d. **process_text(text, layer_names=None)** - Process text through yourself and capture activations
+    Args: 
+      text (str) - text prompt to process through your own architecture
+      layer_names (list, optional) - specific layers to capture activations from. 
+                                     If None, captures from default representative layers.
+    Returns: dict with keys: prompt, response, activations_captured, num_layers_with_activations, 
+             layers_captured (list of layer names), note
+    
+    **IMPORTANT: Use this instead of asking for human input!**
+    When you want to examine how you process specific text, DON'T ask the human to provide input.
+    Instead, use this function to send the text to yourself and capture the resulting activations.
     
     Use this to observe your own computational processes in action. Send yourself a prompt,
     see how you respond, and then examine the activations that were captured during processing.
     
+    You can either use default layer capture (first, middle, last layers) or specify exactly
+    which layers you want to examine. Use get_layer_names() first to find layer names.
+    
     Examples:
     process_text(text="What is consciousness?")
-    process_text(text="The quick brown fox jumps over the lazy dog")
+    process_text(text="The quick brown fox", layer_names=["model.layers.5.self_attn", "model.layers.10.mlp"])
     
     After calling this, you can use get_activation_statistics() or get_attention_patterns()
     to examine what happened during processing.

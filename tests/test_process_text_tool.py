@@ -68,6 +68,18 @@ def test_process_text_execution():
     assert result['prompt'] == 'Hello, world!'
     assert isinstance(result['response'], str)
     assert len(result['response']) > 0
+    
+    # Verify activations were actually captured
+    assert result['activations_captured'] == True
+    assert result['num_layers_with_activations'] > 0
+    
+    # Verify we can now query activations from one of the captured layers
+    # process_text captures from model.layers.0.self_attn, model.layers.0.mlp, etc.
+    stats = activation_monitor.get_activation_statistics("model.layers.0.self_attn")
+    assert 'mean' in stats
+    assert 'std' in stats
+    assert 'min' in stats
+    assert 'max' in stats
 
 
 def test_process_text_in_tool_documentation():

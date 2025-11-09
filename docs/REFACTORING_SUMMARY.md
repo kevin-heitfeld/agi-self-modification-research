@@ -1,7 +1,8 @@
 # Refactoring Summary: ToolInterface and Scripts Organization
 
 **Date:** November 7, 2025  
-**Commits:** 19c9824, e82186b
+**Last Updated:** November 9, 2025  
+**Commits:** 19c9824, e82186b, and subsequent updates
 
 ## Overview
 
@@ -388,3 +389,60 @@ This refactoring:
 - ✅ Documented everything comprehensively
 
 The codebase is now better organized, more maintainable, and ready for Phase 2 and beyond.
+
+---
+
+## Recent Updates (November 9, 2025)
+
+### Added `process_text` Tool for Autonomous Introspection
+
+**Purpose:** Enable the model to autonomously investigate its own processing by sending itself prompts and capturing activations, eliminating the need to ask for human input.
+
+**Changes Made:**
+
+1. **Updated `src/tool_interface.py`:**
+   - Added `_process_text()` method that:
+     - Generates a response to the provided text
+     - Captures activations from specified layers (or defaults to representative layers)
+     - Returns response, activation status, and list of captured layers
+   - Added optional `layer_names` parameter for targeted layer capture
+   - Returns `layers_captured` list in response for transparency
+   - Registered `process_text` tool when both `model_manager` and `activation_monitor` are available
+
+2. **Tool Signature:**
+   ```python
+   process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str, Any]
+   ```
+   
+   **Returns:**
+   - `prompt`: The text that was processed
+   - `response`: The model's generated response
+   - `activations_captured`: Boolean indicating success
+   - `num_layers_with_activations`: Count of layers captured
+   - `layers_captured`: List of layer names with captured activations
+   - `note`: Instructions for next steps
+
+3. **Default Layer Coverage:**
+   - First layers: `model.layers.0.self_attn`, `model.layers.0.mlp`
+   - Middle layers: `model.layers.13.self_attn`, `model.layers.13.mlp`
+   - Last layers: `model.layers.27.self_attn`, `model.layers.27.mlp`
+   - Model can override by specifying custom `layer_names`
+
+4. **Documentation Updates:**
+   - Added explicit note: **"IMPORTANT: Use this instead of asking for human input!"**
+   - Clarified that model should NOT ask humans for input but use this function
+   - Provided examples of both default and custom layer capture
+   - Explained workflow: `process_text()` → `get_activation_statistics()` or `get_attention_patterns()`
+
+**Impact:**
+- ✅ Enables fully autonomous introspection experiments
+- ✅ Model can investigate specific text processing without human intervention
+- ✅ Flexible layer selection gives model control over what to examine
+- ✅ Fixes Phase 1a issue where model kept asking "Please provide an input"
+
+**Test Coverage:**
+- `tests/test_process_text_tool.py` with 3 tests:
+  - Tool registration verification
+  - Tool execution with activation capture
+  - Tool documentation presence
+
