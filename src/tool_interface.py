@@ -457,6 +457,8 @@ your own processing, then examine the resulting activations with these tools.
 def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
     Get statistics about activations in one or more layers.
+    
+    **NOTE:** You must call process_text() first to capture activations before using this function.
 
     Args:
         layer_name: Either:
@@ -498,6 +500,8 @@ def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[s
 def get_attention_patterns(layer_name: Union[str, List[str]], head_idx: Optional[int] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
     Examine attention patterns in one or more attention layers.
+    
+    **NOTE:** You must call process_text() first to capture activations before using this function.
 
     Args:
         layer_name: Either:
