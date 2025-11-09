@@ -34,27 +34,15 @@ def setup_logging(phase_name: str):
     log_dir = Path("data/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get or create logger
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    
-    # Remove any existing handlers to avoid duplicates
-    logger.handlers.clear()
-    
-    # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    # Add file handler
-    file_handler = logging.FileHandler(f'data/logs/{phase_name}.log')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    
-    # Add stream handler (for console/notebook output)
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    
-    return logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(f'data/logs/{phase_name}.log'),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
 
 
 class Phase1BaseSession(ABC):
