@@ -352,12 +352,17 @@ Note: These tools require capturing activations first by processing an input.
    ARGS: {"query": "Do I have any residual connections?"}
 
 10. **explain_component(component_type)** - Explain what a component does
-    Args: component_type (str) - component type to explain (e.g., "attention", "mlp", "feedforward", "embedding")
+    Args: component_type (str) - component type to search for. Common types with detailed explanations:
+      "attention", "mlp", "embedding", "layernorm", "dropout"
+      You can also search for other terms like "feedforward", "norm", etc. - the function will find matching components in the model.
     Returns: description of component's purpose, function, and locations in model
 
-    Example:
+    Examples:
     TOOL_CALL: explain_component
     ARGS: {"component_type": "attention"}
+    
+    TOOL_CALL: explain_component
+    ARGS: {"component_type": "mlp"}
 """
 
         if self.memory:
