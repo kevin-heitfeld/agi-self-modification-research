@@ -298,7 +298,10 @@ class Phase1BaseSession(ABC):
                 # Clear activation hooks (they hold references to tensors)
                 if hasattr(self.activation_monitor, 'clear_hooks'):
                     self.activation_monitor.clear_hooks()
-                if hasattr(self.activation_monitor, 'clear_activations'):
+
+                # Only clear cached activations if this was NOT a process_text call
+                # (process_text captures activations for later examination)
+                if function_name != 'process_text' and hasattr(self.activation_monitor, 'clear_activations'):
                     self.activation_monitor.clear_activations()
 
                 # Force garbage collection and clear CUDA cache
