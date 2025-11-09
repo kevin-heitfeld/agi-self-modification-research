@@ -134,7 +134,7 @@ class Phase1BaseSession(ABC):
 
         # Initialize introspection tools
         self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
-        self.activation_monitor = ActivationMonitor(self.model, self.inspector)
+        self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
 

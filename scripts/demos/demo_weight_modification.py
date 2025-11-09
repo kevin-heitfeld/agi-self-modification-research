@@ -159,7 +159,7 @@ def run_weight_modification_demo(
         baseline_metrics={}
     )
 
-    activation_monitor = ActivationMonitor(model, inspector)
+    activation_monitor = ActivationMonitor(model, tokenizer)
 
     logger.info("✓ All systems initialized")
 

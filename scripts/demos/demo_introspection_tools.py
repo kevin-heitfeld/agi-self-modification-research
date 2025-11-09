@@ -116,7 +116,7 @@ class FirstSelfExaminationSession:
         # Initialize introspection tools
         logger.info("  Initializing introspection tools...")
         self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
-        self.activation_monitor = ActivationMonitor(self.model, self.inspector)
+        self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         logger.info("  ✓ Introspection tools ready")
 
         # Initialize memory - this will store the system's self-observations
