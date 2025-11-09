@@ -299,9 +299,10 @@ class Phase1BaseSession(ABC):
                 if hasattr(self.activation_monitor, 'clear_hooks'):
                     self.activation_monitor.clear_hooks()
 
-                # Only clear cached activations if this was NOT a process_text call
-                # (process_text captures activations for later examination)
-                if function_name != 'process_text' and hasattr(self.activation_monitor, 'clear_activations'):
+                # Only clear cached activations for tools that don't examine them
+                # Keep activations after: process_text, get_activation_statistics, get_attention_patterns, get_layer_info
+                activation_examination_tools = {'process_text', 'get_activation_statistics', 'get_attention_patterns', 'get_layer_info'}
+                if function_name not in activation_examination_tools and hasattr(self.activation_monitor, 'clear_activations'):
                     self.activation_monitor.clear_activations()
 
                 # Force garbage collection and clear CUDA cache
