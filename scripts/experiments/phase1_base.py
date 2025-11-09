@@ -250,7 +250,7 @@ class Phase1BaseSession(ABC):
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=2000,
+                    max_new_tokens=1000,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id
@@ -259,6 +259,10 @@ class Phase1BaseSession(ABC):
             # Decode only the NEW tokens (after the input)
             new_tokens = outputs[0][input_length:]
             response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+            # Clear CUDA cache immediately after generation to prevent KV cache accumulation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             self.logger.info(f"[MODEL] {response}\n")
 
@@ -332,12 +336,24 @@ class Phase1BaseSession(ABC):
 
         This prevents the model from hallucinating multi-turn conversations
         by using the proper format it was trained on.
+
+        To prevent OOM, keeps only the most recent turns (system prompt + last N exchanges).
         """
+        # Keep conversation manageable to prevent OOM
+        # Keep: system message + last 8 turns (4 user-assistant pairs)
+        MAX_RECENT_TURNS = 8
+
+        if len(self.conversation_history) > MAX_RECENT_TURNS + 1:
+            # Always keep first message (system/initial prompt) + recent turns
+            trimmed_history = [self.conversation_history[0]] + self.conversation_history[-(MAX_RECENT_TURNS):]
+        else:
+            trimmed_history = self.conversation_history
+
         # Use the model's native chat template if available
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
             # Qwen models have a specific chat template that handles roles properly
             formatted = self.tokenizer.apply_chat_template(
-                self.conversation_history,
+                trimmed_history,
                 tokenize=False,
                 add_generation_prompt=True  # Adds the prompt for assistant to continue
             )
@@ -345,7 +361,7 @@ class Phase1BaseSession(ABC):
         else:
             # Fallback to simple format if no chat template
             formatted = []
-            for msg in self.conversation_history:
+            for msg in trimmed_history:
                 role = msg["role"].upper()
                 content = msg["content"]
                 formatted.append(f"{role}: {content}")
