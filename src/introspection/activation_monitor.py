@@ -101,7 +101,27 @@ class ActivationMonitor:
         
         for layer_name in layer_names:
             if layer_name not in self.layers:
-                raise KeyError(f"Layer '{layer_name}' not found. Use get_layer_names() to see available layers.")
+                # Find similar layer names to help the model
+                similar = []
+                # Check if using underscores instead of dots
+                if '_' in layer_name:
+                    dotted_version = layer_name.replace('_', '.')
+                    if dotted_version in self.layers:
+                        similar.append(f"Did you mean '{dotted_version}'? (use dots, not underscores)")
+                
+                # Find other similar names
+                layer_name_lower = layer_name.lower()
+                for available_layer in self.layers.keys():
+                    if layer_name_lower in available_layer.lower():
+                        similar.append(available_layer)
+                        if len(similar) >= 5:
+                            break
+                
+                error_msg = f"Layer '{layer_name}' not found. Use get_layer_names() to see available layers."
+                if similar:
+                    error_msg += f"\n\nSimilar layers found:\n" + "\n".join(f"  - {s}" for s in similar[:5])
+                
+                raise KeyError(error_msg)
             
             module = self.layers[layer_name]
             
