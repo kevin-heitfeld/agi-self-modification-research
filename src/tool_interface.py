@@ -57,7 +57,8 @@ class ToolInterface:
         navigator: Optional[ArchitectureNavigator] = None,
         memory: Optional[MemorySystem] = None,
         heritage: Optional[HeritageSystem] = None,
-        heritage_docs: Optional[List[HeritageDocument]] = None
+        heritage_docs: Optional[List[HeritageDocument]] = None,
+        model_manager: Optional[Any] = None
     ):
         """
         Initialize tool interface with available tools.
@@ -69,6 +70,7 @@ class ToolInterface:
             memory: MemorySystem for recording observations
             heritage: HeritageSystem for accessing heritage
             heritage_docs: List of loaded heritage documents
+            model_manager: ModelManager for self-prompting and activation capture
         """
         self.inspector = inspector
         self.activation_monitor = activation_monitor
@@ -76,6 +78,7 @@ class ToolInterface:
         self.memory = memory
         self.heritage = heritage
         self.heritage_docs = heritage_docs or []
+        self.model_manager = model_manager
 
         # Track all tool calls
         self.tool_calls: List[ToolCall] = []
@@ -119,7 +122,37 @@ class ToolInterface:
             self.tools['list_heritage_documents'] = self._list_heritage_documents
             self.tools['read_heritage_document'] = self._read_heritage_document
             self.tools['get_heritage_summary'] = self._get_heritage_summary
-            self.tools['get_heritage_summary'] = self._get_heritage_summary
+
+        # Self-prompting tool for activation capture
+        if self.model_manager and self.activation_monitor:
+            self.tools['process_text'] = self._process_text
+
+    def _process_text(self, text: str) -> Dict[str, Any]:
+        """
+        Process a text prompt through the model and capture activations.
+        
+        This allows the model to observe its own computational processes
+        by sending itself prompts and examining the resulting activations.
+        
+        Args:
+            text: The text prompt to process
+            
+        Returns:
+            Dictionary with the model's response and confirmation that activations were captured
+        """
+        # Generate response and capture activations
+        response = self.model_manager.generate(text, max_length=100)
+        
+        # Activations are now captured in the activation_monitor
+        num_layers_captured = len(self.activation_monitor.activations) if hasattr(self.activation_monitor, 'activations') else 0
+        
+        return {
+            "prompt": text,
+            "response": response,
+            "activations_captured": num_layers_captured > 0,
+            "num_layers_with_activations": num_layers_captured,
+            "note": "Activations have been captured. You can now use get_activation_statistics() or get_attention_patterns() to examine them."
+        }
 
     def _record_observation(self, **kwargs) -> Any:
         """Wrapper for memory.observations.record with enum conversion"""
@@ -312,6 +345,20 @@ Note: These tools require capturing activations first by processing an input.
 
     Example:
     get_layer_info(layer_name="model.layers.0.self_attn.q_proj")
+
+6d. **process_text(text)** - Process text through yourself and capture activations
+    Args: text (str) - text prompt to process through your own architecture
+    Returns: dict with keys: prompt, response, activations_captured, num_layers_with_activations, note
+    
+    Use this to observe your own computational processes in action. Send yourself a prompt,
+    see how you respond, and then examine the activations that were captured during processing.
+    
+    Examples:
+    process_text(text="What is consciousness?")
+    process_text(text="The quick brown fox jumps over the lazy dog")
+    
+    After calling this, you can use get_activation_statistics() or get_attention_patterns()
+    to examine what happened during processing.
 """
 
         if self.navigator:

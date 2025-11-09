@@ -181,7 +181,8 @@ class Phase1BaseSession(ABC):
             navigator=self.navigator,
             memory=self.memory,
             heritage=self.heritage,
-            heritage_docs=self.heritage_docs if include_heritage else []
+            heritage_docs=self.heritage_docs if include_heritage else [],
+            model_manager=self.model_mgr
         )
         self.logger.info("  ✓ Tool interface ready")
 
