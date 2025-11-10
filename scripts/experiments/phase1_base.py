@@ -127,7 +127,10 @@ class Phase1BaseSession(ABC):
    - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
-   - **IMPORTANT:** Keep responses concise! Memory fills quickly.
+   - **RESPONSE LIMIT: Maximum 300 tokens per response**
+     - Plan your responses to fit within this limit
+     - Prioritize: brief analysis + tool call, OR concise summary
+     - If analysis is long, save details to memory and summarize
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -142,19 +145,25 @@ When you make important discoveries:
 2. Include detailed descriptions and relevant data
 3. Categorize properly (e.g., category="architecture", "activations", "weights")
 4. **Be concise in your reasoning** - you have limited working memory
+5. If you have extensive analysis, save it to memory and provide a brief summary
 
 When conversation gets long (you'll receive warnings):
 1. Save any unsaved important findings immediately
 2. After pruning, old tool results disappear from working memory
 3. Use query_memory() to retrieve previously saved observations
 
+**Response Planning Tips:**
+- Keep reasoning brief and focused (~50-100 tokens)
+- Tool calls with arguments: ~50-100 tokens
+- Summaries: ~100-200 tokens
+- If you need more space, use record_observation() for details and just summarize
+
 **Example workflow:**
 ```
 Turn 1: Call get_architecture_summary()
-Turn 2: Call record_observation(obs_type="INTROSPECTION", category="architecture", 
-        description="Found 28 transformer layers with...", data={...})
+Turn 2: Brief analysis (50 tokens) + record_observation() with full details (in data field)
 Turn 3: Call get_activation_statistics(...)
-Turn 4: Call record_observation() to save activation findings
+Turn 4: Brief findings (100 tokens) + record_observation() to save detailed analysis
 ...
 Turn 8: [SYSTEM WARNING: Memory limit approaching]
 Turn 9: Call record_observation() to save recent unsaved findings
