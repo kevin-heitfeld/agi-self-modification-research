@@ -446,27 +446,24 @@ we write down important discoveries and look them up later!"""
                         keep_recent_turns=2
                     )
 
-                    # Discard the KV cache (system prompt cache remains)
+                    # Completely discard the KV cache to prevent corruption
+                    # The system prompt cache remains in the generator
                     self.conversation_kv_cache = None
+                    
+                    # Force garbage collection to free the old cache
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                     
                     # Reset turn counter for this session since we've pruned history
                     turns_in_this_session = 0
 
-                    # DON'T break - let model continue investigating
-                    # Add a notification message to inform model that pruning occurred
-                    notification = (
-                        "\n⚠️ [MEMORY PRUNED] Your working memory was cleared to prevent OOM.\n"
-                        "Only the last 2 exchanges remain in your working memory.\n"
-                        "Use query_memory() to retrieve important findings you saved earlier.\n"
-                        "You can continue your investigation now.\n"
-                    )
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": notification
-                    })
-                    self.logger.info(f"[MEMORY MANAGEMENT] Added pruning notification to model")
+                    # DON'T add notification to history - it would desync from KV cache
+                    # Model will naturally continue with reduced context
+                    # The system prompt explains memory can be pruned and to use query_memory()
+                    self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
                     
-                    # Continue the tool loop - model will see the notification and can continue investigating
+                    # Continue the tool loop - model has reduced context but can keep investigating
 
             # Generate response
             conversation_text = self._format_conversation_for_model()
