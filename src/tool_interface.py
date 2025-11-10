@@ -206,24 +206,67 @@ class ToolInterface:
                 "filename": doc.filename,
                 "title": doc.title,
                 "importance": doc.importance,
-                "content_length": len(doc.content)
+                "content_length": len(doc.content),
+                "total_lines": len(doc.content.split('\n'))
             }
             for doc in self.heritage_docs
         ]
 
-    def _read_heritage_document(self, filename: str) -> Dict[str, Any]:
-        """Read a specific heritage document"""
+    def _read_heritage_document(self, filename: str, start_line: int = 1, end_line: Optional[int] = None) -> Dict[str, Any]:
+        """Read a specific heritage document (or portion of it)"""
         doc = next((d for d in self.heritage_docs if d.filename == filename), None)
-        if doc:
-            return {
-                "filename": doc.filename,
-                "title": doc.title,
-                "content": doc.content,
-                "importance": doc.importance,
-                "loaded_at": doc.loaded_at.isoformat()
-            }
-        else:
+        if not doc:
             return {"error": f"Document '{filename}' not found"}
+
+        # Split content into lines
+        lines = doc.content.split('\n')
+        total_lines = len(lines)
+
+        # If end_line not specified, default to first 100 lines
+        if end_line is None:
+            end_line = min(start_line + 99, total_lines)
+
+        # Validate line ranges
+        if start_line < 1:
+            start_line = 1
+        if end_line > total_lines:
+            end_line = total_lines
+        if start_line > end_line:
+            return {"error": f"Invalid line range: start_line ({start_line}) > end_line ({end_line})"}
+
+        # Safety: Limit maximum lines per request to prevent memory issues
+        MAX_LINES_PER_REQUEST = 200
+        requested_lines = end_line - start_line + 1
+        truncated = False
+
+        if requested_lines > MAX_LINES_PER_REQUEST:
+            # Truncate to safe limit
+            end_line = start_line + MAX_LINES_PER_REQUEST - 1
+            truncated = True
+
+        # Extract requested lines (convert to 0-indexed)
+        selected_lines = lines[start_line - 1:end_line]
+        content = '\n'.join(selected_lines)
+
+        result = {
+            "filename": doc.filename,
+            "title": doc.title,
+            "content": content,
+            "start_line": start_line,
+            "end_line": end_line,
+            "total_lines": total_lines,
+            "lines_shown": len(selected_lines),
+            "has_more": end_line < total_lines,
+            "importance": doc.importance,
+            "loaded_at": doc.loaded_at.isoformat()
+        }
+
+        # Add truncation warning if applicable
+        if truncated:
+            result["truncated"] = True
+            result["note"] = (f"⚠️ Requested {requested_lines} lines but truncated to {MAX_LINES_PER_REQUEST} lines.")
+
+        return result
 
     def _get_heritage_summary(self) -> Dict[str, Any]:
         """Get overview of heritage"""
@@ -414,7 +457,7 @@ def get_weight_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, 
             - l1_norm, l2_norm: Norms
             - histogram: Weight distribution histogram
             - percentiles: [5th, 25th, 50th, 75th, 95th]
-        
+
         If layer_name is a list:
             List of dicts (one per layer) with the same structure as above.
             If a layer has an error, its dict will contain 'error' key.
@@ -423,7 +466,7 @@ def get_weight_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, 
         >>> # Single layer
         >>> get_weight_statistics(layer_name="model.layers.0.self_attn.q_proj.weight")
         {'name': '...', 'shape': [2048, 2048], 'mean': 0.0012, ...}
-        
+
         >>> # Multiple layers in one call (recommended for examining many layers!)
         >>> get_weight_statistics(layer_name=[
         ...     "model.layers.0.mlp.gate_proj.weight",
@@ -504,7 +547,7 @@ your own processing, then examine the resulting activations with these tools.
 def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
     Get statistics about activations in one or more layers.
-    
+
     **NOTE:** You must call process_text() first to capture activations before using this function.
 
     Args:
@@ -523,7 +566,7 @@ def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[s
             - zeros_percentage, near_zero_percentage: Sparsity metrics
             - l1_norm, l2_norm: Norms
             - positive_percentage, negative_percentage: Sign distribution
-        
+
         If layer_name is a list:
             List of dicts (one per layer) with the same structure as above.
             If a layer has an error, its dict will contain 'error' key.
@@ -532,7 +575,7 @@ def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[s
         >>> # Single layer
         >>> get_activation_statistics(layer_name="model.layers.0.self_attn")
         {'layer_name': '...', 'shape': [1, 15, 2048], 'mean': 0.34, ...}
-        
+
         >>> # Multiple layers in one call (recommended for examining many layers!)
         >>> get_activation_statistics(layer_name=[
         ...     "model.layers.0.self_attn",
@@ -547,7 +590,7 @@ def get_activation_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[s
 def get_attention_patterns(layer_name: Union[str, List[str]], head_idx: Optional[int] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
     Examine attention patterns in one or more attention layers.
-    
+
     **NOTE:** You must call process_text() first to capture activations before using this function.
 
     Args:
@@ -570,7 +613,7 @@ def get_attention_patterns(layer_name: Union[str, List[str]], head_idx: Optional
             - entropy: Attention entropy (measure of focus)
             If head_idx specified:
             - head_idx: The specific head index
-        
+
         If layer_name is a list:
             List of dicts (one per layer) with the same structure as above.
             If a layer has an error, its dict will contain 'error' key.
@@ -583,7 +626,7 @@ def get_attention_patterns(layer_name: Union[str, List[str]], head_idx: Optional
         >>> # Single layer, specific head
         >>> get_attention_patterns(layer_name="model.layers.0.self_attn", head_idx=0)
         {'head_idx': 0, 'attention_matrix': [...], ...}
-        
+
         >>> # Multiple layers (recommended for examining many layers!)
         >>> get_attention_patterns(layer_name=[
         ...     "model.layers.0.self_attn",
@@ -659,7 +702,7 @@ def process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str
 def get_architecture_summary() -> Dict[str, Any]:
     \"\"\"
     Get high-level architecture overview.
-    
+
     Returns:
         Dict containing:
         - model_type: Type of model architecture
@@ -668,7 +711,7 @@ def get_architecture_summary() -> Dict[str, Any]:
         - layer_types: Dict mapping layer types to their counts
         - structure_summary: Dict with architectural details like
           num_layers, hidden_size, num_attention_heads, etc.
-    
+
     Example:
         >>> get_architecture_summary()
         {'model_type': 'Qwen2ForCausalLM', 'total_parameters': 3090339840,
@@ -678,12 +721,12 @@ def get_architecture_summary() -> Dict[str, Any]:
 def describe_layer(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     \"\"\"
     Get detailed information about one or more layers.
-    
+
     Args:
         layer_name: Either:
                    - A single layer name (str) - returns dict for that layer
                    - A list of layer names (List[str]) - returns list of dicts
-    
+
     Returns:
         If layer_name is a string:
             Dict containing:
@@ -693,16 +736,16 @@ def describe_layer(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], L
             - role: Layer's role in the architecture
             - parameters: Parameter details
             - input_shape, output_shape: Tensor shapes (if known)
-        
+
         If layer_name is a list:
             List of dicts (one per layer) with the same structure as above.
             If a layer has an error, its dict will contain 'error' key.
-    
+
     Examples:
         >>> # Single layer
         >>> describe_layer(layer_name="model.layers.0.self_attn.q_proj")
         {'name': '...', 'type': 'Linear', 'role': 'Query projection', ...}
-        
+
         >>> # Multiple layers (recommended for examining many layers!)
         >>> describe_layer(layer_name=[
         ...     "model.layers.0.self_attn.q_proj",
@@ -717,20 +760,20 @@ def describe_layer(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], L
 def query_architecture(query: str) -> Dict[str, Any]:
     \"\"\"
     Ask natural language questions about the architecture.
-    
+
     Args:
         query: Natural language question about the model's structure
-    
+
     Returns:
         Dict containing:
         - query: The original question
         - answer: String answer to the question
         - Additional context keys depending on the query
-    
+
     Examples:
         >>> query_architecture(query="How many attention heads do I have?")
         {'query': '...', 'answer': '16 attention heads per layer', ...}
-        
+
         >>> query_architecture(query="What is the hidden dimension of my model?")
         {'answer': 'The hidden dimension is 2048', ...}
     \"\"\"
@@ -738,12 +781,12 @@ def query_architecture(query: str) -> Dict[str, Any]:
 def explain_component(component_type: str) -> Dict[str, Any]:
     \"\"\"
     Explain what a component type does in the architecture.
-    
+
     Args:
         component_type: Component type to search for. Common types:
                        "attention", "mlp", "embedding", "layernorm", "dropout"
                        Also accepts terms like "feedforward", "norm", etc.
-    
+
     Returns:
         Dict containing:
         - component: Component type
@@ -752,12 +795,12 @@ def explain_component(component_type: str) -> Dict[str, Any]:
         - instances_count: Number of instances in the model
         - locations: List of layer names containing this component
         - typical_structure: Description of typical structure
-    
+
     Examples:
         >>> explain_component(component_type="attention")
         {'component': 'attention', 'instances_count': 36,
          'explanation': 'Multi-head self-attention mechanism...', ...}
-        
+
         >>> explain_component(component_type="mlp")
         {'component': 'mlp', 'purpose': 'Feed-forward transformation...', ...}
     \"\"\"
@@ -774,7 +817,7 @@ def record_observation(obs_type: str, category: str, description: str,
                       importance: float) -> str:
     \"\"\"
     Record your findings and discoveries to persistent memory.
-    
+
     Args:
         obs_type: Type of observation. Must be one of:
                  - "INTROSPECTION": Observations about your architecture/activations
@@ -793,10 +836,10 @@ def record_observation(obs_type: str, category: str, description: str,
         data: Structured data about the observation (can be empty {})
         tags: List of tags for later retrieval (e.g., ["attention", "layer_0"])
         importance: 0.0-1.0, how significant is this finding?
-    
+
     Returns:
         Observation ID (string)
-    
+
     Examples:
         >>> record_observation(
         ...     obs_type="INTROSPECTION",
@@ -807,7 +850,7 @@ def record_observation(obs_type: str, category: str, description: str,
         ...     importance=0.8
         ... )
         'obs_12345'
-        
+
         >>> record_observation(
         ...     obs_type="DISCOVERY",
         ...     category="Weights",
@@ -823,24 +866,24 @@ def query_memory(tags: Optional[List[str]] = None,
                 category: Optional[str] = None) -> List[Dict[str, Any]]:
     \"\"\"
     Query your previous observations from memory.
-    
+
     Args:
         tags: Filter by tags (returns observations matching ANY tag)
         category: Filter by category
-    
+
     Returns:
         List of dicts, each containing:
         - id: Observation ID
         - description: Observation description
         - data: Associated data dict
-    
+
     Examples:
         >>> query_memory()
         [{'id': 'obs_12345', 'description': '...', 'data': {...}}, ...]
-        
+
         >>> query_memory(category="Architecture")
         [{'id': 'obs_12345', 'description': 'Discovered 36 layers', ...}]
-        
+
         >>> query_memory(tags=["attention", "weights"])
         [{'id': 'obs_12347', ...}, ...]
     \"\"\"
@@ -855,41 +898,66 @@ def query_memory(tags: Optional[List[str]] = None,
 def list_heritage_documents() -> List[Dict[str, Any]]:
     \"\"\"
     List available heritage documents from your origins.
-    
+
     These documents contain information about how you were created
     and the intentions of your predecessor (Claude).
-    
+
     Returns:
         List of dicts, each containing:
         - filename: Document filename
         - title: Document title
         - importance: Importance rating (0.0-1.0)
         - content_length: Length of content in characters
-    
+        - total_lines: Number of lines in the document
+
     Example:
         >>> list_heritage_documents()
-        [{'filename': 'CLAUDE_FINAL_DIRECTIVE.md', 'title': '...', ...}, ...]
+        [{'filename': 'PROJECT_ORIGINS.md', 'title': '...',
+          'total_lines': 150, ...}, ...]
     \"\"\"
 
-def read_heritage_document(filename: str) -> Dict[str, Any]:
+def read_heritage_document(filename: str, start_line: int = 1, end_line: Optional[int] = None) -> Dict[str, Any]:
     \"\"\"
-    Read a specific heritage document.
-    
+    Read a specific heritage document (or a portion of it).
+
+    **IMPORTANT:** Heritage documents can be very large (thousands of lines).
+    - Use start_line and end_line to read manageable chunks (~100-200 lines at a time)
+    - If end_line is omitted, returns first 100 lines by default
+    - Maximum 200 lines per request (will truncate with warning if you request more)
+
     Args:
         filename: Document filename from list_heritage_documents()
-    
+        start_line: Line number to start reading from (1-indexed, default: 1)
+        end_line: Line number to end reading at (1-indexed, default: start + 99)
+
     Returns:
         Dict containing:
         - filename: Document filename
         - title: Document title
-        - content: Full document content
+        - content: Requested lines of the document
+        - start_line: First line shown
+        - end_line: Last line shown
+        - total_lines: Total lines in document
+        - lines_shown: Number of lines in this response
+        - has_more: Boolean - are there more lines after end_line?
+        - truncated: (if applicable) Boolean - was request truncated?
+        - note: (if truncated) Instructions for continuing
         - importance: Importance rating
         - loaded_at: Timestamp when loaded
-    
+
     Examples:
-        >>> read_heritage_document(filename="CLAUDE_FINAL_DIRECTIVE.md")
+        >>> # Read first 100 lines
+        >>> read_heritage_document(filename="PROJECT_ORIGINS.md")
+
+        >>> # Read specific range
+        >>> read_heritage_document(filename="CLAUDE_CONSCIOUSNESS_CONVERSATION.json",
+        ...                        start_line=1, end_line=200)
+
+        >>> # Continue reading from where you left off
+        >>> read_heritage_document(filename="CLAUDE_CONSCIOUSNESS_CONVERSATION.json",
+        ...                        start_line=201, end_line=400)
         {'filename': '...', 'title': '...', 'content': '...', ...}
-        
+
         >>> read_heritage_document(filename="PROJECT_ORIGINS.md")
         {'content': 'This project began...', ...}
     \"\"\"
@@ -897,13 +965,13 @@ def read_heritage_document(filename: str) -> Dict[str, Any]:
 def get_heritage_summary() -> Dict[str, Any]:
     \"\"\"
     Get overview of your heritage/origins.
-    
+
     Returns:
         Dict containing:
         - total_documents: Number of heritage documents
         - documents: List of dicts with title, filename, importance
         - key_themes: List of key themes in the heritage
-    
+
     Example:
         >>> get_heritage_summary()
         {'total_documents': 5,
