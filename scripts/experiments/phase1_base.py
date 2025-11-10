@@ -244,20 +244,22 @@ Example workflow:
         )
         self.tokenizer.chat_template = modified_template
 
+        # DISABLED KV CACHING for debugging gibberish issue
         # Now cache the system prompt ONCE for all future generations
         # This saves ~6000 tokens being repeated on every turn
-        system_prompt_text = self.create_initial_prompt()
+        # system_prompt_text = self.create_initial_prompt()
 
         # Format system prompt with chat template
-        system_message = [{"role": "system", "content": system_prompt_text}]
-        formatted_system = self.tokenizer.apply_chat_template(
-            system_message,
-            tokenize=False,
-            add_generation_prompt=False
-        )
+        # system_message = [{"role": "system", "content": system_prompt_text}]
+        # formatted_system = self.tokenizer.apply_chat_template(
+        #     system_message,
+        #     tokenize=False,
+        #     add_generation_prompt=False
+        # )
 
-        self.generator.cache_system_prompt(formatted_system)
-        self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens, modified template to prevent default system injection)")
+        # self.generator.cache_system_prompt(formatted_system)
+        # self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens, modified template to prevent default system injection)")
+        self.logger.info(f"  ✓ Manual generator ready (KV caching DISABLED for debugging)")
 
         self.logger.info("[INITIALIZATION] Complete\n")
 
@@ -646,56 +648,37 @@ Your previous response had: "{parse_error}"
 
     def _format_conversation_for_model(self) -> str:
         """
-        Format conversation history for manual generation.
+        Format conversation history for model generation.
 
-        NOTE: System prompt is NOW CACHED in ManualGenerator and NOT included here!
-        This saves massive amounts of memory (~6000 tokens per turn).
+        KV CACHING IS DISABLED - we now include the full system prompt
+        with every generation using the tokenizer's chat template.
 
-        We only format the recent conversation (user/assistant exchanges).
-        The model's chat template will be applied by tokenizer.apply_chat_template.
-
-        IMPORTANT: We modified the chat template to NOT inject a default system message,
-        so the conversation can start with a user message without any issues.
-
-        To prevent OOM, implements smart pruning:
-        - System prompt: CACHED ONCE (not included in conversation)
-        - Always keep: Last 2 full exchanges (4 messages - full tool results preserved)
-        - Older messages: Keep model responses, REMOVE tool results (replace with notice)
-
-        Rationale: Model should have saved important discoveries to memory.
-        Recent tool results are needed for active analysis.
-        Old tool results just bloat context without adding value.
+        Returns:
+            str: Formatted conversation text ready for the model
         """
-        # Keep recent exchanges fully intact
-        KEEP_RECENT_EXCHANGES = 2  # Last 2 exchanges = 4 messages (2 assistant + 2 tool results)
-        KEEP_RECENT_MESSAGES = KEEP_RECENT_EXCHANGES * 2
+        # Get conversation without system (will be re-added via chat template)
+        conversation_without_system = [
+            msg for msg in self.conversation_history
+            if msg["role"] != "system"
+        ]
 
-        # Maximum total conversation length (WITHOUT system prompt - it's cached!)
-        MAX_TOTAL_TURNS = 6
+        # Token budget management
+        MAX_CONTEXT_TOKENS = 8000  # Leave room for generation
+        KEEP_RECENT_EXCHANGES = 2  # Always keep last 2 user-assistant exchanges
 
-        # IMPORTANT: Skip system prompt (index 0) - it's cached in ManualGenerator
-        conversation_without_system = self.conversation_history[1:] if len(self.conversation_history) > 1 else []
+        trimmed_history = conversation_without_system
 
-        # If conversation is empty (only system prompt exists), return empty string
-        if len(conversation_without_system) == 0:
-            return ""
+        # If conversation is getting long, trim old messages
+        if len(conversation_without_system) > KEEP_RECENT_EXCHANGES * 2:
+            # Calculate approximate tokens (rough estimate: 1 token ≈ 4 chars)
+            approx_tokens = sum(len(msg["content"]) for msg in conversation_without_system) // 4
 
-        if len(conversation_without_system) <= MAX_TOTAL_TURNS:
-            # Short conversation - no pruning needed
-            trimmed_history = conversation_without_system
-        else:
-            # Long conversation - smart pruning
-            recent_messages = conversation_without_system[-KEEP_RECENT_MESSAGES:]
+            if approx_tokens > MAX_CONTEXT_TOKENS:
+                # Keep recent exchanges fully intact
+                recent_messages = conversation_without_system[-(KEEP_RECENT_EXCHANGES * 2):]
 
-            # Calculate how many older messages we can keep (with tool results pruned)
-            available_slots = MAX_TOTAL_TURNS - KEEP_RECENT_MESSAGES
-
-            if available_slots > 0:
-                # We have room for some pruned older messages
-                older_messages = conversation_without_system[:-KEEP_RECENT_MESSAGES]
-
-                # Take the most recent older messages and prune their tool results
-                keep_older = older_messages[-available_slots:] if len(older_messages) > available_slots else older_messages
+                # From older messages, keep assistant reasoning but summarize tool results
+                keep_older = conversation_without_system[:-(KEEP_RECENT_EXCHANGES * 2)]
 
                 pruned_older = []
                 for msg in keep_older:
@@ -714,32 +697,29 @@ Your previous response had: "{parse_error}"
                 # Log the pruning
                 num_removed = len(conversation_without_system) - len(trimmed_history)
                 num_tool_results_pruned = sum(1 for msg in keep_older if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"))
-                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact, system prompt cached separately)")
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact)")
             else:
                 # No room for older messages - just keep recent
                 trimmed_history = recent_messages
                 num_removed = len(conversation_without_system) - len(trimmed_history)
-                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept last {KEEP_RECENT_EXCHANGES} exchanges, system prompt cached separately)")
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept last {KEEP_RECENT_EXCHANGES} exchanges)")
 
-        # CRITICAL: When system prompt is cached, we must NOT use apply_chat_template
-        # because it will inject an empty <|im_start|>system<|im_end|> block,
-        # which confuses the model and causes gibberish generation!
-        #
-        # Instead, manually format the conversation turns using the chat format
-        # WITHOUT any system message block.
+        # Use tokenizer's chat template to format the conversation
+        # This will include the system prompt automatically
+        system_prompt_text = self.create_initial_prompt()
 
-        # Qwen chat format: <|im_start|>role\ncontent<|im_end|>\n
-        formatted_parts = []
-        for msg in trimmed_history:
-            role = msg["role"]  # "user" or "assistant"
-            content = msg["content"]
-            formatted_parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+        # Build full conversation with system prompt
+        messages = [{"role": "system", "content": system_prompt_text}]
+        messages.extend(trimmed_history)
 
-        # Add generation prompt for assistant to continue
-        # IMPORTANT: Must include \n after assistant token (Qwen format requirement)
-        formatted_parts.append("<|im_start|>assistant\n")
+        # Format with chat template
+        formatted = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
 
-        return "\n".join(formatted_parts)
+        return formatted
 
     def save_session(self):
         """Save conversation and tool calls"""
