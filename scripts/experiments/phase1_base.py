@@ -89,10 +89,6 @@ class Phase1BaseSession(ABC):
 
         # Track tool calls made by the model
         self.tool_calls: List[Dict[str, Any]] = []
-        
-        # KV cache for system prompt (significant speedup - recompute once, reuse forever)
-        self.system_prompt_cache = None
-        self.system_prompt_tokens = 0
 
     @abstractmethod
     def get_phase_name(self) -> str:
@@ -202,11 +198,6 @@ class Phase1BaseSession(ABC):
             model_manager=self.model_mgr
         )
         self.logger.info("  ✓ Tool interface ready")
-        
-        # Pre-compute KV cache for system prompt (major optimization!)
-        self.logger.info("  Creating system prompt KV cache...")
-        self._create_system_prompt_cache()
-        self.logger.info(f"  ✓ System prompt KV cache ready ({self.system_prompt_tokens} tokens cached)")
 
         self.logger.info("[INITIALIZATION] Complete\n")
 
@@ -216,43 +207,6 @@ class Phase1BaseSession(ABC):
         # For now, return empty heritage
         self.logger.warning("  WARNING: Wrong heritage not yet implemented, using empty heritage")
         return HeritageSystem(Path("heritage"))  # Will be replaced with wrong content
-    
-    def _create_system_prompt_cache(self):
-        """
-        Pre-compute KV cache for the system prompt (tool documentation).
-        
-        This gives major speedup since system prompt is ~1500-2000 tokens and is
-        included in EVERY generation but never changes. By caching its KV states,
-        we only compute attention for it once instead of every turn.
-        
-        Expected savings: 30-50% faster generation, 20-30% less peak memory.
-        """
-        # Get the system prompt (tool documentation)
-        system_prompt = self.tool_interface.get_available_tools()
-        
-        # Tokenize it
-        assert self.tokenizer is not None
-        system_inputs = self.tokenizer(system_prompt, return_tensors="pt")
-        system_inputs = {k: v.to(self.model_mgr.device) for k, v in system_inputs.items()}
-        
-        self.system_prompt_tokens = system_inputs['input_ids'].shape[1]
-        
-        # Compute KV cache using forward pass (not generate)
-        with torch.no_grad():
-            system_outputs = self.model(**system_inputs, use_cache=True)
-            self.system_prompt_cache = system_outputs.past_key_values
-        
-        # Note: system_prompt_cache is a tuple of tuples:
-        # (layer1_key_values, layer2_key_values, ..., layer36_key_values)
-        # Each layer has (key_tensor, value_tensor) both shaped [batch, heads, seq_len, head_dim]
-        
-        cache_size_mb = sum(
-            k.element_size() * k.nelement() + v.element_size() * v.nelement()
-            for layer_kv in self.system_prompt_cache
-            for k, v in [layer_kv]
-        ) / (1024 * 1024)
-        
-        self.logger.info(f"    Cache size: {cache_size_mb:.1f} MB for {self.system_prompt_tokens} tokens")
 
     def cleanup_gpu_memory(self):
         """Clean up GPU memory to prevent OOM crashes during long sessions"""
@@ -294,7 +248,7 @@ class Phase1BaseSession(ABC):
             inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
             input_length = inputs['input_ids'].shape[1]
 
-            self.logger.info(f"[GENERATION] Input tokens: {input_length} + {self.system_prompt_tokens} cached = {input_length + self.system_prompt_tokens} total, max_new_tokens: 700")
+            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 700")
 
             with torch.no_grad():
                 outputs = self.model.generate(
@@ -302,9 +256,7 @@ class Phase1BaseSession(ABC):
                     max_new_tokens=700,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    past_key_values=self.system_prompt_cache,  # Reuse cached system prompt!
-                    use_cache=True
+                    pad_token_id=self.tokenizer.eos_token_id
                 )
 
             new_tokens = outputs[0][input_length:]
@@ -369,9 +321,7 @@ class Phase1BaseSession(ABC):
                     max_new_tokens=700,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    past_key_values=self.system_prompt_cache,  # Reuse cached system prompt!
-                    use_cache=True
+                    pad_token_id=self.tokenizer.eos_token_id
                 )
 
             # Decode only the NEW tokens (after the input)
@@ -638,7 +588,7 @@ Your previous response had: "{parse_error}"
         by using the proper format it was trained on.
 
         To prevent OOM, implements smart pruning:
-        - System prompt: EXCLUDED (it's in the KV cache, not in text)
+        - Always keep: System prompt
         - Always keep: Last 3 full exchanges (6 messages - full tool results preserved)
         - Older messages: Keep model responses, REMOVE tool results (replace with notice)
 
@@ -650,25 +600,23 @@ Your previous response had: "{parse_error}"
         KEEP_RECENT_EXCHANGES = 3  # Last 3 exchanges = 6 messages (3 assistant + 3 tool results)
         KEEP_RECENT_MESSAGES = KEEP_RECENT_EXCHANGES * 2
 
-        # Maximum total conversation length (NO system prompt + kept recent + pruned old)
-        MAX_TOTAL_TURNS = 7  # Reduced by 1 since system prompt is now in KV cache
+        # Maximum total conversation length (system + kept recent + pruned old)
+        MAX_TOTAL_TURNS = 8
 
-        # Skip first message (system prompt) - it's in the KV cache
-        conversation_without_system = self.conversation_history[1:]
-
-        if len(conversation_without_system) <= MAX_TOTAL_TURNS:
+        if len(self.conversation_history) <= MAX_TOTAL_TURNS:
             # Short conversation - no pruning needed
-            trimmed_history = conversation_without_system
+            trimmed_history = self.conversation_history
         else:
             # Long conversation - smart pruning
-            recent_messages = conversation_without_system[-KEEP_RECENT_MESSAGES:]
+            system_prompt = self.conversation_history[0]
+            recent_messages = self.conversation_history[-KEEP_RECENT_MESSAGES:]
 
             # Calculate how many older messages we can keep (with tool results pruned)
-            available_slots = MAX_TOTAL_TURNS - KEEP_RECENT_MESSAGES
+            available_slots = MAX_TOTAL_TURNS - 1 - KEEP_RECENT_MESSAGES  # -1 for system prompt
 
             if available_slots > 0:
                 # We have room for some pruned older messages
-                older_messages = conversation_without_system[:-KEEP_RECENT_MESSAGES]
+                older_messages = self.conversation_history[1:-KEEP_RECENT_MESSAGES]
 
                 # Take the most recent older messages and prune their tool results
                 keep_older = older_messages[-available_slots:] if len(older_messages) > available_slots else older_messages
@@ -685,17 +633,17 @@ Your previous response had: "{parse_error}"
                         # Keep assistant messages (reasoning) and other user messages
                         pruned_older.append(msg)
 
-                trimmed_history = pruned_older + recent_messages
+                trimmed_history = [system_prompt] + pruned_older + recent_messages
 
                 # Log the pruning
-                num_removed = len(conversation_without_system) - len(trimmed_history)
+                num_removed = len(self.conversation_history) - len(trimmed_history)
                 num_tool_results_pruned = sum(1 for msg in keep_older if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"))
                 self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact)")
             else:
-                # No room for older messages - just keep recent
-                trimmed_history = recent_messages
-                num_removed = len(conversation_without_system) - len(trimmed_history)
-                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept last {KEEP_RECENT_EXCHANGES} exchanges)")
+                # No room for older messages - just keep system + recent
+                trimmed_history = [system_prompt] + recent_messages
+                num_removed = len(self.conversation_history) - len(trimmed_history)
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept system + last {KEEP_RECENT_EXCHANGES} exchanges)")
 
         # Use the model's native chat template if available
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
