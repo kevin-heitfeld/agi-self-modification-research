@@ -710,6 +710,33 @@ Your previous response had: "{parse_error}"
                 # Log the reasoning if provided
                 if json_obj and "reasoning" in json_obj:
                     self.logger.info(f"[MODEL REASONING] {json_obj['reasoning']}")
+                
+                # Check for common parameter name errors and provide helpful feedback
+                if isinstance(result, dict) and "error" in result:
+                    error_msg = result["error"]
+                    
+                    # Detect "unexpected keyword argument" errors - common mistake
+                    if "unexpected keyword argument" in error_msg:
+                        # Extract the wrong argument name from error message
+                        import re
+                        match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
+                        if match:
+                            wrong_arg = match.group(1)
+                            
+                            # Common fixes
+                            fixes = {
+                                "layer_names": "layer_name",  # Plural vs singular confusion
+                            }
+                            
+                            if wrong_arg in fixes:
+                                correct_arg = fixes[wrong_arg]
+                                result["hint"] = (
+                                    f"\n\n💡 PARAMETER NAME ERROR!\n"
+                                    f"   You used: '{wrong_arg}'\n"
+                                    f"   Should be: '{correct_arg}'\n\n"
+                                    f"The function accepts '{correct_arg}' (note the singular form).\n"
+                                    f"Try again with the correct parameter name."
+                                )
 
                 # Aggressive memory cleanup after tool execution
                 # Clear activation hooks (they hold references to tensors)
