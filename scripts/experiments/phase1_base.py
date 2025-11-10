@@ -382,7 +382,25 @@ get_layer_info(layer_name="model.layers.5")
 
 Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
                     
-                    # Pattern 2: Variable assignment (x = function(...))
+                    # Pattern 2: Import statement (trying to write Python code)
+                    elif re.search(r'\bimport\s+\w+', response, re.IGNORECASE):
+                        feedback_msg = """INCORRECT: You're trying to write Python code with 'import'. You cannot execute arbitrary Python code.
+
+❌ WRONG:
+```python
+import json
+observation_data = {"key": "value"}
+record_observation(obs_type="DISCOVERY", category="Test", description=json.dumps(observation_data), data={}, tags=[], importance=0.5)
+```
+
+✅ CORRECT:
+```
+record_observation(obs_type="INTROSPECTION", category="Activations", description="Layer 5 shows high activation in attention heads 2-4 with mean=0.023", data={"layer": 5, "mean": 0.023}, tags=["layer_5", "attention"], importance=0.7)
+```
+
+Just call the tool function directly with proper arguments. NO imports, NO variables, NO arbitrary code execution."""
+                    
+                    # Pattern 3: Variable assignment (x = function(...))
                     elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
                         feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
 
@@ -399,7 +417,7 @@ get_layer_info(layer_name="model.layers.5")
 
 Just call the function with NO variable assignment, NO extra lines, then STOP. The TOOL_RESULTS will appear in the next message."""
                     
-                    # Pattern 3: Text after the function call
+                    # Pattern 4: Text after the function call
                     elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', response):
                         feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
 
