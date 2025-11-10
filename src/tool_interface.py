@@ -278,7 +278,8 @@ When you want to use a tool, you can explain your thinking in natural language, 
 - You can write natural text before the JSON to explain your thinking (optional)
 - End your response with a valid JSON object (must be the last thing in your response)
 - The JSON must have "reasoning" and "tool_call" fields
-- "tool_call" must have "function" and "arguments" fields
+- "tool_call" must have "function" field
+- "arguments" field is required if the function has mandatory parameters, optional otherwise
 - Only call ONE function per message
 - Wait for TOOL_RESULTS before making another call
 - Use proper JSON syntax (double quotes, no trailing commas, valid escaping)
@@ -290,13 +291,22 @@ I need to understand my architecture before examining activations. Let me start 
 {
   "reasoning": "Getting architecture summary to understand my structure",
   "tool_call": {
-    "function": "get_architecture_summary",
-    "arguments": {}
+    "function": "get_architecture_summary"
   }
 }
 ```
 
-**Example 2: Just JSON (also valid)**
+**Example 2: Function with no required parameters (arguments optional)**
+```json
+{
+  "reasoning": "I'll get an overview of all weights in the model.",
+  "tool_call": {
+    "function": "get_weight_summary"
+  }
+}
+```
+
+**Example 3: Function with required parameters**
 ```json
 {
   "reasoning": "I'll examine the activation statistics for the first layer to understand the activation patterns during processing.",

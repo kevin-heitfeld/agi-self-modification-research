@@ -388,13 +388,37 @@ class Phase1BaseSession(ABC):
                     parse_error = "'tool_call' must be an object"
                 elif "function" not in json_obj["tool_call"]:
                     parse_error = "'tool_call' missing 'function' field"
-                elif "arguments" not in json_obj["tool_call"]:
-                    parse_error = "'tool_call' missing 'arguments' field"
                 else:
                     # Valid JSON structure - extract tool call
                     function_name = json_obj["tool_call"]["function"]
-                    arguments = json_obj["tool_call"]["arguments"]
-                    tool_call = (function_name, arguments)
+                    
+                    # Check if arguments field is present
+                    if "arguments" not in json_obj["tool_call"]:
+                        # Check if this function requires arguments
+                        if function_name in self.tool_interface.tools:
+                            import inspect
+                            func = self.tool_interface.tools[function_name]
+                            sig = inspect.signature(func)
+                            # Check if there are required parameters (no defaults)
+                            required_params = [
+                                p for p in sig.parameters.values()
+                                if p.default == inspect.Parameter.empty and p.name != 'self'
+                            ]
+                            if required_params:
+                                # Function has required parameters but arguments field is missing
+                                param_names = [p.name for p in required_params]
+                                parse_error = f"'tool_call' missing 'arguments' field. Function '{function_name}' requires arguments: {param_names}"
+                            else:
+                                # No required parameters - arguments is optional, default to empty dict
+                                arguments = {}
+                                tool_call = (function_name, arguments)
+                        else:
+                            # Unknown function, require arguments field
+                            parse_error = "'tool_call' missing 'arguments' field"
+                    else:
+                        # Arguments field present
+                        arguments = json_obj["tool_call"]["arguments"]
+                        tool_call = (function_name, arguments)
                     
             except json.JSONDecodeError as e:
                 parse_error = f"Invalid JSON: {str(e)}"
