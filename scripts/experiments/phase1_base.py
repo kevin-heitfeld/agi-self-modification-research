@@ -840,7 +840,10 @@ Your previous response had: "{parse_error}"
 
                 tool_call_count += 1
 
-        self.logger.warning(f"Reached max tool calls ({max_tool_calls})")
+        # Only log warning if we ACTUALLY hit the limit (not if we broke out early)
+        if tool_call_count >= max_tool_calls:
+            self.logger.warning(f"Reached max tool calls ({max_tool_calls})")
+        
         return response
 
     def _format_conversation_for_model(self) -> str:
