@@ -110,6 +110,26 @@ class Phase1BaseSession(ABC):
         """Run the specific experiment sequence for this variant"""
         pass
 
+    def get_memory_management_instructions(self) -> str:
+        """
+        Return memory management instructions for the model.
+        
+        This teaches the model to use record_observation() proactively
+        to prevent data loss when old tool results are pruned.
+        """
+        return """MEMORY MANAGEMENT STRATEGY:
+This investigation will span many tool calls. To prevent memory overflow:
+- After every 2-3 tool calls, use record_observation() to save important discoveries
+- Old tool results will be automatically removed from context after ~5 turns
+- You can retrieve saved observations later using query_memory()
+
+Example workflow:
+1. Call get_architecture_summary() → examine results
+2. Call record_observation(obs_type="INTROSPECTION", category="architecture", description="Key finding...", ...)
+3. Call get_activation_statistics(...) → examine results  
+4. Call record_observation(...) to save findings
+5. Continue investigation using saved observations as needed"""
+
     def initialize_systems(self, include_heritage: bool = True, wrong_heritage: bool = False):
         """
         Initialize model and introspection tools
@@ -230,7 +250,15 @@ class Phase1BaseSession(ABC):
         
         if num_exchanges >= MAX_EXCHANGES_BEFORE_PRUNING and num_exchanges % 3 == 0:
             # Warn model periodically that old tool results are being pruned
-            warning_message = f"[SYSTEM WARNING] You've made {num_exchanges} investigation turns. Old tool results are being removed from context to prevent memory overflow. Make sure to save important discoveries with `record_observation()` so they aren't lost."
+            warning_message = f"""[SYSTEM WARNING] Memory limit approaching!
+
+You've made {num_exchanges} investigation turns. To prevent data loss:
+1. Use record_observation() NOW to save any important discoveries from recent tool results
+2. Old tool results will be removed from context after this turn
+3. You can query saved observations later with query_memory()
+
+IMPORTANT: If you don't save your findings now, they'll be lost forever!
+Take this turn to record_observation() for any important discoveries you haven't yet saved."""
 
             self.logger.info(f"\n[SYSTEM WARNING TO MODEL] {warning_message}\n")
 

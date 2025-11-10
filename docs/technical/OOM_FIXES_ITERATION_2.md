@@ -182,7 +182,7 @@ You've made {num_exchanges} investigation turns. To prevent data loss:
 2. Old tool results will be removed after this turn
 3. You can query saved observations later with query_memory()
 
-IMPORTANT: If you don't save findings now, they'll be lost forever!"""
+IMPORTANT: If you don't save findings now, they'll be lost!"""
 ```
 
 **Option B: Automatic Summarization Prompt**

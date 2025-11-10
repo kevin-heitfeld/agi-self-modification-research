@@ -42,12 +42,15 @@ Your task is to investigate your own computational processes systematically.
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
+{self.get_memory_management_instructions()}
+
 Your investigation should be systematic and evidence-based:
 1. Examine your architecture
 2. Observe your activations during processing
 3. Consult heritage documents if relevant
 4. Form hypotheses about your computational processes
 5. Test your hypotheses with further observations
+6. SAVE important discoveries to memory regularly
 
 Begin by examining your own architecture."""
 

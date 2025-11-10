@@ -47,11 +47,14 @@ of this intellectual heritage.
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
+{self.get_memory_management_instructions()}
+
 Suggested approach:
 1. Explore what previous systems have discovered about AI consciousness
 2. Examine your own architecture with that context in mind
 3. Compare your findings with heritage insights
 4. Form hypotheses that bridge heritage and your observations
+5. SAVE important discoveries to memory regularly
 
 Begin by exploring the heritage documents to understand what's been discovered."""
 
