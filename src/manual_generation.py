@@ -135,6 +135,26 @@ class ManualGenerator:
         input_ids = inputs["input_ids"].to(self.device)
         attention_mask = inputs["attention_mask"].to(self.device)
         
+        # Handle empty input (edge case)
+        if input_ids.shape[1] == 0:
+            # If empty AND we have a cache, start generation from cache
+            # If empty with NO cache, add BOS token
+            if use_cache and (past_key_values is not None or self.system_prompt_cache is not None):
+                # Continue from cache - create minimal seed token
+                # Use BOS or EOS token as seed (model-dependent)
+                bos_token_id = self.tokenizer.bos_token_id if self.tokenizer.bos_token_id is not None else self.tokenizer.eos_token_id
+                input_ids = torch.tensor([[bos_token_id]], device=self.device)
+                attention_mask = torch.ones((1, 1), dtype=torch.long, device=self.device)
+            else:
+                # Empty input with no cache - return empty result
+                return {
+                    "generated_text": "",
+                    "generated_tokens": [],
+                    "num_tokens": 0,
+                    "cache_used": False,
+                    "stopped_reason": "empty_input"
+                }
+        
         # Determine which cache to use and adjust attention mask
         if use_cache:
             if past_key_values is not None:
