@@ -123,10 +123,11 @@ class Phase1BaseSession(ABC):
 **Your memory has two systems (like human memory):**
 
 1. **Working Memory (this conversation):**
-   - Holds recent context (last ~5-7 conversation turns)
-   - Limited capacity to prevent memory overflow
+   - Holds recent context (last ~3 conversation turns)
+   - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
+   - **IMPORTANT:** Keep responses concise! Memory fills quickly.
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -140,6 +141,7 @@ When you make important discoveries:
 1. Use record_observation() to save findings to long-term memory
 2. Include detailed descriptions and relevant data
 3. Categorize properly (e.g., category="architecture", "activations", "weights")
+4. **Be concise in your reasoning** - you have limited working memory
 
 When conversation gets long (you'll receive warnings):
 1. Save any unsaved important findings immediately
@@ -154,10 +156,10 @@ Turn 2: Call record_observation(obs_type="INTROSPECTION", category="architecture
 Turn 3: Call get_activation_statistics(...)
 Turn 4: Call record_observation() to save activation findings
 ...
-Turn 15: [SYSTEM WARNING: Memory limit approaching]
-Turn 16: Call record_observation() to save recent unsaved findings
-Turn 17: [SYSTEM: Old turns pruned, working memory reset]
-Turn 18: Call query_memory(category="architecture") to retrieve earlier findings
+Turn 8: [SYSTEM WARNING: Memory limit approaching]
+Turn 9: Call record_observation() to save recent unsaved findings
+Turn 10: [SYSTEM: Old turns pruned, working memory reset]
+Turn 11: Call query_memory(category="architecture") to retrieve earlier findings
 ```
 
 This is exactly how humans do research - we don't keep everything in our heads,
@@ -362,7 +364,7 @@ we write down important discoveries and look them up later!"""
         total_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
         return total_chars // 4  # Rough approximation: 1 token ≈ 4 chars
 
-    def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 5):
+    def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 3):
         """
         Reset KV cache and trim conversation to recent turns only.
         
@@ -373,7 +375,7 @@ we write down important discoveries and look them up later!"""
         slide out of the window.
         
         Args:
-            keep_recent_turns: Number of recent conversation turns to keep (default: 5)
+            keep_recent_turns: Number of recent conversation turns to keep (default: 3)
         """
         # Count conversation exchanges (user-assistant pairs)
         num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
@@ -438,7 +440,7 @@ we write down important discoveries and look them up later!"""
         """
         # Check conversation length and manage KV cache
         estimated_tokens = self._estimate_conversation_tokens()
-        MAX_CONTEXT_TOKENS = 8000  # Conservative limit to prevent OOM
+        MAX_CONTEXT_TOKENS = 4000  # Reduced from 8000 - be more aggressive to prevent OOM
         
         if estimated_tokens > MAX_CONTEXT_TOKENS:
             # Conversation is getting too long - time to prune and reset cache
@@ -475,7 +477,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             conversation_text = self._format_conversation_for_model()
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=500,
+                max_new_tokens=200,  # Reduced from 500 to prevent OOM
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
@@ -507,7 +509,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
                 self.logger.info(f"[PRE-PRUNING TOOL CALL] {function_name} executed\n")
 
             # NOW prune the conversation and reset KV cache
-            self._reset_kv_cache_with_sliding_window(keep_recent_turns=5)
+            self._reset_kv_cache_with_sliding_window(keep_recent_turns=3)  # Reduced from 5 to 3
             
             # Clear CUDA cache after pruning
             if torch.cuda.is_available():
@@ -534,7 +536,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             # Otherwise, it will use just the system prompt cache
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=500,
+                max_new_tokens=200,  # Reduced from 500 - attention memory scales quadratically!
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
