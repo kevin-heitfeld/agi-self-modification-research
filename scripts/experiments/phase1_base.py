@@ -448,10 +448,25 @@ we write down important discoveries and look them up later!"""
 
                     # Discard the KV cache (system prompt cache remains)
                     self.conversation_kv_cache = None
+                    
+                    # Reset turn counter for this session since we've pruned history
+                    turns_in_this_session = 0
 
-                    # Break out of tool loop - force model to complete this chat session
-                    self.logger.info("[MEMORY MANAGEMENT] Breaking tool loop to reset memory")
-                    break
+                    # DON'T break - let model continue investigating
+                    # Add a notification message to inform model that pruning occurred
+                    notification = (
+                        "\n⚠️ [MEMORY PRUNED] Your working memory was cleared to prevent OOM.\n"
+                        "Only the last 2 exchanges remain in your working memory.\n"
+                        "Use query_memory() to retrieve important findings you saved earlier.\n"
+                        "You can continue your investigation now.\n"
+                    )
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": notification
+                    })
+                    self.logger.info(f"[MEMORY MANAGEMENT] Added pruning notification to model")
+                    
+                    # Continue the tool loop - model will see the notification and can continue investigating
 
             # Generate response
             conversation_text = self._format_conversation_for_model()
