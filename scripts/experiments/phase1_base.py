@@ -248,12 +248,12 @@ class Phase1BaseSession(ABC):
             inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
             input_length = inputs['input_ids'].shape[1]
 
-            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 700")
+            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 500")
 
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=700,
+                    max_new_tokens=500,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id
@@ -314,11 +314,14 @@ class Phase1BaseSession(ABC):
 
             # Store the input length so we can extract only new tokens
             input_length = inputs['input_ids'].shape[1]
+            
+            # Log input size for monitoring
+            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 500")
 
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=700,
+                    max_new_tokens=500,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id
@@ -596,12 +599,12 @@ Your previous response had: "{parse_error}"
         Recent tool results are needed for active analysis.
         Old tool results just bloat context without adding value.
         """
-        # Keep recent exchanges fully intact
-        KEEP_RECENT_EXCHANGES = 3  # Last 3 exchanges = 6 messages (3 assistant + 3 tool results)
+        # Keep recent exchanges fully intact - REDUCED from 3 to 2 for more aggressive memory savings
+        KEEP_RECENT_EXCHANGES = 2  # Last 2 exchanges = 4 messages (2 assistant + 2 tool results)
         KEEP_RECENT_MESSAGES = KEEP_RECENT_EXCHANGES * 2
 
-        # Maximum total conversation length (system + kept recent + pruned old)
-        MAX_TOTAL_TURNS = 8
+        # Maximum total conversation length (system + kept recent + pruned old) - REDUCED from 8 to 6
+        MAX_TOTAL_TURNS = 6
 
         if len(self.conversation_history) <= MAX_TOTAL_TURNS:
             # Short conversation - no pruning needed
