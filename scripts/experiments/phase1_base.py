@@ -863,11 +863,15 @@ Your previous response had: "{parse_error}"
                 self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages")
 
         # Format with chat template (no system message, just conversation)
-        formatted = self.tokenizer.apply_chat_template(
-            trimmed_history,
-            tokenize=False,
-            add_generation_prompt=True
-        )
+        # CRITICAL: We must NOT use apply_chat_template because it injects the default
+        # Qwen system prompt, which conflicts with our cached custom system prompt.
+        # Instead, manually format using the Qwen chat format.
+        formatted = ""
+        for msg in trimmed_history:
+            formatted += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
+        
+        # Add generation prompt (assistant role marker)
+        formatted += "<|im_start|>assistant\n"
 
         return formatted
 
