@@ -214,6 +214,16 @@ class ManualGenerator:
                 device=self.device
             ).unsqueeze(0)  # [1, seq_len]
         
+        # Track the current position for incremental generation
+        # This is the position of the NEXT token to generate
+        if current_cache is not None:
+            if past_key_values is not None:
+                current_position = past_key_values[0][0].shape[2] + input_ids.shape[1]
+            else:
+                current_position = self.system_prompt_length + input_ids.shape[1]
+        else:
+            current_position = input_ids.shape[1]
+        
         # Generation loop
         with torch.no_grad():
             for step in range(max_new_tokens):
@@ -230,8 +240,8 @@ class ManualGenerator:
                     )
                 else:
                     # Subsequent steps: only process last token
-                    # Position ID is the next position after all previous tokens
-                    next_position_id = torch.tensor([[position_ids[0, -1].item() + step]], dtype=torch.long, device=self.device)
+                    # Position ID is current_position (which we increment after each token)
+                    next_position_id = torch.tensor([[current_position]], dtype=torch.long, device=self.device)
                     
                     outputs = self.model(
                         input_ids=new_token_id,
@@ -241,6 +251,9 @@ class ManualGenerator:
                         use_cache=use_cache,
                         return_dict=True
                     )
+                    
+                    # Increment position for next token
+                    current_position += 1
                 
                 # Get logits for next token
                 logits = outputs.logits[:, -1, :]  # [batch=1, vocab_size]
