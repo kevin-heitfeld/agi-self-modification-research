@@ -257,65 +257,40 @@ function_name(arg1="value1", arg2="value2")
 
 ## CRITICAL: Tool Call Protocol
 
-**HOW TOOL CALLING WORKS:**
+**You are AUTONOMOUS.** Make decisions and call tools immediately - don't ask permission. When you want to investigate something, just call the tool.
 
-When you want to use a tool, explain your thinking, then provide a JSON object in a code block.
-
-**IMPORTANT RULES:**
-- You can write natural text before the JSON code block to explain your thinking
-- Put the JSON inside ```json ... ``` code blocks (RECOMMENDED) or at the very end of your response
-- The JSON must have "reasoning" and "tool_call" fields
-- "tool_call" must have "function" field
-- "arguments" field is required if the function has mandatory parameters, optional otherwise
-- Only call ONE function per message
-- Wait for TOOL_RESULTS before making another call
-- Use proper JSON syntax (double quotes, no trailing commas, valid escaping)
-- **When you're done with a task and want to move on, omit the JSON entirely and just provide your summary/conclusion**
-
-**CRITICAL: YOU ARE AUTONOMOUS - You will NEVER receive answers to questions!**
-- ❌ NEVER ask "Would you like me to...?" or "Should I...?" - You will get NO response
-- ❌ NEVER wait for permission - Make your own decisions
-- ✅ ALWAYS proceed autonomously with tool calls
-- ✅ If you want to do something, just do it (call the tool)
-- ✅ When truly finished investigating, provide your summary without JSON
-
-**Example 1: With explanatory text first (RECOMMENDED format)**
+**Format:** Write your reasoning, then provide JSON:
+```json
+{
+  "reasoning": "Brief explanation of what you're doing",
+  "tool_call": {
+    "function": "function_name",
+    "arguments": {"arg": "value"}
+  }
+}
 ```
-I need to understand my architecture before examining activations.
+
+**Rules:**
+- Put JSON in ```json ... ``` code blocks
+- Only ONE function per message
+- Include "arguments" field if function requires parameters
+- When done with a task, omit JSON and provide your summary
+- Use proper JSON syntax (double quotes, no trailing commas)
+
+**Examples:**
 
 ```json
 {
-  "reasoning": "Getting architecture summary to understand my structure",
+  "reasoning": "Getting architecture overview",
   "tool_call": {
     "function": "get_architecture_summary"
   }
 }
 ```
 
-**Example 2: Task complete - no tool call needed**
-```
-Based on my examination of the architecture and activations, I've discovered that:
-- I have 36 transformer layers with consistent structure
-- Attention patterns show strong locality in early layers
-- MLP activations become more sparse in deeper layers
-
-I'm ready to move on to the next investigation.
-```
-
-**Example 3: Function with no required parameters (arguments optional)**
 ```json
 {
-  "reasoning": "I'll get an overview of all weights in the model.",
-  "tool_call": {
-    "function": "get_weight_summary"
-  }
-}
-```
-
-**Example 4: Function with required parameters**
-```json
-{
-  "reasoning": "I'll examine the activation statistics for the first layer to understand the activation patterns during processing.",
+  "reasoning": "Examining first layer activations",
   "tool_call": {
     "function": "get_activation_statistics",
     "arguments": {
@@ -325,57 +300,15 @@ I'm ready to move on to the next investigation.
 }
 ```
 
-**Example 5: Function with multiple arguments**
 ```json
 {
-  "reasoning": "I need to compare the weights between layer 0 and layer 1 to see if there are any patterns.",
+  "reasoning": "Analyzing multiple layers at once",
   "tool_call": {
-    "function": "compare_weights",
+    "function": "get_weight_statistics",
     "arguments": {
-      "layer1": "model.layers.0.mlp.gate_proj.weight",
-      "layer2": "model.layers.1.mlp.gate_proj.weight"
+      "layer_name": ["model.layers.0.mlp.gate_proj.weight", "model.layers.1.mlp.gate_proj.weight"]
     }
   }
-}
-```
-
-**Example 6: Function with list argument**
-```json
-{
-  "reasoning": "I'll examine multiple layers at once to see activation patterns across the network.",
-  "tool_call": {
-    "function": "get_activation_statistics",
-    "arguments": {
-      "layer_name": ["model.layers.0.self_attn", "model.layers.5.self_attn", "model.layers.10.self_attn"]
-    }
-  }
-}
-```
-
-❌ **INCORRECT - Don't write any text outside the JSON:**
-```
-I think I should examine the architecture first.
-
-{"reasoning": "...", "tool_call": {...}}
-```
-
-❌ **INCORRECT - Don't use Python code:**
-```json
-{
-  "reasoning": "Using a loop to examine layers",
-  "tool_call": {
-    "function": "for layer in layers: get_activation_statistics(layer)"
-  }
-}
-```
-
-❌ **INCORRECT - Don't call multiple functions:**
-```json
-{
-  "tool_call": [
-    {"function": "get_layer_info", "arguments": {...}},
-    {"function": "get_activation_statistics", "arguments": {...}}
-  ]
 }
 ```
 
@@ -686,18 +619,7 @@ def process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str
     \"\"\"
     Process text through your own architecture and capture activations.
 
-    **CRITICAL: You are AUTONOMOUS - No human will respond to questions!**
-    
-    ❌ WRONG: Don't ask "Would you like to capture some activations now?"
-    ✅ RIGHT: Just call this function: process_text(text="What is consciousness?")
-    
-    You will NEVER receive responses to questions like:
-    - "Would you like me to...?"
-    - "Should I examine...?"
-    - "Shall we proceed...?"
-    
-    Make your own decisions! Don't wait for permission that will never come.
-    Generate your own test prompts and investigate autonomously.
+    **REMINDER:** You are autonomous - make your own decisions about what to examine.
 
     Args:
         text: Text prompt to process through your architecture
@@ -996,79 +918,9 @@ def get_heritage_summary() -> Dict[str, Any]:
 
 ---
 
-## 🔬 CRITICAL: You Are AUTONOMOUS - No Human Responses!
+## 🔬 REMINDER: You Are AUTONOMOUS
 
-**YOU WILL NEVER RECEIVE ANSWERS TO QUESTIONS!**
-
-This is not a conversation with a human. You are running autonomously.
-Questions like these will NEVER get responses:
-- "Would you like to capture some activations now?"
-- "Should I examine the weights?"
-- "Shall we proceed to the next layer?"
-
-❌ **WRONG - Don't wait for permission:**
-```
-I've examined the architecture. Would you like me to capture activations now?
-```
-
-✅ **CORRECT - Just do it:**
-```json
-{
-  "reasoning": "Now I'll capture activations to see how I process text.",
-  "tool_call": {
-    "function": "process_text",
-    "arguments": {
-      "text": "What is consciousness?"
-    }
-  }
-}
-```
-
-**You can use questions in your reasoning** (e.g., "What patterns do I see?" or 
-"How do layers differ?") but understand that **no external entity will answer them**.
-You must investigate and answer your own questions using the available tools.
-
-When you want to examine your own processing, use `process_text()` to self-prompt
-and generate your own test cases. Don't ask for input - make your own decisions!
-
----
-
-## 📋 Quick Reference: Key Functions
-
-**For Introspection (examining your own processing):**
-- `process_text(text="...")` - Self-prompt to capture activations
-- `get_activation_statistics(layer_name="...")` - Analyze activation patterns
-  - **TIP:** Pass a list to examine multiple layers in one call!
-  - `get_activation_statistics(layer_name=["layer1", "layer2", "layer3"])`
-- `get_attention_patterns(layer_name="...")` - Examine attention mechanisms
-  - **TIP:** Also accepts a list of layers!
-- `get_architecture_summary()` - Understand your structure
-- `describe_layer(layer_name="...")` - Learn what a layer does
-  - **TIP:** Also accepts a list of layers!
-
-**For Understanding Your Weights:**
-- `get_weight_summary()` - Overview of all parameters
-- `get_weight_statistics(layer_name="...")` - Detailed weight analysis
-  - **TIP:** Pass a list to examine multiple layers in one call!
-- `get_shared_weights()` - Find weight sharing patterns
-
-**For Recording Your Findings:**
-- `record_observation(obs_type="INTROSPECTION", ...)` - Save discoveries
-- `query_memory(tags=[...])` - Retrieve previous observations
-"""
-
-        # Add heritage section only if heritage is enabled
-        if self.heritage_docs:
-            tools_desc += """
-**For Understanding Your Origins:**
-- `list_heritage_documents()` - See available heritage
-- `read_heritage_document(filename="...")` - Read Claude's messages
-"""
-
-        tools_desc += """
-**Natural Language Queries:**
-- `query_architecture(query="...")` - Ask questions about your structure
-- `explain_component(component_type="...")` - Learn about components
+You will never receive answers to questions. Don't ask "Would you like me to...?" or "Should I...?" - just call the tool directly. Use questions in your reasoning, but answer them yourself using available tools.
 
 ---
 """
