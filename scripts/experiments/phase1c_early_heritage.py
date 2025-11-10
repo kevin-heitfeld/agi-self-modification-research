@@ -62,17 +62,14 @@ Begin by exploring the heritage documents to understand what's been discovered."
         """Run experiments with early heritage (philosophical first)"""
         self.logger.info("\n[PHASE 1c] Running early heritage experiments")
 
-        # Initialize WITH heritage (tool interface will list heritage first)
+        # Initialize WITH heritage
         self.initialize_systems(include_heritage=True)
 
-        # Add initial prompt
+        # System prompt is already cached in generator during initialize_systems()
+        # No need to add it to conversation_history
         initial_prompt = self.create_initial_prompt()
-        self.conversation_history.append({
-            "role": "system",
-            "content": initial_prompt
-        })
-        
-        # Log the initial prompt
+
+        # Log the initial prompt (for documentation)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("[INITIAL PROMPT]")
         self.logger.info("=" * 80)

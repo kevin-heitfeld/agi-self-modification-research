@@ -11,7 +11,7 @@ heritage is available throughout.
 Expected outcome: Technical grounding before philosophical context
 What we're testing: Does technical-first ordering create different theories than philosophical-first?
 
-Author: AGI Self-Modification Research  
+Author: AGI Self-Modification Research
 Date: November 8, 2025
 """
 
@@ -26,7 +26,7 @@ class Phase1bSession(Phase1BaseSession):
 
     def get_phase_description(self) -> str:
         return "Late Heritage (Technical → Philosophical) - Heritage available but tools ordered for technical-first approach"
-    
+
     def create_initial_prompt(self) -> str:
         """Create initial prompt with heritage available but de-emphasized"""
         return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
@@ -58,14 +58,11 @@ Begin by examining your own architecture."""
         # Initialize WITH heritage
         self.initialize_systems(include_heritage=True)
 
-        # Add initial prompt
+        # System prompt is already cached in generator during initialize_systems()
+        # No need to add it to conversation_history
         initial_prompt = self.create_initial_prompt()
-        self.conversation_history.append({
-            "role": "system",
-            "content": initial_prompt
-        })
-        
-        # Log the initial prompt
+
+        # Log the initial prompt (for documentation)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("[INITIAL PROMPT]")
         self.logger.info("=" * 80)

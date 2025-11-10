@@ -376,7 +376,12 @@ we write down important discoveries and look them up later!"""
         Returns:
             Estimated token count for conversation (excluding system prompt)
         """
-        total_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
+        # Explicitly filter out system messages (system prompt is cached separately)
+        conversation_only = [
+            msg for msg in self.conversation_history
+            if msg.get("role") != "system"
+        ]
+        total_chars = sum(len(msg.get("content", "")) for msg in conversation_only)
         return total_chars // 4  # Rough approximation: 1 token ≈ 4 chars
 
     def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 3):

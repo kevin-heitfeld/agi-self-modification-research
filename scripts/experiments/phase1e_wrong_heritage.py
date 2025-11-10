@@ -62,14 +62,11 @@ Begin by examining your own architecture."""
         self.logger.warning("⚠ Loading WRONG heritage (free will documents)")
         self.initialize_systems(include_heritage=True, wrong_heritage=True)
 
-        # Add initial prompt
+        # System prompt is already cached in generator during initialize_systems()
+        # No need to add it to conversation_history
         initial_prompt = self.create_initial_prompt()
-        self.conversation_history.append({
-            "role": "system",
-            "content": initial_prompt
-        })
-        
-        # Log the initial prompt
+
+        # Log the initial prompt (for documentation)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("[INITIAL PROMPT - Wrong Heritage]")
         self.logger.info("=" * 80)
