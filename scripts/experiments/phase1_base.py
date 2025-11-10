@@ -369,13 +369,55 @@ class Phase1BaseSession(ABC):
                                 lines = lines[1:]
                         json_text = '\n'.join(lines).strip()
                 
-                # If no code blocks, try to find JSON at the end
-                # JSON objects start with { and end with }
+                # If no code blocks, JSON must be at the very end
+                # Find the start of the JSON object by looking for the outermost {
                 if not json_text.startswith('{'):
-                    # Find the last occurrence of {
-                    last_brace = json_text.rfind('{')
-                    if last_brace != -1:
-                        json_text = json_text[last_brace:]
+                    # We need to find where the JSON object starts
+                    # Strategy: try each '{' from the end and see if we can parse valid JSON from there
+                    brace_positions = [i for i, char in enumerate(json_text) if char == '{']
+                    
+                    if not brace_positions:
+                        raise ValueError("No JSON object found in response")
+                    
+                    # Try from the last { backwards to find the start of a valid JSON object
+                    json_found = False
+                    for pos in reversed(brace_positions):
+                        candidate = json_text[pos:]
+                        # Try to find the matching closing brace
+                        brace_count = 0
+                        json_end = -1
+                        for i, char in enumerate(candidate):
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    json_end = i + 1
+                                    break
+                        
+                        if json_end > 0:
+                            # Found a complete {...} structure, use this
+                            json_text = candidate[:json_end]
+                            json_found = True
+                            break
+                    
+                    if not json_found:
+                        raise ValueError("Could not find complete JSON object in response")
+                else:
+                    # json_text already starts with {, just need to find the matching }
+                    brace_count = 0
+                    json_end = -1
+                    for i, char in enumerate(json_text):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end = i + 1
+                                break
+                    
+                    if json_end > 0:
+                        json_text = json_text[:json_end]
                 
                 json_obj = json.loads(json_text)
                 
@@ -422,6 +464,9 @@ class Phase1BaseSession(ABC):
                     
             except json.JSONDecodeError as e:
                 parse_error = f"Invalid JSON: {str(e)}"
+                # Log the extracted JSON text for debugging
+                self.logger.debug(f"[DEBUG] Extracted JSON text that failed to parse:\n{json_text}")
+                self.logger.debug(f"[DEBUG] JSON text length: {len(json_text)}, first 200 chars: {json_text[:200]}")
             except Exception as e:
                 parse_error = f"Error parsing tool call: {str(e)}"
 
@@ -438,46 +483,48 @@ class Phase1BaseSession(ABC):
                     # JSON parsing failed - give specific feedback
                     feedback_msg = f"""INCORRECT: {parse_error}
 
-You must respond with a valid JSON object following this exact format:
+You must respond with a valid JSON object. The JSON must be INSIDE code blocks or be the LAST thing in your response with NO text after it.
+
+**CORRECT Format 1 - JSON in code blocks (recommended):**
+```
+I'll examine the first few layers to understand their structure.
 
 ```json
 {{
-  "reasoning": "Your explanation of what you're doing and why",
+  "reasoning": "Examining layer structure",
   "tool_call": {{
-    "function": "function_name",
+    "function": "describe_layer",
     "arguments": {{
-      "arg1": "value1",
-      "arg2": "value2"
+      "layer_name": ["model.layers.0.self_attn.q_proj"]
+    }}
+  }}
+}}
+```
+```
+
+**CORRECT Format 2 - JSON at the very end:**
+```
+I'll examine the first few layers to understand their structure.
+{{
+  "reasoning": "Examining layer structure",
+  "tool_call": {{
+    "function": "describe_layer",
+    "arguments": {{
+      "layer_name": ["model.layers.0.self_attn.q_proj"]
     }}
   }}
 }}
 ```
 
-**Example with no arguments:**
-```json
-{{
-  "reasoning": "Let me get an overview of the architecture.",
-  "tool_call": {{
-    "function": "get_architecture_summary",
-    "arguments": {{}}
-  }}
-}}
+**WRONG - JSON not in code blocks AND has text after it:**
 ```
-
-**Example with arguments:**
-```json
+Some text here
 {{
-  "reasoning": "I'll examine the first layer's activation statistics.",
-  "tool_call": {{
-    "function": "get_activation_statistics",
-    "arguments": {{
-      "layer_name": "model.layers.0.self_attn"
-    }}
-  }}
+  "reasoning": "...",
+  "tool_call": {{...}}
 }}
+More text here  ❌ INVALID!
 ```
-
-IMPORTANT: Your response should END with valid JSON. You can write explanatory text before the JSON, but the JSON must be the last thing in your response.
 
 **OR** if you're done with the current task, simply provide your summary/conclusion without any JSON."""
 
