@@ -188,6 +188,32 @@ class ManualGenerator:
         generated_tokens = []
         stopped_reason = "max_length"
         
+        # CRITICAL: Calculate position_ids for models with rotary embeddings
+        # When using cached KV states, position_ids must account for cached sequence length
+        if current_cache is not None:
+            # Cached sequence length
+            if past_key_values is not None:
+                cache_length = past_key_values[0][0].shape[2]
+            else:
+                cache_length = self.system_prompt_length
+            
+            # Position IDs start AFTER the cached sequence
+            # For first step: [cache_length, cache_length+1, ..., cache_length+input_len-1]
+            position_ids = torch.arange(
+                cache_length,
+                cache_length + input_ids.shape[1],
+                dtype=torch.long,
+                device=self.device
+            ).unsqueeze(0)  # [1, seq_len]
+        else:
+            # No cache: use default positions [0, 1, 2, ...]
+            position_ids = torch.arange(
+                0,
+                input_ids.shape[1],
+                dtype=torch.long,
+                device=self.device
+            ).unsqueeze(0)  # [1, seq_len]
+        
         # Generation loop
         with torch.no_grad():
             for step in range(max_new_tokens):
@@ -197,15 +223,20 @@ class ManualGenerator:
                     outputs = self.model(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
+                        position_ids=position_ids,
                         past_key_values=current_cache,
                         use_cache=use_cache,
                         return_dict=True
                     )
                 else:
                     # Subsequent steps: only process last token
+                    # Position ID is the next position after all previous tokens
+                    next_position_id = torch.tensor([[position_ids[0, -1].item() + step]], dtype=torch.long, device=self.device)
+                    
                     outputs = self.model(
                         input_ids=new_token_id,
                         attention_mask=attention_mask,
+                        position_ids=next_position_id,
                         past_key_values=current_cache,
                         use_cache=use_cache,
                         return_dict=True
