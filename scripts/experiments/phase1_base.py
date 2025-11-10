@@ -387,7 +387,7 @@ we write down important discoveries and look them up later!"""
         total_chars = sum(len(msg.get("content", "")) for msg in conversation_only)
         return total_chars // 4  # Rough approximation: 1 token ≈ 4 chars
 
-    def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 3):
+    def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 2):
         """
         Reset KV cache and trim conversation to recent turns only.
 
@@ -465,23 +465,38 @@ we write down important discoveries and look them up later!"""
         # System prompt is cached separately (self.system_prompt_tokens)
         # We limit conversation tokens to prevent total context from being too large
         estimated_conversation_tokens = self._estimate_conversation_tokens()
-        MAX_CONVERSATION_TOKENS = 3000  # Conversation only (system prompt is separate)
+        MAX_CONVERSATION_TOKENS = 2000  # Reduced from 3000 - prevents OOM during generation
         # Total context will be: system_prompt_tokens + up to MAX_CONVERSATION_TOKENS
+        
+        # Also check number of turns - clear cache every 4 turns to prevent OOM
+        # (Even if under token limit, KV cache grows with each generation)
+        num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
+        MAX_TURNS_BEFORE_CLEAR = 4
+        
+        should_clear_by_tokens = estimated_conversation_tokens > MAX_CONVERSATION_TOKENS
+        should_clear_by_turns = num_exchanges >= MAX_TURNS_BEFORE_CLEAR
 
-        if estimated_conversation_tokens > MAX_CONVERSATION_TOKENS:
+        if should_clear_by_tokens or should_clear_by_turns:
             # Conversation is getting too long - time to prune and reset cache
-            num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
-
             total_context = self.system_prompt_tokens + estimated_conversation_tokens
-            self.logger.warning(f"\n[MEMORY MANAGEMENT] Conversation has ~{estimated_conversation_tokens} tokens")
-            self.logger.warning(f"[MEMORY MANAGEMENT] This exceeds safe limit of {MAX_CONVERSATION_TOKENS} tokens (system prompt: ~{self.system_prompt_tokens} additional)")
+            
+            reason = []
+            if should_clear_by_tokens:
+                reason.append(f"token count (~{estimated_conversation_tokens} > {MAX_CONVERSATION_TOKENS})")
+            if should_clear_by_turns:
+                reason.append(f"turn count ({num_exchanges} >= {MAX_TURNS_BEFORE_CLEAR})")
+            reason_str = " and ".join(reason)
+            
+            self.logger.warning(f"\n[MEMORY MANAGEMENT] Pruning needed: {reason_str}")
+            self.logger.warning(f"[MEMORY MANAGEMENT] Conversation tokens: ~{estimated_conversation_tokens}, turns: {num_exchanges}")
             self.logger.warning(f"[MEMORY MANAGEMENT] Total context: ~{total_context} tokens")
 
             # Warn model to save important findings before we prune
             total_context_tokens = self.system_prompt_tokens + estimated_conversation_tokens
             warning_message = f"""⚠️ MEMORY LIMIT REACHED
 
-Your conversation history has grown to approximately {estimated_conversation_tokens} tokens.
+Your conversation history has grown too large ({reason_str}).
+Current: ~{estimated_conversation_tokens} tokens over {num_exchanges} turns
 (Plus ~{self.system_prompt_tokens} tokens from system prompt = ~{total_context_tokens} total context)
 
 To prevent out-of-memory errors, I need to prune old conversation turns.
