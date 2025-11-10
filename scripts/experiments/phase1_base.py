@@ -260,6 +260,10 @@ Example workflow:
         self.generator.cache_system_prompt(formatted_system)
         self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens)")
 
+        # Track the growing KV cache for multi-turn conversation
+        # This starts as None, gets populated with system+turn1, then system+turn1+turn2, etc.
+        self.conversation_kv_cache = None
+
         self.logger.info("[INITIALIZATION] Complete\n")
 
     def _create_wrong_heritage(self):
@@ -379,17 +383,24 @@ Take this turn to record_observation() for any important discoveries you haven't
             self.logger.info(f"[DEBUG] Conversation text length: {len(conversation_text)} chars")
             self.logger.info(f"[DEBUG] Conversation text:\n{conversation_text}")
 
-            # Use manual generator (system prompt cached, template modified to prevent default injection)
+            # Use manual generator with KV caching
+            # If we have a conversation cache, use it (includes system + all previous turns)
+            # Otherwise, it will use just the system prompt cache
             result = self.generator.generate(
                 prompt=conversation_text,
                 max_new_tokens=500,
                 temperature=0.7,
-                do_sample=True
+                do_sample=True,
+                past_key_values=self.conversation_kv_cache,
+                return_cache=True  # Get the updated cache back
             )
 
             response = result["generated_text"]
             num_tokens = result["num_tokens"]
             cache_used = result["cache_used"]
+
+            # Update the conversation KV cache for next turn
+            self.conversation_kv_cache = result.get("past_key_values")
 
             self.logger.info(f"[GENERATION] Generated {num_tokens} tokens, cache used: {cache_used}")
 
