@@ -435,12 +435,6 @@ class Phase1BaseSession(ABC):
 
                 # If there's a parse error, it's an actual error - give feedback
                 if parse_error:
-                self.conversation_history.append({
-                    "role": "assistant",
-                    "content": response
-                })
-
-                if parse_error:
                     # JSON parsing failed - give specific feedback
                     feedback_msg = f"""INCORRECT: {parse_error}
 
