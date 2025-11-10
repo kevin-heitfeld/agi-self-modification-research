@@ -338,6 +338,11 @@ class Phase1BaseSession(ABC):
                 self.logger.warning(f"⚠ Model generated very short response ({len(response)} chars): '{response}'")
                 self.logger.warning("This might indicate a model loading or generation issue.")
 
+            # Check for multiple tool calls BEFORE parsing (to give feedback even if they're valid)
+            function_call_pattern = r'\w+\s*\([^)]*\)'
+            all_function_calls = re.findall(function_call_pattern, response)
+            has_multiple_calls = len(all_function_calls) > 1
+
             # Parse the last tool call (only executes if model stopped properly after it)
             tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
 
@@ -437,6 +442,20 @@ Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
                 # Valid tool call - execute it
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
+                
+                # Check if multiple calls were made (give feedback even though we executed the last one)
+                if has_multiple_calls:
+                    feedback_msg = f"""NOTICE: You called {len(all_function_calls)} functions in one message. Only the LAST one was executed.
+
+You called:
+{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(all_function_calls))}
+
+Only "{all_function_calls[-1]}" was executed!
+
+Remember: Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
+                    
+                    self.logger.info(f"[SYSTEM] Model made {len(all_function_calls)} tool calls - giving feedback after execution")
+                    self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
                 # Aggressive memory cleanup after tool execution
                 # Clear activation hooks (they hold references to tensors)
@@ -471,6 +490,13 @@ Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
                     self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
                 else:
                     self.logger.info(f"\n{tool_results_msg}\n")
+                
+                # Add feedback message if multiple calls were detected
+                if has_multiple_calls:
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": feedback_msg
+                    })
 
                 tool_call_count += 1
 
