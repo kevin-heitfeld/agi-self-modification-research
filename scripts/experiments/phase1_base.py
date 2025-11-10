@@ -114,7 +114,7 @@ class Phase1BaseSession(ABC):
     def get_memory_management_instructions(self) -> str:
         """
         Return memory management instructions for the model.
-        
+
         This teaches the model to use record_observation() proactively
         to prevent data loss when old tool results are pruned.
         """
@@ -127,7 +127,7 @@ This investigation will span many tool calls. To prevent memory overflow:
 Example workflow:
 1. Call get_architecture_summary() → examine results
 2. Call record_observation(obs_type="INTROSPECTION", category="architecture", description="Key finding...", ...)
-3. Call get_activation_statistics(...) → examine results  
+3. Call get_activation_statistics(...) → examine results
 4. Call record_observation(...) to save findings
 5. Continue investigation using saved observations as needed"""
 
@@ -226,7 +226,7 @@ Example workflow:
             tokenizer=self.tokenizer,
             device=self.model_mgr.device
         )
-        
+
         # CRITICAL FIX: Modify chat template to NOT inject default system message
         # Problem: Qwen's chat template adds "You are Qwen, created by Alibaba Cloud..."
         # if no system message is present. This interferes with our system prompt caching.
@@ -243,11 +243,11 @@ Example workflow:
             "        {{- '' }}"
         )
         self.tokenizer.chat_template = modified_template
-        
+
         # Now cache the system prompt ONCE for all future generations
         # This saves ~6000 tokens being repeated on every turn
         system_prompt_text = self.create_initial_prompt()
-        
+
         # Format system prompt with chat template
         system_message = [{"role": "system", "content": system_prompt_text}]
         formatted_system = self.tokenizer.apply_chat_template(
@@ -255,7 +255,7 @@ Example workflow:
             tokenize=False,
             add_generation_prompt=False
         )
-        
+
         self.generator.cache_system_prompt(formatted_system)
         self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens, modified template to prevent default system injection)")
 
@@ -288,11 +288,11 @@ Example workflow:
         # Warn EARLY and OFTEN - OOM can happen quickly with large tool results
         FIRST_WARNING_AT = 3  # Warn after just 3 exchanges (was 5, but OOM happens at ~4-5)
         num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
-        
+
         # Warn at turn 3, then every 2 turns (3, 5, 7, 9, 11...)
         # This ensures model gets warning BEFORE OOM, with frequent reminders
         should_warn = num_exchanges >= FIRST_WARNING_AT and (num_exchanges - FIRST_WARNING_AT) % 2 == 0
-        
+
         if should_warn:
             # Warn model periodically that old tool results are being pruned
             warning_message = f"""[SYSTEM WARNING] Memory limit approaching!
@@ -653,7 +653,7 @@ Your previous response had: "{parse_error}"
 
         We only format the recent conversation (user/assistant exchanges).
         The model's chat template will be applied by tokenizer.apply_chat_template.
-        
+
         IMPORTANT: We modified the chat template to NOT inject a default system message,
         so the conversation can start with a user message without any issues.
 
@@ -721,25 +721,24 @@ Your previous response had: "{parse_error}"
                 num_removed = len(conversation_without_system) - len(trimmed_history)
                 self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept last {KEEP_RECENT_EXCHANGES} exchanges, system prompt cached separately)")
 
-        # Use the model's native chat template if available
-        if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
-            # Qwen models have a specific chat template that handles roles properly
-            # NOTE: System prompt is already cached, and we modified the template to NOT add default
-            formatted = self.tokenizer.apply_chat_template(
-                trimmed_history,
-                tokenize=False,
-                add_generation_prompt=True  # Adds the prompt for assistant to continue
-            )
-            return formatted
-        else:
-            # Fallback to simple format if no chat template
-            formatted = []
-            for msg in trimmed_history:
-                role = msg["role"].upper()
-                content = msg["content"]
-                formatted.append(f"{role}: {content}")
-            formatted.append("ASSISTANT:")  # Add generation prompt
-            return "\n\n".join(formatted)
+        # CRITICAL: When system prompt is cached, we must NOT use apply_chat_template
+        # because it will inject an empty <|im_start|>system<|im_end|> block,
+        # which confuses the model and causes gibberish generation!
+        #
+        # Instead, manually format the conversation turns using the chat format
+        # WITHOUT any system message block.
+
+        # Qwen chat format: <|im_start|>role\ncontent<|im_end|>\n
+        formatted_parts = []
+        for msg in trimmed_history:
+            role = msg["role"]  # "user" or "assistant"
+            content = msg["content"]
+            formatted_parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+
+        # Add generation prompt for assistant to continue
+        formatted_parts.append("<|im_start|>assistant")
+
+        return "\n".join(formatted_parts)
 
     def save_session(self):
         """Save conversation and tool calls"""
