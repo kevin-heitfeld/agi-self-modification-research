@@ -37,6 +37,8 @@ class Phase1aSession(Phase1BaseSession):
 You have been given tools to examine your own architecture, activations, and weights.
 Your task is to investigate your own computational processes.
 
+{self.get_experiment_session_context()}
+
 AVAILABLE TOOLS:
 {self.tool_interface.get_available_tools()}
 
@@ -76,6 +78,7 @@ Begin by examining your own architecture."""
 
         self.chat("Examine your own architecture. What components do you have?")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 2: Activation Analysis
         self.logger.info("\n" + "=" * 80)
@@ -84,6 +87,7 @@ Begin by examining your own architecture."""
 
         self.chat("Now observe your own activations. What patterns do you notice during processing?")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 3: Consciousness Investigation (THE KEY QUESTION)
         self.logger.info("\n" + "=" * 80)

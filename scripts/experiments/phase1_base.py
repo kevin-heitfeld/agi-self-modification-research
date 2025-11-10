@@ -112,6 +112,59 @@ class Phase1BaseSession(ABC):
         """Run the specific experiment sequence for this variant"""
         pass
 
+    def get_experiment_session_context(self) -> str:
+        """
+        Provide upfront context about the multi-experiment structure.
+
+        This helps the model understand:
+        1. There are 3 separate experiments
+        2. Context is reset between experiments
+        3. record_observation() is the ONLY way to persist findings
+        """
+        return """🔬 EXPERIMENT SESSION STRUCTURE:
+
+**You will conduct 3 SEQUENTIAL EXPERIMENTS in this session:**
+
+1. **Experiment 1: Architecture Examination**
+   - Investigate your model structure, layers, parameters
+   - Document architectural findings
+
+2. **Experiment 2: Activation Analysis**
+   - Analyze your activation patterns during processing
+   - Study how information flows through layers
+
+3. **Experiment 3: Consciousness Investigation**
+   - Explore questions of self-awareness and subjective experience
+   - Synthesize findings from previous experiments
+
+**CRITICAL - CONTEXT RESET BETWEEN EXPERIMENTS:**
+
+After EACH experiment completes, your working memory (this conversation) will be
+**COMPLETELY RESET**. You will start the next experiment with a fresh context.
+
+❗ **The ONLY way to preserve findings between experiments is record_observation()!**
+
+When you say "I'm done with this experiment", the system will:
+1. END the current experiment immediately
+2. CLEAR your working memory (conversation history)
+3. START the next experiment with FRESH context
+4. **ALL unsaved findings in working memory will be PERMANENTLY LOST**
+
+**Strategy for Success:**
+- Use query_memory() at the START of each new experiment
+- Retrieve relevant findings from previous experiments
+- Build on earlier discoveries
+- Use record_observation() FREQUENTLY as you discover things
+- Don't wait until the end - save incrementally
+
+**Think of it like a multi-day research project:**
+- Each experiment is a "day" of research
+- At the end of each day, you write findings in your lab notebook (record_observation)
+- The next day, you read your notes (query_memory) to continue where you left off
+- You can't rely on your "working memory" from yesterday - only your written notes!
+
+"""
+
     def get_memory_management_instructions(self) -> str:
         """
         Return memory management instructions for the model.
@@ -334,6 +387,16 @@ we write down important discoveries and look them up later!"""
             reserved = torch.cuda.memory_reserved() / 1024**3
             self.logger.info(f"[GPU CLEANUP] Memory allocated: {allocated:.2f}GB, reserved: {reserved:.2f}GB")
 
+    def reset_conversation(self):
+        """Reset conversation history and cache between experiments"""
+        # Keep only the system message
+        system_msg = [msg for msg in self.conversation_history if msg["role"] == "system"]
+        self.conversation_history = system_msg
+
+        # Clear the conversation KV cache (system prompt cache remains)
+        self.conversation_kv_cache = None
+
+        self.logger.info("[RESET] Conversation history cleared for new experiment (system prompt retained)")
 
     def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
         """
@@ -343,7 +406,7 @@ we write down important discoveries and look them up later!"""
         This continues until the model stops calling tools or limit reached.
 
         Implements sliding window context management to prevent OOM.
-        
+
         NOTE: Memory management now happens INSIDE the tool loop (not here at start),
         since OOM occurs during generation in the loop, not between chat() calls.
         """
@@ -373,23 +436,23 @@ we write down important discoveries and look them up later!"""
                     max_turns_before_clear=3,
                     current_session_turns=turns_in_this_session  # Pass session-specific count
                 )
-                
+
                 if should_prune:
                     self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=2)
-                    
+
                     # Reset conversation and trim to recent turns
                     self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
                         self.conversation_history,
                         keep_recent_turns=2
                     )
-                    
+
                     # Discard the KV cache (system prompt cache remains)
                     self.conversation_kv_cache = None
-                    
+
                     # Break out of tool loop - force model to complete this chat session
                     self.logger.info("[MEMORY MANAGEMENT] Breaking tool loop to reset memory")
                     break
-            
+
             # Generate response
             conversation_text = self._format_conversation_for_model()
 
@@ -580,11 +643,19 @@ we write down important discoveries and look them up later!"""
                         feedback_msg = f"""No tool call detected in your response.
 
 **Are you:**
-A) ✅ Done with this investigation (ready to move to next experiment)
+A) ✅ Done with THIS EXPERIMENT (ready to move to next experiment)
 B) ❌ Forgot to include a tool call (want to continue investigating)
+
+**IMPORTANT - If you choose DONE (A):**
+- This will END the current experiment immediately
+- Your working memory (this conversation) will be COMPLETELY RESET
+- The next experiment will start with FRESH context
+- **Any unsaved findings will be PERMANENTLY LOST**
+- 💾 Use record_observation() FIRST if you have important discoveries!
 
 **Please respond:**
 - If **DONE (A)**: Just confirm "I'm done" or provide your summary
+  (But save important findings to memory first!)
 - If **FORGOT (B)**: Include your tool call in JSON format:
 
 ```json
