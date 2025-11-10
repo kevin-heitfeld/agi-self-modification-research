@@ -357,6 +357,7 @@ we write down important discoveries and look them up later!"""
 
         tool_call_count = 0
         confirmation_attempts = 0  # Track how many times we've asked for clarification
+        response = ""  # Initialize response in case we break early
 
         while tool_call_count < max_tool_calls:
             # CRITICAL: Check memory BEFORE each generation (not just at chat() start)
