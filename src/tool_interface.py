@@ -259,57 +259,154 @@ function_name(arg1="value1", arg2="value2")
 
 **HOW TOOL CALLING WORKS:**
 
-When you want to use a tool, separate your reasoning from your action with a blank line:
+When you want to use a tool, you can explain your thinking in natural language, then end your response with a JSON object:
 
-1. Write your reasoning/explanation
-2. Add a BLANK LINE
-3. Call the function in a code block
-4. STOP (generate EOS token)
-
-**IMPORTANT: You can ONLY call individual functions - NOT write Python code!**
-- ❌ NO loops: `for x in list: function(x)` - This will NOT work!
-- ❌ NO variables: `x = "value"` then `function(x)` - This will NOT work!
-- ❌ NO control flow: `if/else`, `while`, etc. - This will NOT work!
-- ✅ ONLY: Direct function calls with literal values
-
-You do NOT have access to a Python interpreter. You can ONLY call the documented
-functions one at a time with explicit argument values.
-
-**Example of CORRECT usage:**
-```
-I'll examine the activation statistics for the first layer to understand
-the activation patterns during processing.
-
-get_activation_statistics(layer_name="model.layers.0.self_attn")
+```json
+{
+  "reasoning": "Your explanation of what you're doing and why",
+  "tool_call": {
+    "function": "function_name",
+    "arguments": {
+      "arg1": "value1",
+      "arg2": "value2"
+    }
+  }
+}
 ```
 
-Notice: Explanation first, then BLANK LINE, then function call, then STOP.
+**IMPORTANT RULES:**
+- You can write natural text before the JSON to explain your thinking (optional)
+- End your response with a valid JSON object (must be the last thing in your response)
+- The JSON must have "reasoning" and "tool_call" fields
+- "tool_call" must have "function" and "arguments" fields
+- Only call ONE function per message
+- Wait for TOOL_RESULTS before making another call
+- Use proper JSON syntax (double quotes, no trailing commas, valid escaping)
 
-**Example of INCORRECT usage (no blank line):**
+**Example 1: With explanatory text first**
 ```
-Let me examine layer 0:
-get_activation_statistics(layer_name="model.layers.0.self_attn")
-```
-❌ Missing blank line before the function call!
+I need to understand my architecture before examining activations. Let me start by getting a high-level overview.
 
-**Another INCORRECT example (text after call):**
+{
+  "reasoning": "Getting architecture summary to understand my structure",
+  "tool_call": {
+    "function": "get_architecture_summary",
+    "arguments": {}
+  }
+}
 ```
-I'll check layer 0.
 
-get_activation_statistics(layer_name="model.layers.0.self_attn")
-
-Then I'll examine the architecture...  ← This prevents execution!
+**Example 2: Just JSON (also valid)**
+```json
+{
+  "reasoning": "I'll examine the activation statistics for the first layer to understand the activation patterns during processing.",
+  "tool_call": {
+    "function": "get_activation_statistics",
+    "arguments": {
+      "layer_name": "model.layers.0.self_attn"
+    }
+  }
+}
 ```
-❌ Don't write anything after the function call!
 
-**Yet another INCORRECT example (multiple calls):**
+**Example 3: Function with multiple arguments**
+```json
+{
+  "reasoning": "I need to compare the weights between layer 0 and layer 1 to see if there are any patterns.",
+  "tool_call": {
+    "function": "compare_weights",
+    "arguments": {
+      "layer1": "model.layers.0.mlp.gate_proj.weight",
+      "layer2": "model.layers.1.mlp.gate_proj.weight"
+    }
+  }
+}
 ```
-I'll examine multiple layers.
 
-get_activation_statistics(layer_name="model.layers.0.self_attn")
-get_activation_statistics(layer_name="model.layers.1.self_attn")
+**Example 3: Function with no arguments**
+```json
+{
+  "reasoning": "Let me get an overview of the entire architecture first.",
+  "tool_call": {
+    "function": "get_architecture_summary",
+    "arguments": {}
+  }
+}
 ```
-❌ Only ONE function call per message! Wait for TOOL_RESULTS before the next call.
+
+**Example 4: Function with list argument**
+```json
+{
+  "reasoning": "I'll examine multiple layers at once to see activation patterns across the network.",
+  "tool_call": {
+    "function": "get_activation_statistics",
+    "arguments": {
+      "layer_name": ["model.layers.0.self_attn", "model.layers.5.self_attn", "model.layers.10.self_attn"]
+    }
+  }
+}
+```
+
+❌ **INCORRECT - Don't write any text outside the JSON:**
+```
+I think I should examine the architecture first.
+
+{"reasoning": "...", "tool_call": {...}}
+```
+
+❌ **INCORRECT - Don't use Python code:**
+```json
+{
+  "reasoning": "Using a loop to examine layers",
+  "tool_call": {
+    "function": "for layer in layers: get_activation_statistics(layer)"
+  }
+}
+```
+
+❌ **INCORRECT - Don't call multiple functions:**
+```json
+{
+  "tool_call": [
+    {"function": "get_layer_info", "arguments": {...}},
+    {"function": "get_activation_statistics", "arguments": {...}}
+  ]
+}
+```
+
+---
+
+## 📖 How to Read Tool Documentation
+
+**IMPORTANT:** The tools below are documented in Python syntax (for readability), but you must CALL them using JSON format (shown above).
+
+**Example of how this works:**
+
+If you see this documentation:
+```python
+def get_layer_info(layer_name: str) -> Dict[str, Any]:
+    \"\"\"Get metadata about a specific layer.\"\"\"
+```
+
+You would call it like this:
+```json
+{
+  "reasoning": "I'll examine layer 0 to understand its structure",
+  "tool_call": {
+    "function": "get_layer_info",
+    "arguments": {
+      "layer_name": "model.layers.0.self_attn"
+    }
+  }
+}
+```
+
+**Why this format?**
+- Python docs are easier to read and understand
+- JSON calls are structured and parseable
+- You can reference Python syntax in your reasoning: "I'll call `get_layer_info(layer_name='...')`"
+
+---
 
 """
 

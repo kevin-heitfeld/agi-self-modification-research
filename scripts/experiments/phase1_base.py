@@ -338,55 +338,122 @@ class Phase1BaseSession(ABC):
                 self.logger.warning(f"⚠ Model generated very short response ({len(response)} chars): '{response}'")
                 self.logger.warning("This might indicate a model loading or generation issue.")
 
-            # NEW APPROACH: Look for blank line separator before tool call
-            # The model should separate reasoning from action with a blank line.
-            # We only check the LAST section (after the last blank line) for tool calls.
+            # NEW APPROACH: Parse JSON tool calling format
+            # Model can write text, then end with: {"reasoning": "...", "tool_call": {"function": "...", "arguments": {...}}}
             
-            sections = response.split('\n\n')  # Split by blank lines
-            last_section = sections[-1].strip() if sections else response.strip()
+            tool_call = None
+            json_obj = None
+            parse_error = None
             
-            # Check if last section has a tool call
-            tool_names = set(self.tool_interface.tools.keys())
-            function_call_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
-            potential_calls_in_last_section = re.findall(function_call_pattern, last_section)
-            
-            tool_calls_in_last_section = []
-            for call in potential_calls_in_last_section:
-                func_name = call.split('(')[0]
-                if func_name in tool_names:
-                    tool_calls_in_last_section.append(call)
-            
-            has_multiple_calls = len(tool_calls_in_last_section) > 1
-            
-            # Parse the last tool call (only executes if model stopped properly after it)
-            tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
+            # Try to parse JSON from the end of the response
+            try:
+                # Try to extract JSON - it might be at the end after some text
+                json_text = response.strip()
+                
+                # If response has code blocks, extract from the last one
+                if '```' in json_text:
+                    # Find all code blocks
+                    blocks = json_text.split('```')
+                    # The JSON should be in the last code block
+                    if len(blocks) >= 2:
+                        # blocks[0] = before first ```
+                        # blocks[1] = inside first code block
+                        # blocks[2] = between code blocks
+                        # blocks[-1] = after last ```
+                        # blocks[-2] = inside last code block
+                        last_block = blocks[-2] if len(blocks) >= 2 else blocks[-1]
+                        # Remove language identifier if present (```json)
+                        lines = last_block.strip().split('\n')
+                        if lines and lines[0].strip() in ['json', '{']:
+                            if lines[0].strip() == 'json':
+                                lines = lines[1:]
+                        json_text = '\n'.join(lines).strip()
+                
+                # If no code blocks, try to find JSON at the end
+                # JSON objects start with { and end with }
+                if not json_text.startswith('{'):
+                    # Find the last occurrence of {
+                    last_brace = json_text.rfind('{')
+                    if last_brace != -1:
+                        json_text = json_text[last_brace:]
+                
+                json_obj = json.loads(json_text)
+                
+                # Validate JSON structure
+                if not isinstance(json_obj, dict):
+                    parse_error = "Response is not a JSON object"
+                elif "tool_call" not in json_obj:
+                    parse_error = "JSON missing 'tool_call' field"
+                elif not isinstance(json_obj["tool_call"], dict):
+                    parse_error = "'tool_call' must be an object"
+                elif "function" not in json_obj["tool_call"]:
+                    parse_error = "'tool_call' missing 'function' field"
+                elif "arguments" not in json_obj["tool_call"]:
+                    parse_error = "'tool_call' missing 'arguments' field"
+                else:
+                    # Valid JSON structure - extract tool call
+                    function_name = json_obj["tool_call"]["function"]
+                    arguments = json_obj["tool_call"]["arguments"]
+                    tool_call = (function_name, arguments)
+                    
+            except json.JSONDecodeError as e:
+                parse_error = f"Invalid JSON: {str(e)}"
+            except Exception as e:
+                parse_error = f"Error parsing tool call: {str(e)}"
 
             if tool_call is None:
-                # No valid tool call - either no tool calls at all, or model didn't stop properly
+                # No valid tool call - give feedback based on parse error
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
                 })
 
-                # Check for import statements FIRST (even if no function calls)
-                if re.search(r'\bimport\s+\w+', response, re.IGNORECASE):
-                    feedback_msg = """INCORRECT: You're trying to write Python code with 'import'. You cannot execute arbitrary Python code.
+                if parse_error:
+                    # JSON parsing failed - give specific feedback
+                    feedback_msg = f"""INCORRECT: {parse_error}
 
-❌ WRONG:
-```python
-import json
-observation_data = {"key": "value"}
-record_observation(obs_type="DISCOVERY", category="Test", description=json.dumps(observation_data), data={}, tags=[], importance=0.5)
+You must respond with a valid JSON object following this exact format:
+
+```json
+{{
+  "reasoning": "Your explanation of what you're doing and why",
+  "tool_call": {{
+    "function": "function_name",
+    "arguments": {{
+      "arg1": "value1",
+      "arg2": "value2"
+    }}
+  }}
+}}
 ```
 
-✅ CORRECT:
-```
-record_observation(obs_type="INTROSPECTION", category="Activations", description="Layer 5 shows high activation in attention heads 2-4 with mean=0.023", data={"layer": 5, "mean": 0.023}, tags=["layer_5", "attention"], importance=0.7)
+**Example with no arguments:**
+```json
+{{
+  "reasoning": "Let me get an overview of the architecture.",
+  "tool_call": {{
+    "function": "get_architecture_summary",
+    "arguments": {{}}
+  }}
+}}
 ```
 
-Just call the tool function directly with proper arguments. NO imports, NO variables, NO arbitrary code execution."""
+**Example with arguments:**
+```json
+{{
+  "reasoning": "I'll examine the first layer's activation statistics.",
+  "tool_call": {{
+    "function": "get_activation_statistics",
+    "arguments": {{
+      "layer_name": "model.layers.0.self_attn"
+    }}
+  }}
+}}
+```
 
-                    self.logger.info("[SYSTEM] Model tried to write Python code with import - giving targeted feedback")
+IMPORTANT: Your response should END with valid JSON. You can write explanatory text before the JSON, but the JSON must be the last thing in your response."""
+
+                    self.logger.info(f"[SYSTEM] JSON parse error: {parse_error}")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
                     self.conversation_history.append({
@@ -395,93 +462,35 @@ Just call the tool function directly with proper arguments. NO imports, NO varia
                     })
                     continue  # Go back to get next model response
 
-                # Check if there were tool calls in the last section but model didn't stop properly
-                if tool_calls_in_last_section:
-                    # Detect specific problematic patterns and give targeted feedback
+                # Check for old-style Python function calls (not JSON)
+                function_call_pattern = r'[a-z_][a-z0-9_]*\([^)]*\)'
+                potential_calls = re.findall(function_call_pattern, response)
+                
+                if potential_calls:
+                    # Model is using old Python syntax instead of JSON
+                    feedback_msg = """INCORRECT: You're trying to use Python function call syntax instead of JSON.
 
-                    # Pattern 1: Multiple function calls in last section
-                    if len(tool_calls_in_last_section) > 1:
-                        feedback_msg = f"""INCORRECT: You tried to call multiple functions in the action section. Only the LAST one is executed.
-
-You called {len(tool_calls_in_last_section)} functions after the blank line:
-{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(tool_calls_in_last_section))}
-
-Only "{tool_calls_in_last_section[-1]}" was executed!
-
-❌ WRONG:
+❌ WRONG (Python syntax):
 ```
-I'll examine multiple layers.
+I'll examine the architecture.
 
-get_layer_info(layer_name="model.layers.5")
-get_activation_statistics(layer_name="model.layers.5")
+get_architecture_summary()
 ```
 
-✅ CORRECT:
-```
-I'll examine layer 5 information first.
-
-get_layer_info(layer_name="model.layers.5")
-```
-
-Call ONE function per message. Add a blank line before the call, then STOP."""
-
-                    # Pattern 2: Variable assignment (x = function(...))
-                    elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', last_section):
-                        feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
-
-❌ WRONG:
-```python
-```
-I'll store the result for later.
-
-result = get_layer_info(layer_name="model.layers.5")
-result
+✅ CORRECT (JSON format):
+```json
+{
+  "reasoning": "I'll examine the architecture to understand my structure.",
+  "tool_call": {
+    "function": "get_architecture_summary",
+    "arguments": {}
+  }
+}
 ```
 
-✅ CORRECT:
-```
-I'll get information about layer 5.
+You can write explanatory text before the JSON, but your response must END with the JSON object."""
 
-get_layer_info(layer_name="model.layers.5")
-```
-
-Explanation first, blank line, then just the function call with NO variable assignment."""
-
-                    # Pattern 3: Text after the function call
-                    elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', last_section):
-                        feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
-
-❌ WRONG:
-```
-I'll check layer 5.
-
-get_layer_info(layer_name="model.layers.5")
-Then we'll examine the activations...
-```
-
-✅ CORRECT:
-```
-I'll check layer 5 to understand its structure.
-
-get_layer_info(layer_name="model.layers.5")
-```
-
-Explanation, blank line, function call, then STOP. Don't write anything after the call."""
-
-                    else:
-                        # Generic feedback
-                        feedback_msg = """INCORRECT: To use a tool properly, separate reasoning from action with a blank line.
-
-✅ CORRECT format:
-```
-I'll examine this layer to understand its structure.
-
-function_name(arg1="value1", arg2="value2")
-```
-
-Write your reasoning, add a BLANK LINE, call the function, then STOP."""
-
-                    self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving targeted feedback")
+                    self.logger.info("[SYSTEM] Model used Python syntax instead of JSON - giving feedback")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
                     self.conversation_history.append({
@@ -493,23 +502,13 @@ Write your reasoning, add a BLANK LINE, call the function, then STOP."""
                     self.logger.info(f"[SYSTEM] Model gave conversational response without tool calls. Ending this conversation turn.")
                     return response
             else:
-                # Valid tool call - execute it
+                # Valid JSON tool call - execute it
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
 
-                # Check if multiple calls were made (give feedback even though we executed the last one)
-                if has_multiple_calls:
-                    feedback_msg = f"""NOTICE: You called {len(tool_calls_in_last_section)} functions in the action section. Only the LAST one was executed.
-
-You called:
-{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(tool_calls_in_last_section))}
-
-Only "{tool_calls_in_last_section[-1]}" was executed!
-
-Remember: Explanation first, blank line, then ONE function call, then STOP."""
-
-                    self.logger.info(f"[SYSTEM] Model made {len(tool_calls_in_last_section)} tool calls - giving feedback after execution")
-                    self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
+                # Log the reasoning if provided
+                if json_obj and "reasoning" in json_obj:
+                    self.logger.info(f"[MODEL REASONING] {json_obj['reasoning']}")
 
                 # Aggressive memory cleanup after tool execution
                 # Clear activation hooks (they hold references to tensors)
@@ -544,13 +543,6 @@ Remember: Explanation first, blank line, then ONE function call, then STOP."""
                     self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
                 else:
                     self.logger.info(f"\n{tool_results_msg}\n")
-
-                # Add feedback message if multiple calls were detected
-                if has_multiple_calls:
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": feedback_msg
-                    })
 
                 tool_call_count += 1
 
