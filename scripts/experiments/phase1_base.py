@@ -375,8 +375,8 @@ Take this turn to record_observation() for any important discoveries you haven't
             conversation_text = self._format_conversation_for_model()
 
             # DEBUG: Log what we're sending to the generator
-            self.logger.debug(f"[DEBUG] Conversation text being sent to generator:\n{conversation_text[:500]}... (truncated to 500 chars)")
-            self.logger.debug(f"[DEBUG] Full conversation text length: {len(conversation_text)} chars")
+            self.logger.info(f"[DEBUG] Conversation text length: {len(conversation_text)} chars")
+            self.logger.info(f"[DEBUG] Conversation text:\n{conversation_text}")
 
             # Use manual generator (system prompt cached, template modified to prevent default injection)
             result = self.generator.generate(
