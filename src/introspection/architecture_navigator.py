@@ -13,6 +13,7 @@ Date: November 6, 2025
 
 import torch
 import torch.nn as nn
+import json
 from typing import Dict, List, Optional, Set, Tuple, Any, Union
 from collections import defaultdict
 import re
@@ -199,8 +200,25 @@ class ArchitectureNavigator:
         # Get the module
         modules = dict(self.model.named_modules())
         if layer_name not in modules:
+            # Check for comma-separated string error
+            comma_separated_hint = ""
+            if ',' in layer_name:
+                suggested_layers = [name.strip() for name in layer_name.split(',')]
+                # Check if these are valid layer names
+                matching_layers = [name for name in suggested_layers if name in modules]
+                
+                if matching_layers:
+                    comma_separated_hint = (
+                        f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
+                        f"\n\n🔧 WRONG (what you did):"
+                        f"\n   \"layer_name\": \"{layer_name}\""
+                        f"\n\n✅ CORRECT (what you should do):"
+                        f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                        f"\n\nThe function accepts Union[str, List[str]] - that means EITHER a single string OR a JSON list!"
+                    )
+            
             return {
-                'error': f"Layer '{layer_name}' not found",
+                'error': f"Layer '{layer_name}' not found.{comma_separated_hint}",
                 'available_layers': list(modules.keys())[:10]  # Show first 10
             }
         

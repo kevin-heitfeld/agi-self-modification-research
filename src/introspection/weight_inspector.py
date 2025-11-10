@@ -7,6 +7,7 @@ compare layers, and track weight changes over time.
 
 import torch
 import numpy as np
+import json
 from typing import Dict, List, Optional, Any, Tuple, Union
 from pathlib import Path
 import logging
@@ -291,7 +292,31 @@ class WeightInspector:
             return self._stats_cache[layer_name]
         
         if layer_name not in self.layers:
-            raise KeyError(f"Layer '{layer_name}' not found.")
+            # Check for comma-separated string error
+            comma_separated_hint = ""
+            if ',' in layer_name:
+                suggested_layers = [name.strip() for name in layer_name.split(',')]
+                # Check if these are valid layer names
+                matching_layers = [name for name in suggested_layers if name in self.layers]
+                
+                if matching_layers:
+                    comma_separated_hint = (
+                        f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
+                        f"\n\n🔧 WRONG (what you did):"
+                        f"\n   \"layer_name\": \"{layer_name}\""
+                        f"\n\n✅ CORRECT (what you should do):"
+                        f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                        f"\n\nThe function accepts Union[str, List[str]] - that means EITHER:"
+                        f"\n  - A single string: \"model.layers.0.mlp.gate_proj.weight\""
+                        f"\n  - A JSON list: [\"model.layers.0.mlp.gate_proj.weight\", \"model.layers.1.mlp.gate_proj.weight\"]"
+                        f"\n\nDo NOT concatenate layer names with commas into a single string!"
+                    )
+            
+            raise KeyError(
+                f"Layer '{layer_name}' not found. "
+                f"Use get_layer_names() to see available layers."
+                f"{comma_separated_hint}"
+            )
         
         param = self.layers[layer_name]
         weights = param.detach().cpu().float()

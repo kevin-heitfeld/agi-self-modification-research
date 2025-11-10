@@ -7,6 +7,7 @@ track attention patterns, and understand information flow through the network.
 
 import torch
 import numpy as np
+import json
 from typing import Dict, List, Optional, Any, Tuple, Callable, Protocol, Union
 from pathlib import Path
 import logging
@@ -265,14 +266,39 @@ class ActivationMonitor:
         # Handle single layer name
         if layer_name not in self.activations:
             # Provide helpful error message
+            
+            # Check if user passed a comma-separated string instead of a list
+            comma_separated_hint = ""
+            if ',' in layer_name and layer_name not in self.activations:
+                # They probably meant to pass a list!
+                suggested_layers = [name.strip() for name in layer_name.split(',')]
+                # Check if these would actually work
+                matching_layers = [name for name in suggested_layers if name in self.activations]
+                
+                if matching_layers:
+                    comma_separated_hint = (
+                        f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
+                        f"\n\n🔧 WRONG (what you did):"
+                        f"\n   \"layer_name\": \"{layer_name}\""
+                        f"\n\n✅ CORRECT (what you should do):"
+                        f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                        f"\n\nThe function accepts Union[str, List[str]] - that means EITHER:"
+                        f"\n  - A single string: \"model.layers.0.self_attn\""
+                        f"\n  - A JSON list: [\"model.layers.0.self_attn\", \"model.layers.0.mlp\"]"
+                        f"\n\nDo NOT concatenate layer names with commas into a single string!"
+                    )
+            
             # Check if user passed a variable-like name
-            variable_like_names = ['layer_name', 'layer', 'name', 'x', 'l', 'layer_id']
+            variable_like_names = ['layer_name', 'layer', 'name', 'x', 'l', 'layer_id', '[list_of_captured_layers]']
             variable_hint = ""
-            if layer_name in variable_like_names:
+            if layer_name in variable_like_names or '[' in layer_name:
                 variable_hint = (
-                    f"\n\n⚠️  WARNING: You passed '{layer_name}' which looks like a variable name. "
-                    f"Remember: You CANNOT use variables! You must call the function with a "
-                    f"literal layer name like: get_activation_statistics(layer_name=\"model.layers.0.self_attn\")"
+                    f"\n\n⚠️  WARNING: You passed '{layer_name}' which looks like a placeholder/variable name. "
+                    f"Remember: You CANNOT use variables or placeholders! You must call the function with "
+                    f"actual literal layer names like:\n"
+                    f"  get_activation_statistics(layer_name=\"model.layers.0.self_attn\")\n"
+                    f"Or with a list:\n"
+                    f"  get_activation_statistics(layer_name=[\"model.layers.0.self_attn\", \"model.layers.0.mlp\"])"
                 )
             
             if self.activations:
@@ -282,6 +308,7 @@ class ActivationMonitor:
                     f"Activations are available for: {available_layers[:10]}. "
                     f"Use process_text() with layer_names=[...] to capture activations for specific layers, "
                     f"or use get_layer_info() to see which layers were captured."
+                    f"{comma_separated_hint}"
                     f"{variable_hint}"
                 )
             else:
@@ -289,6 +316,7 @@ class ActivationMonitor:
                     f"No activations captured for '{layer_name}'. "
                     f"No activations have been captured yet. "
                     f"Use process_text() to capture activations first."
+                    f"{comma_separated_hint}"
                     f"{variable_hint}"
                 )
             raise KeyError(error_msg)
@@ -427,10 +455,24 @@ class ActivationMonitor:
         if layer_name not in self.attention_weights:
             # Check if it's because no activations were captured at all
             if not self.attention_weights:
+                # Check for comma-separated string error
+                comma_separated_hint = ""
+                if ',' in original_layer_name:
+                    suggested_layers = [name.strip() for name in original_layer_name.split(',')]
+                    comma_separated_hint = (
+                        f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
+                        f"\n\n🔧 WRONG (what you did):"
+                        f"\n   \"layer_name\": \"{original_layer_name}\""
+                        f"\n\n✅ CORRECT (what you should do):"
+                        f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                        f"\n\nThe function accepts Union[str, List[str]] - that means EITHER a single string OR a JSON list!"
+                    )
+                
                 raise KeyError(
                     f"No attention weights captured for '{original_layer_name}'. "
                     f"You must first capture activations by calling process_text(text='your prompt here') "
                     f"before examining attention patterns."
+                    f"{comma_separated_hint}"
                 )
             else:
                 # Some layers were captured but not this one
@@ -438,9 +480,27 @@ class ActivationMonitor:
                 hint = ""
                 if ".layers." in original_layer_name and not original_layer_name.endswith(".self_attn"):
                     hint = f"\n\nHINT: For attention patterns from decoder layers, specify the attention sublayer: '{original_layer_name}.self_attn'"
+                
+                # Check for comma-separated string error
+                comma_separated_hint = ""
+                if ',' in original_layer_name:
+                    suggested_layers = [name.strip() for name in original_layer_name.split(',')]
+                    matching_layers = [name for name in suggested_layers if name in self.attention_weights]
+                    
+                    if matching_layers:
+                        comma_separated_hint = (
+                            f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
+                            f"\n\n🔧 WRONG (what you did):"
+                            f"\n   \"layer_name\": \"{original_layer_name}\""
+                            f"\n\n✅ CORRECT (what you should do):"
+                            f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                            f"\n\nThe function accepts Union[str, List[str]] - that means EITHER a single string OR a JSON list!"
+                        )
+                
                 raise KeyError(
                     f"No attention weights captured for '{original_layer_name}'. "
                     f"Available layers with attention: {available[:5]}{'...' if len(available) > 5 else ''}{hint}"
+                    f"{comma_separated_hint}"
                 )
         
         attn = self.attention_weights[layer_name]
