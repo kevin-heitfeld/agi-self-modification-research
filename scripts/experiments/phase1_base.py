@@ -245,10 +245,15 @@ Example workflow:
         This continues until the model stops calling tools or limit reached.
         """
         # Check if we're approaching the limit where tool results will be pruned
-        MAX_EXCHANGES_BEFORE_PRUNING = 5  # After this many exchanges, old tool results get pruned
+        # Warn EARLY and OFTEN - OOM can happen quickly with large tool results
+        FIRST_WARNING_AT = 3  # Warn after just 3 exchanges (was 5, but OOM happens at ~4-5)
         num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
         
-        if num_exchanges >= MAX_EXCHANGES_BEFORE_PRUNING and num_exchanges % 3 == 0:
+        # Warn at turn 3, then every 2 turns (3, 5, 7, 9, 11...)
+        # This ensures model gets warning BEFORE OOM, with frequent reminders
+        should_warn = num_exchanges >= FIRST_WARNING_AT and (num_exchanges - FIRST_WARNING_AT) % 2 == 0
+        
+        if should_warn:
             # Warn model periodically that old tool results are being pruned
             warning_message = f"""[SYSTEM WARNING] Memory limit approaching!
 
@@ -260,7 +265,7 @@ You've made {num_exchanges} investigation turns. To prevent data loss:
 IMPORTANT: If you don't save your findings now, they'll be lost forever!
 Take this turn to record_observation() for any important discoveries you haven't yet saved."""
 
-            self.logger.info(f"\n[SYSTEM WARNING TO MODEL] {warning_message}\n")
+            self.logger.info(f"\n[SYSTEM WARNING TO MODEL] Turn {num_exchanges} - {warning_message}\n")
 
             self.conversation_history.append({
                 "role": "user",
