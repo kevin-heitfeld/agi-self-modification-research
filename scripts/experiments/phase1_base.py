@@ -127,10 +127,11 @@ class Phase1BaseSession(ABC):
    - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
-   - **RESPONSE LIMIT: Maximum 300 tokens per response**
-     - Plan your responses to fit within this limit
-     - Prioritize: brief analysis + tool call, OR concise summary
-     - If analysis is long, save details to memory and summarize
+   - **RESPONSE LIMIT: Maximum 400 tokens per response**
+     - **CRITICAL**: Your responses will be hard-cut at 400 tokens
+     - Incomplete JSON will cause errors and corrupt future responses
+     - Always finish your JSON tool calls within the limit
+     - Token budget: Reasoning (~100-150) + JSON (~100-200) + Buffer (~50)
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -153,17 +154,19 @@ When conversation gets long (you'll receive warnings):
 3. Use query_memory() to retrieve previously saved observations
 
 **Response Planning Tips:**
-- Keep reasoning brief and focused (~50-100 tokens)
-- Tool calls with arguments: ~50-100 tokens
-- Summaries: ~100-200 tokens
-- If you need more space, use record_observation() for details and just summarize
+- **ALWAYS complete your JSON** - incomplete JSON breaks everything
+- Keep reasoning focused (~100-150 tokens maximum)
+- Tool calls with arguments: ~100-200 tokens
+- Leave ~50 token buffer to ensure JSON closes properly
+- For complex data, use record_observation() first, then just reference it
+- **If your response approaches 400 tokens, STOP and finish the JSON immediately**
 
 **Example workflow:**
 ```
 Turn 1: Call get_architecture_summary()
-Turn 2: Brief analysis (50 tokens) + record_observation() with full details (in data field)
+Turn 2: Brief analysis (100 tokens) + record_observation() with full details (in data field)
 Turn 3: Call get_activation_statistics(...)
-Turn 4: Brief findings (100 tokens) + record_observation() to save detailed analysis
+Turn 4: Brief findings (150 tokens) + record_observation() to save detailed analysis
 ...
 Turn 8: [SYSTEM WARNING: Memory limit approaching]
 Turn 9: Call record_observation() to save recent unsaved findings
@@ -564,7 +567,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             # Otherwise, it will use just the system prompt cache
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=300,  # Balance: enough for analysis + tool call, not too large for OOM
+                max_new_tokens=400,  # Increased from 300 to 400: enough for reasoning + complete tool call JSON
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
