@@ -736,7 +736,8 @@ Your previous response had: "{parse_error}"
             formatted_parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
 
         # Add generation prompt for assistant to continue
-        formatted_parts.append("<|im_start|>assistant")
+        # IMPORTANT: Must include \n after assistant token (Qwen format requirement)
+        formatted_parts.append("<|im_start|>assistant\n")
 
         return "\n".join(formatted_parts)
 
