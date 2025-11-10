@@ -615,13 +615,13 @@ Your previous response had: "{parse_error}"
 
     def _format_conversation_for_model(self) -> str:
         """
-        Format conversation history using the model's native chat template.
-
-        This prevents the model from hallucinating multi-turn conversations
-        by using the proper format it was trained on.
+        Format conversation history for manual generation.
 
         NOTE: System prompt is NOW CACHED in ManualGenerator and NOT included here!
         This saves massive amounts of memory (~6000 tokens per turn).
+
+        We only format the recent conversation (user/assistant exchanges).
+        The model's chat template will be applied by tokenizer.apply_chat_template.
 
         To prevent OOM, implements smart pruning:
         - System prompt: CACHED ONCE (not included in conversation)
@@ -640,7 +640,11 @@ Your previous response had: "{parse_error}"
         MAX_TOTAL_TURNS = 6
 
         # IMPORTANT: Skip system prompt (index 0) - it's cached in ManualGenerator
-        conversation_without_system = self.conversation_history[1:] if len(self.conversation_history) > 0 else []
+        conversation_without_system = self.conversation_history[1:] if len(self.conversation_history) > 1 else []
+
+        # If conversation is empty (only system prompt exists), return empty string
+        if len(conversation_without_system) == 0:
+            return ""
 
         if len(conversation_without_system) <= MAX_TOTAL_TURNS:
             # Short conversation - no pruning needed
