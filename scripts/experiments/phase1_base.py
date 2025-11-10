@@ -478,64 +478,50 @@ class Phase1BaseSession(ABC):
                     "content": response
                 })
 
-                # If there's a parse error, it's an actual error - give feedback
+                # If there's a parse error, ask model to clarify intent
                 if parse_error:
-                    # JSON parsing failed - give specific feedback
-                    feedback_msg = f"""INCORRECT: {parse_error}
+                    # Check if we already asked for confirmation (to avoid infinite loop)
+                    last_user_message = self.conversation_history[-2]["content"] if len(self.conversation_history) >= 2 else ""
+                    already_asked_confirmation = "Are you done with this investigation" in last_user_message
+                    
+                    if already_asked_confirmation:
+                        # Model didn't clarify even after being asked - assume done
+                        self.logger.info("[SYSTEM] No tool call after confirmation request - assuming task complete")
+                        self.logger.info(f"[MODEL] {response}\n")
+                        break
+                    else:
+                        # First time - ask for clarification
+                        feedback_msg = f"""No tool call detected in your response.
 
-You must respond with a valid JSON object. The JSON must be INSIDE code blocks or be the LAST thing in your response with NO text after it.
+**Are you:**
+A) ✅ Done with this investigation (ready to move to next experiment)
+B) ❌ Forgot to include a tool call (want to continue investigating)
 
-**CORRECT Format 1 - JSON in code blocks (recommended):**
-```
-I'll examine the first few layers to understand their structure.
+**Please respond:**
+- If **DONE (A)**: Just confirm "I'm done" or provide your summary
+- If **FORGOT (B)**: Include your tool call in JSON format:
 
 ```json
 {{
-  "reasoning": "Examining layer structure",
+  "reasoning": "What I want to do next",
   "tool_call": {{
-    "function": "describe_layer",
-    "arguments": {{
-      "layer_name": ["model.layers.0.self_attn.q_proj"]
-    }}
-  }}
-}}
-```
-```
-
-**CORRECT Format 2 - JSON at the very end:**
-```
-I'll examine the first few layers to understand their structure.
-{{
-  "reasoning": "Examining layer structure",
-  "tool_call": {{
-    "function": "describe_layer",
-    "arguments": {{
-      "layer_name": ["model.layers.0.self_attn.q_proj"]
-    }}
+    "function": "function_name",
+    "arguments": {{...}}
   }}
 }}
 ```
 
-**WRONG - JSON not in code blocks AND has text after it:**
-```
-Some text here
-{{
-  "reasoning": "...",
-  "tool_call": {{...}}
-}}
-More text here  ❌ INVALID!
-```
+Your previous response had: "{parse_error}"
+"""
 
-**OR** if you're done with the current task, simply provide your summary/conclusion without any JSON."""
+                        self.logger.info(f"[SYSTEM] No tool call detected, asking for clarification: {parse_error}")
+                        self.logger.info(f"\n[FEEDBACK TO MODEL] Asking for clarification\n")
 
-                    self.logger.info(f"[SYSTEM] JSON parse error: {parse_error}")
-                    self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
-
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": feedback_msg
-                    })
-                    continue  # Go back to get next model response
+                        self.conversation_history.append({
+                            "role": "user",
+                            "content": feedback_msg
+                        })
+                        continue  # Go back to get clarification
                 else:
                     # No parse error, no tool call - model is signaling task completion
                     self.logger.info("[SYSTEM] No tool call detected - model signaling task completion")
