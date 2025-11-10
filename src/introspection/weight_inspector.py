@@ -565,7 +565,9 @@ class WeightInspector:
                 for group, layers in layer_groups.items()
             },
             
-            "layer_groups_detail": dict(layer_groups)
+            # layer_groups_detail removed - it contains all 434 layer names
+            # which creates a massive JSON that causes OOM when added to conversation
+            # Use get_layer_names() if you need the full list
         }
         
         return summary
