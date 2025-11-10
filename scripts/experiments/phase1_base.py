@@ -359,6 +359,7 @@ we write down important discoveries and look them up later!"""
         confirmation_attempts = 0  # Track how many times we've asked for clarification
         response = ""  # Initialize response in case we break early
         generated_in_this_call = False  # Track if we've generated at least once
+        turns_in_this_session = 0  # Track assistant turns within THIS chat() session only
 
         while tool_call_count < max_tool_calls:
             # CRITICAL: Check memory BEFORE each generation (not just at chat() start)
@@ -369,7 +370,8 @@ we write down important discoveries and look them up later!"""
                 should_prune, reasons = self.memory_manager.should_prune_memory(
                     self.conversation_history,
                     max_conversation_tokens=2000,
-                    max_turns_before_clear=3
+                    max_turns_before_clear=3,
+                    current_session_turns=turns_in_this_session  # Pass session-specific count
                 )
                 
                 if should_prune:
@@ -562,6 +564,7 @@ we write down important discoveries and look them up later!"""
                     "role": "assistant",
                     "content": response
                 })
+                turns_in_this_session += 1  # Increment session turn counter
 
                 # If there's a parse error, ask model to clarify intent
                 if parse_error:
@@ -646,6 +649,7 @@ Your previous response had: "{parse_error}"
                     "role": "assistant",
                     "content": response
                 })
+                turns_in_this_session += 1  # Increment session turn counter
 
                 # Truncate long responses from process_text to prevent OOM
                 # The 'response' field can be hundreds of tokens and isn't needed for introspection

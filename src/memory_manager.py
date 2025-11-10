@@ -71,7 +71,8 @@ class MemoryManager:
         self,
         conversation_history: List[Dict[str, str]],
         max_conversation_tokens: int = DEFAULT_MAX_CONVERSATION_TOKENS,
-        max_turns_before_clear: int = DEFAULT_MAX_TURNS_BEFORE_CLEAR
+        max_turns_before_clear: int = DEFAULT_MAX_TURNS_BEFORE_CLEAR,
+        current_session_turns: Optional[int] = None
     ) -> tuple[bool, List[str]]:
         """
         Check if memory should be pruned based on token count or turn count.
@@ -80,12 +81,18 @@ class MemoryManager:
             conversation_history: Current conversation history
             max_conversation_tokens: Maximum tokens before pruning
             max_turns_before_clear: Maximum turns before pruning
+            current_session_turns: Number of turns in current session (if None, count all assistant turns)
         
         Returns:
             Tuple of (should_prune, reasons) where reasons is a list of why pruning is needed
         """
         estimated_tokens = self.estimate_conversation_tokens(conversation_history)
-        num_exchanges = len([m for m in conversation_history if m["role"] == "assistant"])
+        
+        # Use session-specific turn count if provided, otherwise count all assistant messages
+        if current_session_turns is not None:
+            num_exchanges = current_session_turns
+        else:
+            num_exchanges = len([m for m in conversation_history if m["role"] == "assistant"])
         
         reasons = []
         should_clear_by_tokens = estimated_tokens > max_conversation_tokens
