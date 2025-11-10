@@ -406,6 +406,11 @@ You would call it like this:
 - JSON calls are structured and parseable
 - You can reference Python syntax in your reasoning: "I'll call `get_layer_info(layer_name='...')`"
 
+**About return values:**
+- The docs show Python type hints (e.g., `-> Dict[str, Any]`)
+- You will receive results as JSON in the TOOL_RESULTS message
+- Example: `{"function": "get_layer_info", "result": {"name": "...", "type": "..."}}`
+
 ---
 
 """
