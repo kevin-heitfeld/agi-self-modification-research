@@ -358,31 +358,35 @@ we write down important discoveries and look them up later!"""
         tool_call_count = 0
         confirmation_attempts = 0  # Track how many times we've asked for clarification
         response = ""  # Initialize response in case we break early
+        generated_in_this_call = False  # Track if we've generated at least once
 
         while tool_call_count < max_tool_calls:
             # CRITICAL: Check memory BEFORE each generation (not just at chat() start)
             # OOM happens during generation, so we need to check in the tool loop
-            should_prune, reasons = self.memory_manager.should_prune_memory(
-                self.conversation_history,
-                max_conversation_tokens=2000,
-                max_turns_before_clear=3
-            )
-            
-            if should_prune:
-                self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=2)
-                
-                # Reset conversation and trim to recent turns
-                self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
+            # BUT: Only check AFTER we've generated at least once in this chat() call
+            # Otherwise we might break immediately without responding to the current user message
+            if generated_in_this_call:
+                should_prune, reasons = self.memory_manager.should_prune_memory(
                     self.conversation_history,
-                    keep_recent_turns=2
+                    max_conversation_tokens=2000,
+                    max_turns_before_clear=3
                 )
                 
-                # Discard the KV cache (system prompt cache remains)
-                self.conversation_kv_cache = None
-                
-                # Break out of tool loop - force model to complete this chat session
-                self.logger.info("[MEMORY MANAGEMENT] Breaking tool loop to reset memory")
-                break
+                if should_prune:
+                    self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=2)
+                    
+                    # Reset conversation and trim to recent turns
+                    self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
+                        self.conversation_history,
+                        keep_recent_turns=2
+                    )
+                    
+                    # Discard the KV cache (system prompt cache remains)
+                    self.conversation_kv_cache = None
+                    
+                    # Break out of tool loop - force model to complete this chat session
+                    self.logger.info("[MEMORY MANAGEMENT] Breaking tool loop to reset memory")
+                    break
             
             # Generate response
             conversation_text = self._format_conversation_for_model()
@@ -402,6 +406,9 @@ we write down important discoveries and look them up later!"""
             response = result["generated_text"]
             num_tokens = result["num_tokens"]
             cache_used = result["cache_used"]
+
+            # Mark that we've generated at least once in this chat() call
+            generated_in_this_call = True
 
             # Update the conversation KV cache for next turn
             self.conversation_kv_cache = result.get("past_key_values")
