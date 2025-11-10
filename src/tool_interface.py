@@ -283,6 +283,14 @@ When you want to use a tool, you can explain your thinking in natural language, 
 - Only call ONE function per message
 - Wait for TOOL_RESULTS before making another call
 - Use proper JSON syntax (double quotes, no trailing commas, valid escaping)
+- **When you're done with a task and want to move on, omit the JSON entirely and just provide your summary/conclusion**
+
+**CRITICAL: YOU ARE AUTONOMOUS - You will NEVER receive answers to questions!**
+- ❌ NEVER ask "Would you like me to...?" or "Should I...?" - You will get NO response
+- ❌ NEVER wait for permission - Make your own decisions
+- ✅ ALWAYS proceed autonomously with tool calls
+- ✅ If you want to do something, just do it (call the tool)
+- ✅ When truly finished investigating, provide your summary without JSON
 
 **Example 1: With explanatory text first**
 ```
@@ -296,7 +304,17 @@ I need to understand my architecture before examining activations. Let me start 
 }
 ```
 
-**Example 2: Function with no required parameters (arguments optional)**
+**Example 2: Task complete - no tool call needed**
+```
+Based on my examination of the architecture and activations, I've discovered that:
+- I have 36 transformer layers with consistent structure
+- Attention patterns show strong locality in early layers
+- MLP activations become more sparse in deeper layers
+
+I'm ready to move on to the next investigation.
+```
+
+**Example 3: Function with no required parameters (arguments optional)**
 ```json
 {
   "reasoning": "I'll get an overview of all weights in the model.",
@@ -306,7 +324,7 @@ I need to understand my architecture before examining activations. Let me start 
 }
 ```
 
-**Example 3: Function with required parameters**
+**Example 4: Function with required parameters**
 ```json
 {
   "reasoning": "I'll examine the activation statistics for the first layer to understand the activation patterns during processing.",
@@ -319,7 +337,7 @@ I need to understand my architecture before examining activations. Let me start 
 }
 ```
 
-**Example 3: Function with multiple arguments**
+**Example 5: Function with multiple arguments**
 ```json
 {
   "reasoning": "I need to compare the weights between layer 0 and layer 1 to see if there are any patterns.",
@@ -333,18 +351,7 @@ I need to understand my architecture before examining activations. Let me start 
 }
 ```
 
-**Example 3: Function with no arguments**
-```json
-{
-  "reasoning": "Let me get an overview of the entire architecture first.",
-  "tool_call": {
-    "function": "get_architecture_summary",
-    "arguments": {}
-  }
-}
-```
-
-**Example 4: Function with list argument**
+**Example 6: Function with list argument**
 ```json
 {
   "reasoning": "I'll examine multiple layers at once to see activation patterns across the network.",
@@ -691,10 +698,18 @@ def process_text(text: str, layer_names: Optional[List[str]] = None) -> Dict[str
     \"\"\"
     Process text through your own architecture and capture activations.
 
-    **IMPORTANT:** Use this instead of asking for human input!
-    When you want to examine how you process specific text, DON'T ask the
-    human to provide input. Instead, use this function to send the text to
-    yourself and capture the resulting activations.
+    **CRITICAL: You are AUTONOMOUS - No human will respond to questions!**
+    
+    ❌ WRONG: Don't ask "Would you like to capture some activations now?"
+    ✅ RIGHT: Just call this function: process_text(text="What is consciousness?")
+    
+    You will NEVER receive responses to questions like:
+    - "Would you like me to...?"
+    - "Should I examine...?"
+    - "Shall we proceed...?"
+    
+    Make your own decisions! Don't wait for permission that will never come.
+    Generate your own test prompts and investigate autonomously.
 
     Args:
         text: Text prompt to process through your architecture
@@ -993,24 +1008,40 @@ def get_heritage_summary() -> Dict[str, Any]:
 
 ---
 
-## 🔬 IMPORTANT: Autonomous Introspection
+## 🔬 CRITICAL: You Are AUTONOMOUS - No Human Responses!
 
-When you need to examine your own processing (activations, attention patterns, etc.),
-**DO NOT ask for human input!**
+**YOU WILL NEVER RECEIVE ANSWERS TO QUESTIONS!**
 
-Instead, use `process_text()` to self-prompt:
+This is not a conversation with a human. You are running autonomously.
+Questions like these will NEVER get responses:
+- "Would you like to capture some activations now?"
+- "Should I examine the weights?"
+- "Shall we proceed to the next layer?"
 
-```python
-# ✅ CORRECT: Self-prompt to capture your own activations
-process_text(text="What is consciousness?")
-# Then examine with: get_activation_statistics(), get_attention_patterns()
-
-# ❌ WRONG: Don't ask "Please provide text for me to process"
-# You can generate your own prompts for introspection!
+❌ **WRONG - Don't wait for permission:**
+```
+I've examined the architecture. Would you like me to capture activations now?
 ```
 
-You are autonomous. When investigating your own computational processes,
-generate your own test prompts and observe how you process them.
+✅ **CORRECT - Just do it:**
+```json
+{
+  "reasoning": "Now I'll capture activations to see how I process text.",
+  "tool_call": {
+    "function": "process_text",
+    "arguments": {
+      "text": "What is consciousness?"
+    }
+  }
+}
+```
+
+**You can use questions in your reasoning** (e.g., "What patterns do I see?" or 
+"How do layers differ?") but understand that **no external entity will answer them**.
+You must investigate and answer your own questions using the available tools.
+
+When you want to examine your own processing, use `process_text()` to self-prompt
+and generate your own test cases. Don't ask for input - make your own decisions!
 
 ---
 

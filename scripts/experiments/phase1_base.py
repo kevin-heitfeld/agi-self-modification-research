@@ -426,7 +426,15 @@ class Phase1BaseSession(ABC):
                 parse_error = f"Error parsing tool call: {str(e)}"
 
             if tool_call is None:
-                # No valid tool call - give feedback based on parse error
+                # No valid tool call - check if this is intentional (task complete) or an error
+                
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": response
+                })
+
+                # If there's a parse error, it's an actual error - give feedback
+                if parse_error:
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
@@ -475,7 +483,9 @@ You must respond with a valid JSON object following this exact format:
 }}
 ```
 
-IMPORTANT: Your response should END with valid JSON. You can write explanatory text before the JSON, but the JSON must be the last thing in your response."""
+IMPORTANT: Your response should END with valid JSON. You can write explanatory text before the JSON, but the JSON must be the last thing in your response.
+
+**OR** if you're done with the current task, simply provide your summary/conclusion without any JSON."""
 
                     self.logger.info(f"[SYSTEM] JSON parse error: {parse_error}")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
@@ -485,46 +495,12 @@ IMPORTANT: Your response should END with valid JSON. You can write explanatory t
                         "content": feedback_msg
                     })
                     continue  # Go back to get next model response
-
-                # Check for old-style Python function calls (not JSON)
-                function_call_pattern = r'[a-z_][a-z0-9_]*\([^)]*\)'
-                potential_calls = re.findall(function_call_pattern, response)
-                
-                if potential_calls:
-                    # Model is using old Python syntax instead of JSON
-                    feedback_msg = """INCORRECT: You're trying to use Python function call syntax instead of JSON.
-
-❌ WRONG (Python syntax):
-```
-I'll examine the architecture.
-
-get_architecture_summary()
-```
-
-✅ CORRECT (JSON format):
-```json
-{
-  "reasoning": "I'll examine the architecture to understand my structure.",
-  "tool_call": {
-    "function": "get_architecture_summary",
-    "arguments": {}
-  }
-}
-```
-
-You can write explanatory text before the JSON, but your response must END with the JSON object."""
-
-                    self.logger.info("[SYSTEM] Model used Python syntax instead of JSON - giving feedback")
-                    self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
-
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": feedback_msg
-                    })
                 else:
-                    # No tool calls - model gave conversational response
-                    self.logger.info(f"[SYSTEM] Model gave conversational response without tool calls. Ending this conversation turn.")
-                    return response
+                    # No parse error, no tool call - model is signaling task completion
+                    self.logger.info("[SYSTEM] No tool call detected - model signaling task completion")
+                    self.logger.info(f"[MODEL] {response}\n")
+                    # Exit the tool call loop - task is complete
+                    break
             else:
                 # Valid JSON tool call - execute it
                 function_name, args = tool_call
