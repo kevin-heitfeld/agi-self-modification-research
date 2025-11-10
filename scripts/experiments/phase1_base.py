@@ -733,13 +733,15 @@ Your previous response had: "{parse_error}"
         for msg in trimmed_history:
             role = msg["role"]  # "user" or "assistant"
             content = msg["content"]
-            formatted_parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+            # Each message includes its trailing newline
+            formatted_parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
 
         # Add generation prompt for assistant to continue
-        # IMPORTANT: Must include \n after assistant token (Qwen format requirement)
+        # Format: <|im_start|>assistant\n (with single newline, no trailing newline)
         formatted_parts.append("<|im_start|>assistant\n")
 
-        return "\n".join(formatted_parts)
+        # Join without separator since each part already has proper formatting
+        return "".join(formatted_parts)
 
     def save_session(self):
         """Save conversation and tool calls"""
