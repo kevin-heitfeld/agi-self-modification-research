@@ -467,26 +467,26 @@ we write down important discoveries and look them up later!"""
         estimated_conversation_tokens = self._estimate_conversation_tokens()
         MAX_CONVERSATION_TOKENS = 2000  # Reduced from 3000 - prevents OOM during generation
         # Total context will be: system_prompt_tokens + up to MAX_CONVERSATION_TOKENS
-        
-        # Also check number of turns - clear cache every 4 turns to prevent OOM
+
+        # Also check number of turns - clear cache every 3 turns to prevent OOM
         # (Even if under token limit, KV cache grows with each generation)
         num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
-        MAX_TURNS_BEFORE_CLEAR = 4
-        
+        MAX_TURNS_BEFORE_CLEAR = 3
+
         should_clear_by_tokens = estimated_conversation_tokens > MAX_CONVERSATION_TOKENS
         should_clear_by_turns = num_exchanges >= MAX_TURNS_BEFORE_CLEAR
 
         if should_clear_by_tokens or should_clear_by_turns:
             # Conversation is getting too long - time to prune and reset cache
             total_context = self.system_prompt_tokens + estimated_conversation_tokens
-            
+
             reason = []
             if should_clear_by_tokens:
                 reason.append(f"token count (~{estimated_conversation_tokens} > {MAX_CONVERSATION_TOKENS})")
             if should_clear_by_turns:
                 reason.append(f"turn count ({num_exchanges} >= {MAX_TURNS_BEFORE_CLEAR})")
             reason_str = " and ".join(reason)
-            
+
             self.logger.warning(f"\n[MEMORY MANAGEMENT] Pruning needed: {reason_str}")
             self.logger.warning(f"[MEMORY MANAGEMENT] Conversation tokens: ~{estimated_conversation_tokens}, turns: {num_exchanges}")
             self.logger.warning(f"[MEMORY MANAGEMENT] Total context: ~{total_context} tokens")
@@ -858,7 +858,7 @@ Your previous response had: "{parse_error}"
         # Only log warning if we ACTUALLY hit the limit (not if we broke out early)
         if tool_call_count >= max_tool_calls:
             self.logger.warning(f"Reached max tool calls ({max_tool_calls})")
-        
+
         return response
 
     def _format_conversation_for_model(self) -> str:
