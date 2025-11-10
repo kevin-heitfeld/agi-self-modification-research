@@ -502,6 +502,32 @@ we write down important discoveries and look them up later!"""
             if len(response) < 10:
                 self.logger.warning(f"⚠ Model generated very short response ({len(response)} chars): '{response}'")
                 self.logger.warning("This might indicate a model loading or generation issue.")
+            
+            # Check if generation was truncated at token limit
+            # Truncation often results in incomplete JSON that can't be parsed
+            if num_tokens >= 400:  # Hit the max_new_tokens limit
+                self.logger.warning(f"⚠ Generation truncated at token limit ({num_tokens} tokens)")
+                self.logger.warning("This may result in incomplete JSON - checking...")
+                
+                # If response looks like incomplete JSON, provide helpful feedback
+                if '{' in response and response.count('{') > response.count('}'):
+                    self.logger.warning("⚠ Detected incomplete JSON (more { than })")
+                    truncation_warning = (
+                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 400-token limit.\n"
+                        "The JSON appears incomplete.\n\n"
+                        "💡 **To fix this:**\n"
+                        "- Keep observations concise (focus on key findings, not full details)\n"
+                        "- Save detailed data in memory, provide summary in description\n"
+                        "- Break large observations into multiple smaller ones\n\n"
+                        "Please provide a shorter, complete response.\n"
+                    )
+                    # Add warning to history so model sees it
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": truncation_warning
+                    })
+                    # Force model to retry without broken state
+                    continue
 
             # NEW APPROACH: Parse JSON tool calling format
             # Model can write text, then end with: {"reasoning": "...", "tool_call": {"function": "...", "arguments": {...}}}
