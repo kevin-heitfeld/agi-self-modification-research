@@ -301,7 +301,8 @@ we write down important discoveries and look them up later!"""
 
         # Cache it
         self.generator.cache_system_prompt(formatted_system)
-        self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens)")
+        self.system_prompt_tokens = self.generator.system_prompt_length  # Store for memory calculations
+        self.logger.info(f"  ✓ Manual generator ready (cached {self.system_prompt_tokens} tokens)")
 
         # Track the growing KV cache for multi-turn conversation
         # This starts as None, gets populated with system+turn1, then system+turn1+turn2, etc.
@@ -329,19 +330,19 @@ we write down important discoveries and look them up later!"""
     def _prune_tool_result(self, result: Any, function_name: str) -> Any:
         """
         Intelligently prune verbose fields from tool results to save memory.
-        
+
         Keeps: metadata, key findings, essential information
         Removes: verbose generated text, redundant data
-        
+
         This is applied to OLD tool results when conversation gets long.
         Recent tool results are kept in full.
         """
         if not isinstance(result, dict):
             return result
-        
+
         # Create a copy to avoid mutating the original
         pruned = result.copy()
-        
+
         if function_name == "process_text":
             # The 'response' field contains the full generated text (can be 100+ tokens)
             # Model doesn't need this for analysis - it has the activations
@@ -349,26 +350,31 @@ we write down important discoveries and look them up later!"""
                 response_text = pruned["response"]
                 if len(response_text) > 200:
                     pruned["response"] = f"[Generated response of {len(response_text)} chars - removed to save memory]"
-                    
+
         elif function_name in ["get_activation_statistics", "get_weight_statistics"]:
             # Statistics can be very detailed - keep summary, remove verbose details
             # This is acceptable for old results since model should have saved important findings
             pass  # Keep for now, could trim detailed stats if needed
-            
+
         elif function_name == "get_layer_names":
             # Full list of 434+ layer names is huge
             if "layers" in pruned and isinstance(pruned["layers"], list) and len(pruned["layers"]) > 20:
                 total = len(pruned["layers"])
                 pruned["layers"] = f"[List of {total} layer names - removed to save memory. Use get_layer_names() again if needed]"
-        
+
         return pruned
 
     def _estimate_conversation_tokens(self) -> int:
         """
-        Estimate the number of tokens in the conversation history.
-        
+        Estimate the number of tokens in the conversation history ONLY.
+
+        This does NOT include the system prompt (which is separately cached).
+
         This is a rough estimate: chars / 4 (approximation for tokenization)
         Used to decide when to reset KV cache.
+
+        Returns:
+            Estimated token count for conversation (excluding system prompt)
         """
         total_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
         return total_chars // 4  # Rough approximation: 1 token ≈ 4 chars
@@ -376,26 +382,26 @@ we write down important discoveries and look them up later!"""
     def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 3):
         """
         Reset KV cache and trim conversation to recent turns only.
-        
+
         This prevents OOM by maintaining a sliding window of context.
         The system prompt remains cached, so we only lose older conversation turns.
-        
+
         Model should use record_observation() to save important findings before they
         slide out of the window.
-        
+
         Args:
             keep_recent_turns: Number of recent conversation turns to keep (default: 3)
         """
         # Count conversation exchanges (user-assistant pairs)
         num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
-        
+
         if num_exchanges <= keep_recent_turns:
             # Not enough history to trim yet
             return
-        
+
         # Calculate how many messages to keep (2 per exchange: user + assistant)
         keep_messages = keep_recent_turns * 2
-        
+
         # Prune old tool results BEFORE trimming (so we keep metadata even from old turns)
         pruned_history = []
         for msg in self.conversation_history:
@@ -404,7 +410,7 @@ we write down important discoveries and look them up later!"""
                 # Keep recent turns in full, prune older ones
                 msg_index = self.conversation_history.index(msg)
                 is_recent = msg_index >= len(self.conversation_history) - keep_messages
-                
+
                 if not is_recent:
                     # Old tool result - prune it
                     try:
@@ -424,15 +430,15 @@ we write down important discoveries and look them up later!"""
                         # If parsing fails, keep as is
                         pass
             pruned_history.append(msg)
-        
+
         self.conversation_history = pruned_history
-        
+
         # Trim to recent turns only
         self.conversation_history = self.conversation_history[-keep_messages:]
-        
+
         # Discard the KV cache (system prompt cache remains)
         self.conversation_kv_cache = None
-        
+
         self.logger.info(f"[MEMORY MANAGEMENT] Reset KV cache, keeping last {keep_recent_turns} turns")
         self.logger.info(f"[MEMORY MANAGEMENT] Pruned {num_exchanges - keep_recent_turns} old exchanges")
         self.logger.info(f"[MEMORY MANAGEMENT] Model should retrieve old findings with query_memory()")
@@ -444,24 +450,32 @@ we write down important discoveries and look them up later!"""
 
         The model can call tools, we execute them, and return results.
         This continues until the model stops calling tools or limit reached.
-        
+
         Implements sliding window context management to prevent OOM.
         """
         # Check conversation length and manage KV cache
-        estimated_tokens = self._estimate_conversation_tokens()
-        MAX_CONTEXT_TOKENS = 4000  # Reduced from 8000 - be more aggressive to prevent OOM
-        
-        if estimated_tokens > MAX_CONTEXT_TOKENS:
+        # System prompt is cached separately (self.system_prompt_tokens)
+        # We limit conversation tokens to prevent total context from being too large
+        estimated_conversation_tokens = self._estimate_conversation_tokens()
+        MAX_CONVERSATION_TOKENS = 3000  # Conversation only (system prompt is separate)
+        # Total context will be: system_prompt_tokens + up to MAX_CONVERSATION_TOKENS
+
+        if estimated_conversation_tokens > MAX_CONVERSATION_TOKENS:
             # Conversation is getting too long - time to prune and reset cache
             num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
-            
-            self.logger.warning(f"\n[MEMORY MANAGEMENT] Conversation has ~{estimated_tokens} tokens")
-            self.logger.warning(f"[MEMORY MANAGEMENT] This exceeds safe limit of {MAX_CONTEXT_TOKENS} tokens")
-            
+
+            total_context = self.system_prompt_tokens + estimated_conversation_tokens
+            self.logger.warning(f"\n[MEMORY MANAGEMENT] Conversation has ~{estimated_conversation_tokens} tokens")
+            self.logger.warning(f"[MEMORY MANAGEMENT] This exceeds safe limit of {MAX_CONVERSATION_TOKENS} tokens (system prompt: ~{self.system_prompt_tokens} additional)")
+            self.logger.warning(f"[MEMORY MANAGEMENT] Total context: ~{total_context} tokens")
+
             # Warn model to save important findings before we prune
+            total_context_tokens = self.system_prompt_tokens + estimated_conversation_tokens
             warning_message = f"""⚠️ MEMORY LIMIT REACHED
 
-Your conversation history has grown to approximately {estimated_tokens} tokens.
+Your conversation history has grown to approximately {estimated_conversation_tokens} tokens.
+(Plus ~{self.system_prompt_tokens} tokens from system prompt = ~{total_context_tokens} total context)
+
 To prevent out-of-memory errors, I need to prune old conversation turns.
 
 **ACTION REQUIRED:**
@@ -476,7 +490,7 @@ To prevent out-of-memory errors, I need to prune old conversation turns.
 Please save your important findings now, then confirm "Ready for pruning" or continue your investigation."""
 
             self.logger.info(f"\n[SYSTEM WARNING] Sent memory warning to model\n")
-            
+
             self.conversation_history.append({
                 "role": "user",
                 "content": warning_message
@@ -495,7 +509,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
 
             response = result["generated_text"]
             self.conversation_kv_cache = result.get("past_key_values")
-            
+
             self.logger.info(f"[MODEL PRE-PRUNING RESPONSE] {response}\n")
 
             self.conversation_history.append({
@@ -508,18 +522,18 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             if tool_call is not None:
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
-                
+
                 tool_results_msg = f"TOOL_RESULTS:\n{json.dumps(result, indent=2, default=str)}"
                 self.conversation_history.append({
                     "role": "user",
                     "content": tool_results_msg
                 })
-                
+
                 self.logger.info(f"[PRE-PRUNING TOOL CALL] {function_name} executed\n")
 
             # NOW prune the conversation and reset KV cache
             self._reset_kv_cache_with_sliding_window(keep_recent_turns=3)  # Reduced from 5 to 3
-            
+
             # Clear CUDA cache after pruning
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
