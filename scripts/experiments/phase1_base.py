@@ -374,6 +374,7 @@ Take this turn to record_observation() for any important discoveries you haven't
         self.logger.info(f"\n[USER] {user_message}\n")
 
         tool_call_count = 0
+        confirmation_attempts = 0  # Track how many times we've asked for clarification
 
         while tool_call_count < max_tool_calls:
             # Generate response
@@ -557,17 +558,15 @@ Take this turn to record_observation() for any important discoveries you haven't
 
                 # If there's a parse error, ask model to clarify intent
                 if parse_error:
-                    # Check if we already asked for confirmation (to avoid infinite loop)
-                    last_user_message = self.conversation_history[-2]["content"] if len(self.conversation_history) >= 2 else ""
-                    already_asked_confirmation = "Are you done with this investigation" in last_user_message
-
-                    if already_asked_confirmation:
-                        # Model didn't clarify even after being asked - assume done
+                    # Check if we've already asked for confirmation once
+                    if confirmation_attempts >= 1:
+                        # Already asked once and still no valid tool call - assume done
                         self.logger.info("[SYSTEM] No tool call after confirmation request - assuming task complete")
                         self.logger.info(f"[MODEL] {response}\n")
                         break
                     else:
                         # First time - ask for clarification
+                        confirmation_attempts += 1
                         feedback_msg = f"""No tool call detected in your response.
 
 **Are you:**
@@ -607,6 +606,7 @@ Your previous response had: "{parse_error}"
                     break
             else:
                 # Valid JSON tool call - execute it
+                confirmation_attempts = 0  # Reset counter on successful tool call
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
 
