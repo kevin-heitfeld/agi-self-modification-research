@@ -339,14 +339,19 @@ class Phase1BaseSession(ABC):
                 self.logger.warning("This might indicate a model loading or generation issue.")
 
             # Check for multiple tool calls BEFORE parsing (to give feedback even if they're valid)
-            # Use a pattern that matches tool-like names (lowercase with underscores, no space before paren)
-            # This avoids false positives like "Linear (253)" which are descriptive text
-            function_call_pattern = r'[a-z_][a-z0-9_]*\('
-            potential_calls = re.findall(function_call_pattern, response)
-            
+            # Look for actual function calls with arguments (containing = signs), not just mentions like `process_text()`
+            # This avoids false positives when model mentions functions in text
+            function_call_with_args_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
+            potential_calls = re.findall(function_call_with_args_pattern, response)
+
             # Filter to only valid tool names
             tool_names = set(self.tool_interface.tools.keys())
-            all_function_calls = [call[:-1] for call in potential_calls if call[:-1] in tool_names]
+            # Extract function name from "function_name(arg=value)"
+            all_function_calls = []
+            for call in potential_calls:
+                func_name = call.split('(')[0]
+                if func_name in tool_names:
+                    all_function_calls.append(call)
             has_multiple_calls = len(all_function_calls) > 1
 
             # Parse the last tool call (only executes if model stopped properly after it)
@@ -387,15 +392,19 @@ Just call the tool function directly with proper arguments. NO imports, NO varia
                     continue  # Go back to get next model response
 
                 # Check if there were tool calls but model didn't stop
-                # Use smarter pattern to avoid matching "Linear (253)" style descriptive text
-                function_call_pattern = r'[a-z_][a-z0-9_]*\('
-                potential_calls = re.findall(function_call_pattern, response)
+                # Look for actual function calls with arguments, not just mentions
+                function_call_with_args_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
+                potential_calls = re.findall(function_call_with_args_pattern, response)
                 tool_names = set(self.tool_interface.tools.keys())
-                function_calls = [call[:-1] for call in potential_calls if call[:-1] in tool_names]
-                
+                function_calls = []
+                for call in potential_calls:
+                    func_name = call.split('(')[0]
+                    if func_name in tool_names:
+                        function_calls.append(call)
+
                 if function_calls:
                     # Detect specific problematic patterns and give targeted feedback
-                    
+
                     # Pattern 1: Multiple function calls
                     if len(function_calls) > 1:
                         feedback_msg = f"""INCORRECT: You tried to call multiple functions. Only the LAST one is executed.
@@ -417,7 +426,7 @@ get_layer_info(layer_name="model.layers.5")
 ```
 
 Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
-                    
+
                     # Pattern 2: Variable assignment (x = function(...))
                     elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
                         feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
@@ -434,7 +443,7 @@ get_layer_info(layer_name="model.layers.5")
 ```
 
 Just call the function with NO variable assignment, NO extra lines, then STOP. The TOOL_RESULTS will appear in the next message."""
-                    
+
                     # Pattern 3: Text after the function call
                     elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', response):
                         feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
@@ -451,7 +460,7 @@ get_layer_info(layer_name="model.layers.5")
 ```
 
 Call the function, then immediately STOP generating. The results will come in the next USER message."""
-                    
+
                     else:
                         # Generic feedback
                         feedback_msg = """INCORRECT: To use a tool, call the function then immediately STOP.
@@ -478,7 +487,7 @@ Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
                 # Valid tool call - execute it
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
-                
+
                 # Check if multiple calls were made (give feedback even though we executed the last one)
                 if has_multiple_calls:
                     feedback_msg = f"""NOTICE: You called {len(all_function_calls)} functions in one message. Only the LAST one was executed.
@@ -489,7 +498,7 @@ You called:
 Only "{all_function_calls[-1]}" was executed!
 
 Remember: Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
-                    
+
                     self.logger.info(f"[SYSTEM] Model made {len(all_function_calls)} tool calls - giving feedback after execution")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
@@ -526,7 +535,7 @@ Remember: Call ONE function, then STOP. Wait for TOOL_RESULTS before making anot
                     self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
                 else:
                     self.logger.info(f"\n{tool_results_msg}\n")
-                
+
                 # Add feedback message if multiple calls were detected
                 if has_multiple_calls:
                     self.conversation_history.append({
