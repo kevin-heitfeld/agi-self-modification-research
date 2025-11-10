@@ -1180,8 +1180,10 @@ generate your own test prompts and observe how you process them.
         Returns:
             Result from tool execution or error dict
         """
-        logger.info(f"[TOOL CALL] {function_name}")
-        logger.info(f"  Args: {args}")
+        # Format as Python function call syntax for logging
+        args_str = ", ".join(f'{k}={repr(v)}' for k, v in args.items())
+        call_syntax = f"{function_name}({args_str})"
+        logger.info(f"[TOOL CALL] {call_syntax}")
 
         start_time = time.time()
         success = True
