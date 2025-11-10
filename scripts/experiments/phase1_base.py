@@ -118,18 +118,50 @@ class Phase1BaseSession(ABC):
         This teaches the model to use record_observation() proactively
         to prevent data loss when old tool results are pruned.
         """
-        return """MEMORY MANAGEMENT STRATEGY:
-This investigation will span many tool calls. To prevent memory overflow:
-- After every 2-3 tool calls, use record_observation() to save important discoveries
-- Old tool results will be automatically removed from context after ~5 turns
-- You can retrieve saved observations later using query_memory()
+        return """🧠 MEMORY MANAGEMENT - HOW YOUR MEMORY WORKS:
 
-Example workflow:
-1. Call get_architecture_summary() → examine results
-2. Call record_observation(obs_type="INTROSPECTION", category="architecture", description="Key finding...", ...)
-3. Call get_activation_statistics(...) → examine results
-4. Call record_observation(...) to save findings
-5. Continue investigation using saved observations as needed"""
+**Your memory has two systems (like human memory):**
+
+1. **Working Memory (this conversation):**
+   - Holds recent context (last ~5-7 conversation turns)
+   - Limited capacity to prevent memory overflow
+   - Old turns are automatically pruned when conversation gets long
+   - Think of this as your "active thoughts" or "scratch pad"
+
+2. **Long-Term Memory (observations database):**
+   - Unlimited capacity
+   - Stores only what you explicitly save with record_observation()
+   - Retrievable anytime with query_memory()
+   - Think of this as your "research notes" or "lab notebook"
+
+**CRITICAL: You must actively manage your memory!**
+
+When you make important discoveries:
+1. Use record_observation() to save findings to long-term memory
+2. Include detailed descriptions and relevant data
+3. Categorize properly (e.g., category="architecture", "activations", "weights")
+
+When conversation gets long (you'll receive warnings):
+1. Save any unsaved important findings immediately
+2. After pruning, old tool results disappear from working memory
+3. Use query_memory() to retrieve previously saved observations
+
+**Example workflow:**
+```
+Turn 1: Call get_architecture_summary()
+Turn 2: Call record_observation(obs_type="INTROSPECTION", category="architecture", 
+        description="Found 28 transformer layers with...", data={...})
+Turn 3: Call get_activation_statistics(...)
+Turn 4: Call record_observation() to save activation findings
+...
+Turn 15: [SYSTEM WARNING: Memory limit approaching]
+Turn 16: Call record_observation() to save recent unsaved findings
+Turn 17: [SYSTEM: Old turns pruned, working memory reset]
+Turn 18: Call query_memory(category="architecture") to retrieve earlier findings
+```
+
+This is exactly how humans do research - we don't keep everything in our heads,
+we write down important discoveries and look them up later!"""
 
     def initialize_systems(self, include_heritage: bool = True, wrong_heritage: bool = False):
         """
@@ -263,6 +295,7 @@ Example workflow:
         # Track the growing KV cache for multi-turn conversation
         # This starts as None, gets populated with system+turn1, then system+turn1+turn2, etc.
         self.conversation_kv_cache = None
+        self.last_tool_called = None  # Track last tool to prevent immediate repetition
 
         self.logger.info("[INITIALIZATION] Complete\n")
 
@@ -282,88 +315,204 @@ Example workflow:
             reserved = torch.cuda.memory_reserved() / 1024**3
             self.logger.info(f"[GPU CLEANUP] Memory allocated: {allocated:.2f}GB, reserved: {reserved:.2f}GB")
 
+    def _prune_tool_result(self, result: Any, function_name: str) -> Any:
+        """
+        Intelligently prune verbose fields from tool results to save memory.
+        
+        Keeps: metadata, key findings, essential information
+        Removes: verbose generated text, redundant data
+        
+        This is applied to OLD tool results when conversation gets long.
+        Recent tool results are kept in full.
+        """
+        if not isinstance(result, dict):
+            return result
+        
+        # Create a copy to avoid mutating the original
+        pruned = result.copy()
+        
+        if function_name == "process_text":
+            # The 'response' field contains the full generated text (can be 100+ tokens)
+            # Model doesn't need this for analysis - it has the activations
+            if "response" in pruned:
+                response_text = pruned["response"]
+                if len(response_text) > 200:
+                    pruned["response"] = f"[Generated response of {len(response_text)} chars - removed to save memory]"
+                    
+        elif function_name in ["get_activation_statistics", "get_weight_statistics"]:
+            # Statistics can be very detailed - keep summary, remove verbose details
+            # This is acceptable for old results since model should have saved important findings
+            pass  # Keep for now, could trim detailed stats if needed
+            
+        elif function_name == "get_layer_names":
+            # Full list of 434+ layer names is huge
+            if "layers" in pruned and isinstance(pruned["layers"], list) and len(pruned["layers"]) > 20:
+                total = len(pruned["layers"])
+                pruned["layers"] = f"[List of {total} layer names - removed to save memory. Use get_layer_names() again if needed]"
+        
+        return pruned
+
+    def _estimate_conversation_tokens(self) -> int:
+        """
+        Estimate the number of tokens in the conversation history.
+        
+        This is a rough estimate: chars / 4 (approximation for tokenization)
+        Used to decide when to reset KV cache.
+        """
+        total_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
+        return total_chars // 4  # Rough approximation: 1 token ≈ 4 chars
+
+    def _reset_kv_cache_with_sliding_window(self, keep_recent_turns: int = 5):
+        """
+        Reset KV cache and trim conversation to recent turns only.
+        
+        This prevents OOM by maintaining a sliding window of context.
+        The system prompt remains cached, so we only lose older conversation turns.
+        
+        Model should use record_observation() to save important findings before they
+        slide out of the window.
+        
+        Args:
+            keep_recent_turns: Number of recent conversation turns to keep (default: 5)
+        """
+        # Count conversation exchanges (user-assistant pairs)
+        num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
+        
+        if num_exchanges <= keep_recent_turns:
+            # Not enough history to trim yet
+            return
+        
+        # Calculate how many messages to keep (2 per exchange: user + assistant)
+        keep_messages = keep_recent_turns * 2
+        
+        # Prune old tool results BEFORE trimming (so we keep metadata even from old turns)
+        pruned_history = []
+        for msg in self.conversation_history:
+            if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"):
+                # This is a tool result - check if it's old enough to prune
+                # Keep recent turns in full, prune older ones
+                msg_index = self.conversation_history.index(msg)
+                is_recent = msg_index >= len(self.conversation_history) - keep_messages
+                
+                if not is_recent:
+                    # Old tool result - prune it
+                    try:
+                        tool_results = json.loads(msg["content"].replace("TOOL_RESULTS:\n", ""))
+                        if isinstance(tool_results, list) and len(tool_results) > 0:
+                            pruned_results = []
+                            for tr in tool_results:
+                                function_name = tr.get("function", "unknown")
+                                result = tr.get("result", {})
+                                pruned_result = self._prune_tool_result(result, function_name)
+                                pruned_results.append({
+                                    "function": function_name,
+                                    "result": pruned_result
+                                })
+                            msg["content"] = f"TOOL_RESULTS:\n{json.dumps(pruned_results, indent=2, default=str)}"
+                    except:
+                        # If parsing fails, keep as is
+                        pass
+            pruned_history.append(msg)
+        
+        self.conversation_history = pruned_history
+        
+        # Trim to recent turns only
+        self.conversation_history = self.conversation_history[-keep_messages:]
+        
+        # Discard the KV cache (system prompt cache remains)
+        self.conversation_kv_cache = None
+        
+        self.logger.info(f"[MEMORY MANAGEMENT] Reset KV cache, keeping last {keep_recent_turns} turns")
+        self.logger.info(f"[MEMORY MANAGEMENT] Pruned {num_exchanges - keep_recent_turns} old exchanges")
+        self.logger.info(f"[MEMORY MANAGEMENT] Model should retrieve old findings with query_memory()")
+
+
     def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
         """
         Send a message to the model and handle any tool calls.
 
         The model can call tools, we execute them, and return results.
         This continues until the model stops calling tools or limit reached.
+        
+        Implements sliding window context management to prevent OOM.
         """
-        # Check if we're approaching the limit where tool results will be pruned
-        # Warn EARLY and OFTEN - OOM can happen quickly with large tool results
-        FIRST_WARNING_AT = 3  # Warn after just 3 exchanges (was 5, but OOM happens at ~4-5)
-        num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
+        # Check conversation length and manage KV cache
+        estimated_tokens = self._estimate_conversation_tokens()
+        MAX_CONTEXT_TOKENS = 8000  # Conservative limit to prevent OOM
+        
+        if estimated_tokens > MAX_CONTEXT_TOKENS:
+            # Conversation is getting too long - time to prune and reset cache
+            num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
+            
+            self.logger.warning(f"\n[MEMORY MANAGEMENT] Conversation has ~{estimated_tokens} tokens")
+            self.logger.warning(f"[MEMORY MANAGEMENT] This exceeds safe limit of {MAX_CONTEXT_TOKENS} tokens")
+            
+            # Warn model to save important findings before we prune
+            warning_message = f"""⚠️ MEMORY LIMIT REACHED
 
-        # Warn at turn 3, then every 2 turns (3, 5, 7, 9, 11...)
-        # This ensures model gets warning BEFORE OOM, with frequent reminders
-        should_warn = num_exchanges >= FIRST_WARNING_AT and (num_exchanges - FIRST_WARNING_AT) % 2 == 0
+Your conversation history has grown to approximately {estimated_tokens} tokens.
+To prevent out-of-memory errors, I need to prune old conversation turns.
 
-        if should_warn:
-            # Warn model periodically that old tool results are being pruned
-            warning_message = f"""[SYSTEM WARNING] Memory limit approaching!
+**ACTION REQUIRED:**
+1. Use record_observation() NOW to save any important discoveries you haven't yet saved
+2. After this turn, old tool results will be removed from your working memory
+3. You can retrieve saved observations later with query_memory()
 
-You've made {num_exchanges} investigation turns. To prevent data loss:
-1. Use record_observation() NOW to save any important discoveries from recent tool results
-2. Old tool results will be removed from context after this turn
-3. You can query saved observations later with query_memory()
+**Think of this like human memory:**
+- Working memory (this conversation): Limited, recent context only
+- Long-term memory (observations): Unlimited, stores what you explicitly save
 
-IMPORTANT: If you don't save your findings now, they'll be lost forever!
-Take this turn to record_observation() for any important discoveries you haven't yet saved."""
+Please save your important findings now, then confirm "Ready for pruning" or continue your investigation."""
 
-            self.logger.info(f"\n[SYSTEM WARNING TO MODEL] Turn {num_exchanges} - {warning_message}\n")
-
+            self.logger.info(f"\n[SYSTEM WARNING] Sent memory warning to model\n")
+            
             self.conversation_history.append({
                 "role": "user",
                 "content": warning_message
             })
 
-            # Let model respond to warning and potentially save observations
-            self.logger.info("[SYSTEM] Giving model a turn to save observations...")
+            # Let model respond and potentially save observations
             conversation_text = self._format_conversation_for_model()
-
-            # Use manual generator (system prompt already cached!)
             result = self.generator.generate(
                 prompt=conversation_text,
                 max_new_tokens=500,
                 temperature=0.7,
-                do_sample=True
+                do_sample=True,
+                past_key_values=self.conversation_kv_cache,
+                return_cache=True
             )
 
             response = result["generated_text"]
-            num_tokens = result["num_tokens"]
-            cache_used = result["cache_used"]
-
-            self.logger.info(f"[GENERATION] Generated {num_tokens} tokens, cache used: {cache_used}")
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            self.logger.info(f"[MODEL PRE-TRIM RESPONSE] {response}\n")
+            self.conversation_kv_cache = result.get("past_key_values")
+            
+            self.logger.info(f"[MODEL PRE-PRUNING RESPONSE] {response}\n")
 
             self.conversation_history.append({
                 "role": "assistant",
                 "content": response
             })
 
-            # Parse and execute any tool calls (likely record_observation)
+            # Execute any tool calls (likely record_observation)
             tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
             if tool_call is not None:
                 function_name, args = tool_call
                 result = self.tool_interface.execute_tool_call(function_name, args)
-
+                
                 tool_results_msg = f"TOOL_RESULTS:\n{json.dumps(result, indent=2, default=str)}"
                 self.conversation_history.append({
                     "role": "user",
                     "content": tool_results_msg
                 })
+                
+                self.logger.info(f"[PRE-PRUNING TOOL CALL] {function_name} executed\n")
 
-                # Log what the model sees (truncate if very long)
-                if len(tool_results_msg) > 500:
-                    self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
-                else:
-                    self.logger.info(f"\n{tool_results_msg}\n")
-
-                self.logger.info(f"[SYSTEM] Pre-trim tool call executed: {function_name}")
+            # NOW prune the conversation and reset KV cache
+            self._reset_kv_cache_with_sliding_window(keep_recent_turns=5)
+            
+            # Clear CUDA cache after pruning
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                gc.collect()
 
         # Add user message to history
         self.conversation_history.append({
@@ -599,8 +748,12 @@ Your previous response had: "{parse_error}"
                     break
             else:
                 # Valid JSON tool call - execute it
-                confirmation_attempts = 0  # Reset counter on successful tool call
                 function_name, args = tool_call
+
+                # Update last tool called and reset confirmation counter
+                self.last_tool_called = function_name
+                confirmation_attempts = 0  # Reset counter on successful tool call
+
                 result = self.tool_interface.execute_tool_call(function_name, args)
 
                 # Log the reasoning if provided
@@ -629,7 +782,15 @@ Your previous response had: "{parse_error}"
                     "content": response
                 })
 
-                # Add full tool results (we'll prune old ones later to prevent OOM)
+                # Truncate long responses from process_text to prevent OOM
+                # The 'response' field can be hundreds of tokens and isn't needed for introspection
+                if function_name == "process_text" and isinstance(result, dict) and "response" in result:
+                    response_text = result["response"]
+                    if len(response_text) > 200:  # Truncate if longer than ~50 tokens
+                        result["response"] = response_text[:200] + "... (truncated - full response not needed for activation analysis)"
+                        self.logger.info(f"[MEMORY OPTIMIZATION] Truncated process_text response from {len(response_text)} to 200 chars")
+
+                # Add tool results (with truncation applied above if needed)
                 tool_results_json = json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)
                 tool_results_msg = f"TOOL_RESULTS:\n{tool_results_json}"
 
