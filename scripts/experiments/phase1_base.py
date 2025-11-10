@@ -477,7 +477,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             conversation_text = self._format_conversation_for_model()
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=200,  # Reduced from 500 to prevent OOM
+                max_new_tokens=300,  # Balance: enough for complete responses, not too large for OOM
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
@@ -536,7 +536,7 @@ Please save your important findings now, then confirm "Ready for pruning" or con
             # Otherwise, it will use just the system prompt cache
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=200,  # Reduced from 500 - attention memory scales quadratically!
+                max_new_tokens=300,  # Balance: enough for analysis + tool call, not too large for OOM
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
