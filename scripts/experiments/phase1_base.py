@@ -228,8 +228,21 @@ Example workflow:
         )
         
         # Cache system prompt once for all future generations
+        # CRITICAL: Apply chat template to system prompt before caching!
         system_prompt_text = self.create_initial_prompt()
-        self.generator.cache_system_prompt(system_prompt_text)
+        
+        # Format system prompt with chat template
+        system_message = [{"role": "system", "content": system_prompt_text}]
+        if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
+            formatted_system = self.tokenizer.apply_chat_template(
+                system_message,
+                tokenize=False,
+                add_generation_prompt=False  # Don't add generation prompt yet
+            )
+        else:
+            formatted_system = f"SYSTEM: {system_prompt_text}"
+        
+        self.generator.cache_system_prompt(formatted_system)
         self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens)")
 
         self.logger.info("[INITIALIZATION] Complete\n")
@@ -690,6 +703,7 @@ Your previous response had: "{parse_error}"
         # Use the model's native chat template if available
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
             # Qwen models have a specific chat template that handles roles properly
+            # NOTE: System prompt is already cached, so we format only the conversation
             formatted = self.tokenizer.apply_chat_template(
                 trimmed_history,
                 tokenize=False,
@@ -703,6 +717,7 @@ Your previous response had: "{parse_error}"
                 role = msg["role"].upper()
                 content = msg["content"]
                 formatted.append(f"{role}: {content}")
+            formatted.append("ASSISTANT:")  # Add generation prompt
             return "\n\n".join(formatted)
 
     def save_session(self):
