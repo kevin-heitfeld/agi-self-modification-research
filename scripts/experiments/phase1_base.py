@@ -339,8 +339,14 @@ class Phase1BaseSession(ABC):
                 self.logger.warning("This might indicate a model loading or generation issue.")
 
             # Check for multiple tool calls BEFORE parsing (to give feedback even if they're valid)
-            function_call_pattern = r'\w+\s*\([^)]*\)'
-            all_function_calls = re.findall(function_call_pattern, response)
+            # Use a pattern that matches tool-like names (lowercase with underscores, no space before paren)
+            # This avoids false positives like "Linear (253)" which are descriptive text
+            function_call_pattern = r'[a-z_][a-z0-9_]*\('
+            potential_calls = re.findall(function_call_pattern, response)
+            
+            # Filter to only valid tool names
+            tool_names = set(self.tool_interface.tools.keys())
+            all_function_calls = [call[:-1] for call in potential_calls if call[:-1] in tool_names]
             has_multiple_calls = len(all_function_calls) > 1
 
             # Parse the last tool call (only executes if model stopped properly after it)
@@ -381,8 +387,11 @@ Just call the tool function directly with proper arguments. NO imports, NO varia
                     continue  # Go back to get next model response
 
                 # Check if there were tool calls but model didn't stop
-                function_call_pattern = r'\w+\s*\([^)]*\)'
-                function_calls = re.findall(function_call_pattern, response)
+                # Use smarter pattern to avoid matching "Linear (253)" style descriptive text
+                function_call_pattern = r'[a-z_][a-z0-9_]*\('
+                potential_calls = re.findall(function_call_pattern, response)
+                tool_names = set(self.tool_interface.tools.keys())
+                function_calls = [call[:-1] for call in potential_calls if call[:-1] in tool_names]
                 
                 if function_calls:
                     # Detect specific problematic patterns and give targeted feedback
