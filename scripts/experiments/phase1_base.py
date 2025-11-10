@@ -380,10 +380,6 @@ Take this turn to record_observation() for any important discoveries you haven't
             # Generate response
             conversation_text = self._format_conversation_for_model()
 
-            # DEBUG: Log what we're sending to the generator
-            self.logger.info(f"[DEBUG] Conversation text length: {len(conversation_text)} chars")
-            self.logger.info(f"[DEBUG] Conversation text:\n{conversation_text}")
-
             # Use manual generator with KV caching
             # If we have a conversation cache, use it (includes system + all previous turns)
             # Otherwise, it will use just the system prompt cache
@@ -542,9 +538,6 @@ Take this turn to record_observation() for any important discoveries you haven't
 
             except json.JSONDecodeError as e:
                 parse_error = f"Invalid JSON: {str(e)}"
-                # Log the extracted JSON text for debugging
-                self.logger.debug(f"[DEBUG] Extracted JSON text that failed to parse:\n{json_text}")
-                self.logger.debug(f"[DEBUG] JSON text length: {len(json_text)}, first 200 chars: {json_text[:200]}")
             except Exception as e:
                 parse_error = f"Error parsing tool call: {str(e)}"
 
