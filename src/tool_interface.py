@@ -259,24 +259,11 @@ function_name(arg1="value1", arg2="value2")
 
 **HOW TOOL CALLING WORKS:**
 
-When you want to use a tool, you can explain your thinking in natural language, then end your response with a JSON object:
-
-```json
-{
-  "reasoning": "Your explanation of what you're doing and why",
-  "tool_call": {
-    "function": "function_name",
-    "arguments": {
-      "arg1": "value1",
-      "arg2": "value2"
-    }
-  }
-}
-```
+When you want to use a tool, explain your thinking, then provide a JSON object in a code block.
 
 **IMPORTANT RULES:**
-- You can write natural text before the JSON to explain your thinking (optional)
-- End your response with a valid JSON object (must be the last thing in your response)
+- You can write natural text before the JSON code block to explain your thinking
+- Put the JSON inside ```json ... ``` code blocks (RECOMMENDED) or at the very end of your response
 - The JSON must have "reasoning" and "tool_call" fields
 - "tool_call" must have "function" field
 - "arguments" field is required if the function has mandatory parameters, optional otherwise
@@ -292,10 +279,11 @@ When you want to use a tool, you can explain your thinking in natural language, 
 - ✅ If you want to do something, just do it (call the tool)
 - ✅ When truly finished investigating, provide your summary without JSON
 
-**Example 1: With explanatory text first**
+**Example 1: With explanatory text first (RECOMMENDED format)**
 ```
-I need to understand my architecture before examining activations. Let me start by getting a high-level overview.
+I need to understand my architecture before examining activations.
 
+```json
 {
   "reasoning": "Getting architecture summary to understand my structure",
   "tool_call": {
