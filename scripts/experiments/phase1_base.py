@@ -224,14 +224,13 @@ class Phase1BaseSession(ABC):
         The model can call tools, we execute them, and return results.
         This continues until the model stops calling tools or limit reached.
         """
-        # Check if we're about to trim history and warn the model first
-        MAX_RECENT_TURNS = 8
-        if len(self.conversation_history) >= MAX_RECENT_TURNS:
-            num_turns_will_lose = len(self.conversation_history) - MAX_RECENT_TURNS + 1  # +1 for the message we're about to add
-            self.logger.info(f"[SYSTEM] Conversation history approaching limit. Will trim to last {MAX_RECENT_TURNS} turns after this exchange.")
-
-            # Give model a chance to save important info before trimming
-            warning_message = f"[SYSTEM WARNING] Your conversation history will be trimmed after this turn to prevent memory overflow. Approximately {num_turns_will_lose} older messages will be removed. If you've made important discoveries that aren't yet saved to memory, use `record_observation()` now to preserve them before they're lost."
+        # Check if we're approaching the limit where tool results will be pruned
+        MAX_EXCHANGES_BEFORE_PRUNING = 5  # After this many exchanges, old tool results get pruned
+        num_exchanges = len([m for m in self.conversation_history if m["role"] == "assistant"])
+        
+        if num_exchanges >= MAX_EXCHANGES_BEFORE_PRUNING and num_exchanges % 3 == 0:
+            # Warn model periodically that old tool results are being pruned
+            warning_message = f"[SYSTEM WARNING] You've made {num_exchanges} investigation turns. Old tool results are being removed from context to prevent memory overflow. Make sure to save important discoveries with `record_observation()` so they aren't lost."
 
             self.logger.info(f"\n[SYSTEM WARNING TO MODEL] {warning_message}\n")
 
@@ -241,7 +240,7 @@ class Phase1BaseSession(ABC):
             })
 
             # Let model respond to warning and potentially save observations
-            self.logger.info("[SYSTEM] Giving model a turn to save observations before trimming...")
+            self.logger.info("[SYSTEM] Giving model a turn to save observations...")
             conversation_text = self._format_conversation_for_model()
 
             assert self.tokenizer is not None
@@ -249,10 +248,12 @@ class Phase1BaseSession(ABC):
             inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
             input_length = inputs['input_ids'].shape[1]
 
+            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 700")
+
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=1000,
+                    max_new_tokens=700,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id
@@ -317,7 +318,7 @@ class Phase1BaseSession(ABC):
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=1000,
+                    max_new_tokens=700,
                     temperature=0.7,
                     do_sample=True,
                     pad_token_id=self.tokenizer.eos_token_id
@@ -340,16 +341,16 @@ class Phase1BaseSession(ABC):
 
             # NEW APPROACH: Parse JSON tool calling format
             # Model can write text, then end with: {"reasoning": "...", "tool_call": {"function": "...", "arguments": {...}}}
-            
+
             tool_call = None
             json_obj = None
             parse_error = None
-            
+
             # Try to parse JSON from the end of the response
             try:
                 # Try to extract JSON - it might be at the end after some text
                 json_text = response.strip()
-                
+
                 # If response has code blocks, extract from the last one
                 if '```' in json_text:
                     # Find all code blocks
@@ -368,17 +369,17 @@ class Phase1BaseSession(ABC):
                             if lines[0].strip() == 'json':
                                 lines = lines[1:]
                         json_text = '\n'.join(lines).strip()
-                
+
                 # If no code blocks, JSON must be at the very end
                 # Find the start of the JSON object by looking for the outermost {
                 if not json_text.startswith('{'):
                     # We need to find where the JSON object starts
                     # Strategy: try each '{' from the end and see if we can parse valid JSON from there
                     brace_positions = [i for i, char in enumerate(json_text) if char == '{']
-                    
+
                     if not brace_positions:
                         raise ValueError("No JSON object found in response")
-                    
+
                     # Try from the last { backwards to find the start of a valid JSON object
                     json_found = False
                     for pos in reversed(brace_positions):
@@ -394,13 +395,13 @@ class Phase1BaseSession(ABC):
                                 if brace_count == 0:
                                     json_end = i + 1
                                     break
-                        
+
                         if json_end > 0:
                             # Found a complete {...} structure, use this
                             json_text = candidate[:json_end]
                             json_found = True
                             break
-                    
+
                     if not json_found:
                         raise ValueError("Could not find complete JSON object in response")
                 else:
@@ -415,12 +416,12 @@ class Phase1BaseSession(ABC):
                             if brace_count == 0:
                                 json_end = i + 1
                                 break
-                    
+
                     if json_end > 0:
                         json_text = json_text[:json_end]
-                
+
                 json_obj = json.loads(json_text)
-                
+
                 # Validate JSON structure
                 if not isinstance(json_obj, dict):
                     parse_error = "Response is not a JSON object"
@@ -433,7 +434,7 @@ class Phase1BaseSession(ABC):
                 else:
                     # Valid JSON structure - extract tool call
                     function_name = json_obj["tool_call"]["function"]
-                    
+
                     # Check if arguments field is present
                     if "arguments" not in json_obj["tool_call"]:
                         # Check if this function requires arguments
@@ -461,7 +462,7 @@ class Phase1BaseSession(ABC):
                         # Arguments field present
                         arguments = json_obj["tool_call"]["arguments"]
                         tool_call = (function_name, arguments)
-                    
+
             except json.JSONDecodeError as e:
                 parse_error = f"Invalid JSON: {str(e)}"
                 # Log the extracted JSON text for debugging
@@ -472,7 +473,7 @@ class Phase1BaseSession(ABC):
 
             if tool_call is None:
                 # No valid tool call - check if this is intentional (task complete) or an error
-                
+
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
@@ -483,7 +484,7 @@ class Phase1BaseSession(ABC):
                     # Check if we already asked for confirmation (to avoid infinite loop)
                     last_user_message = self.conversation_history[-2]["content"] if len(self.conversation_history) >= 2 else ""
                     already_asked_confirmation = "Are you done with this investigation" in last_user_message
-                    
+
                     if already_asked_confirmation:
                         # Model didn't clarify even after being asked - assume done
                         self.logger.info("[SYSTEM] No tool call after confirmation request - assuming task complete")
@@ -559,7 +560,10 @@ Your previous response had: "{parse_error}"
                     "content": response
                 })
 
-                tool_results_msg = f"TOOL_RESULTS:\n{json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)}"
+                # Add full tool results (we'll prune old ones later to prevent OOM)
+                tool_results_json = json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)
+                tool_results_msg = f"TOOL_RESULTS:\n{tool_results_json}"
+
                 self.conversation_history.append({
                     "role": "user",
                     "content": tool_results_msg
@@ -567,7 +571,7 @@ Your previous response had: "{parse_error}"
 
                 # Log what the model sees (truncate if very long)
                 if len(tool_results_msg) > 500:
-                    self.logger.info(f"\n{tool_results_msg[:500]}... (truncated)\n")
+                    self.logger.info(f"\n{tool_results_msg[:500]}... (truncated in log only)\n")
                 else:
                     self.logger.info(f"\n{tool_results_msg}\n")
 
@@ -583,21 +587,63 @@ Your previous response had: "{parse_error}"
         This prevents the model from hallucinating multi-turn conversations
         by using the proper format it was trained on.
 
-        To prevent OOM, keeps only the most recent turns (system prompt + last N exchanges).
-        Warning about trimming is sent proactively in chat() before it happens.
+        To prevent OOM, implements smart pruning:
+        - Always keep: System prompt
+        - Always keep: Last 3 full exchanges (6 messages - full tool results preserved)
+        - Older messages: Keep model responses, REMOVE tool results (replace with notice)
+
+        Rationale: Model should have saved important discoveries to memory.
+        Recent tool results are needed for active analysis.
+        Old tool results just bloat context without adding value.
         """
-        # Keep conversation manageable to prevent OOM
-        # Keep: system message + last 8 turns (4 user-assistant pairs)
-        MAX_RECENT_TURNS = 8
+        # Keep recent exchanges fully intact
+        KEEP_RECENT_EXCHANGES = 3  # Last 3 exchanges = 6 messages (3 assistant + 3 tool results)
+        KEEP_RECENT_MESSAGES = KEEP_RECENT_EXCHANGES * 2
 
-        if len(self.conversation_history) > MAX_RECENT_TURNS + 1:
-            num_turns_lost = len(self.conversation_history) - MAX_RECENT_TURNS - 1
-            self.logger.info(f"[SYSTEM] Trimming conversation history: keeping initial prompt + last {MAX_RECENT_TURNS} turns ({num_turns_lost} older turns removed)")
+        # Maximum total conversation length (system + kept recent + pruned old)
+        MAX_TOTAL_TURNS = 8
 
-            # Keep system/initial prompt + recent turns (model was warned beforehand)
-            trimmed_history = [self.conversation_history[0]] + self.conversation_history[-(MAX_RECENT_TURNS):]
-        else:
+        if len(self.conversation_history) <= MAX_TOTAL_TURNS:
+            # Short conversation - no pruning needed
             trimmed_history = self.conversation_history
+        else:
+            # Long conversation - smart pruning
+            system_prompt = self.conversation_history[0]
+            recent_messages = self.conversation_history[-KEEP_RECENT_MESSAGES:]
+
+            # Calculate how many older messages we can keep (with tool results pruned)
+            available_slots = MAX_TOTAL_TURNS - 1 - KEEP_RECENT_MESSAGES  # -1 for system prompt
+
+            if available_slots > 0:
+                # We have room for some pruned older messages
+                older_messages = self.conversation_history[1:-KEEP_RECENT_MESSAGES]
+
+                # Take the most recent older messages and prune their tool results
+                keep_older = older_messages[-available_slots:] if len(older_messages) > available_slots else older_messages
+
+                pruned_older = []
+                for msg in keep_older:
+                    if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"):
+                        # Replace tool result with notice
+                        pruned_older.append({
+                            "role": "user",
+                            "content": "[TOOL_RESULTS removed to save memory - you should have saved important findings to memory]"
+                        })
+                    else:
+                        # Keep assistant messages (reasoning) and other user messages
+                        pruned_older.append(msg)
+
+                trimmed_history = [system_prompt] + pruned_older + recent_messages
+
+                # Log the pruning
+                num_removed = len(self.conversation_history) - len(trimmed_history)
+                num_tool_results_pruned = sum(1 for msg in keep_older if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"))
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact)")
+            else:
+                # No room for older messages - just keep system + recent
+                trimmed_history = [system_prompt] + recent_messages
+                num_removed = len(self.conversation_history) - len(trimmed_history)
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept system + last {KEEP_RECENT_EXCHANGES} exchanges)")
 
         # Use the model's native chat template if available
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
