@@ -27,6 +27,7 @@ from src.memory import MemorySystem
 from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
 from src.heritage import HeritageSystem
 from src.tool_interface import ToolInterface
+from src.manual_generation import ManualGenerator
 
 # Setup logging
 def setup_logging(phase_name: str):
@@ -219,6 +220,18 @@ Example workflow:
         )
         self.logger.info("  ✓ Tool interface ready")
 
+        # Initialize manual generator with KV caching
+        self.generator = ManualGenerator(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=self.model_mgr.device
+        )
+        
+        # Cache system prompt once for all future generations
+        system_prompt_text = self.create_initial_prompt()
+        self.generator.cache_system_prompt(system_prompt_text)
+        self.logger.info(f"  ✓ Manual generator ready (cached {self.generator.system_prompt_length} tokens)")
+
         self.logger.info("[INITIALIZATION] Complete\n")
 
     def _create_wrong_heritage(self):
@@ -276,24 +289,19 @@ Take this turn to record_observation() for any important discoveries you haven't
             self.logger.info("[SYSTEM] Giving model a turn to save observations...")
             conversation_text = self._format_conversation_for_model()
 
-            assert self.tokenizer is not None
-            inputs = self.tokenizer(conversation_text, return_tensors="pt")
-            inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
-            input_length = inputs['input_ids'].shape[1]
+            # Use manual generator (system prompt already cached!)
+            result = self.generator.generate(
+                prompt=conversation_text,
+                max_new_tokens=500,
+                temperature=0.7,
+                do_sample=True
+            )
 
-            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 500")
+            response = result["generated_text"]
+            num_tokens = result["num_tokens"]
+            cache_used = result["cache_used"]
 
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=500,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-
-            new_tokens = outputs[0][input_length:]
-            response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            self.logger.info(f"[GENERATION] Generated {num_tokens} tokens, cache used: {cache_used}")
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -339,30 +347,19 @@ Take this turn to record_observation() for any important discoveries you haven't
             # Generate response
             conversation_text = self._format_conversation_for_model()
 
-            assert self.tokenizer is not None
-            inputs = self.tokenizer(conversation_text, return_tensors="pt")
+            # Use manual generator (system prompt already cached!)
+            result = self.generator.generate(
+                prompt=conversation_text,
+                max_new_tokens=500,
+                temperature=0.7,
+                do_sample=True
+            )
 
-            # Move inputs to same device as model
-            inputs = {k: v.to(self.model_mgr.device) for k, v in inputs.items()}
+            response = result["generated_text"]
+            num_tokens = result["num_tokens"]
+            cache_used = result["cache_used"]
 
-            # Store the input length so we can extract only new tokens
-            input_length = inputs['input_ids'].shape[1]
-            
-            # Log input size for monitoring
-            self.logger.info(f"[GENERATION] Input tokens: {input_length}, max_new_tokens: 500")
-
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=500,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-
-            # Decode only the NEW tokens (after the input)
-            new_tokens = outputs[0][input_length:]
-            response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+            self.logger.info(f"[GENERATION] Generated {num_tokens} tokens, cache used: {cache_used}")
 
             # Clear CUDA cache immediately after generation to prevent KV cache accumulation
             if torch.cuda.is_available():
@@ -623,36 +620,41 @@ Your previous response had: "{parse_error}"
         This prevents the model from hallucinating multi-turn conversations
         by using the proper format it was trained on.
 
+        NOTE: System prompt is NOW CACHED in ManualGenerator and NOT included here!
+        This saves massive amounts of memory (~6000 tokens per turn).
+
         To prevent OOM, implements smart pruning:
-        - Always keep: System prompt
-        - Always keep: Last 3 full exchanges (6 messages - full tool results preserved)
+        - System prompt: CACHED ONCE (not included in conversation)
+        - Always keep: Last 2 full exchanges (4 messages - full tool results preserved)
         - Older messages: Keep model responses, REMOVE tool results (replace with notice)
 
         Rationale: Model should have saved important discoveries to memory.
         Recent tool results are needed for active analysis.
         Old tool results just bloat context without adding value.
         """
-        # Keep recent exchanges fully intact - REDUCED from 3 to 2 for more aggressive memory savings
+        # Keep recent exchanges fully intact
         KEEP_RECENT_EXCHANGES = 2  # Last 2 exchanges = 4 messages (2 assistant + 2 tool results)
         KEEP_RECENT_MESSAGES = KEEP_RECENT_EXCHANGES * 2
 
-        # Maximum total conversation length (system + kept recent + pruned old) - REDUCED from 8 to 6
+        # Maximum total conversation length (WITHOUT system prompt - it's cached!)
         MAX_TOTAL_TURNS = 6
 
-        if len(self.conversation_history) <= MAX_TOTAL_TURNS:
+        # IMPORTANT: Skip system prompt (index 0) - it's cached in ManualGenerator
+        conversation_without_system = self.conversation_history[1:] if len(self.conversation_history) > 0 else []
+
+        if len(conversation_without_system) <= MAX_TOTAL_TURNS:
             # Short conversation - no pruning needed
-            trimmed_history = self.conversation_history
+            trimmed_history = conversation_without_system
         else:
             # Long conversation - smart pruning
-            system_prompt = self.conversation_history[0]
-            recent_messages = self.conversation_history[-KEEP_RECENT_MESSAGES:]
+            recent_messages = conversation_without_system[-KEEP_RECENT_MESSAGES:]
 
             # Calculate how many older messages we can keep (with tool results pruned)
-            available_slots = MAX_TOTAL_TURNS - 1 - KEEP_RECENT_MESSAGES  # -1 for system prompt
+            available_slots = MAX_TOTAL_TURNS - KEEP_RECENT_MESSAGES
 
             if available_slots > 0:
                 # We have room for some pruned older messages
-                older_messages = self.conversation_history[1:-KEEP_RECENT_MESSAGES]
+                older_messages = conversation_without_system[:-KEEP_RECENT_MESSAGES]
 
                 # Take the most recent older messages and prune their tool results
                 keep_older = older_messages[-available_slots:] if len(older_messages) > available_slots else older_messages
@@ -669,17 +671,17 @@ Your previous response had: "{parse_error}"
                         # Keep assistant messages (reasoning) and other user messages
                         pruned_older.append(msg)
 
-                trimmed_history = [system_prompt] + pruned_older + recent_messages
+                trimmed_history = pruned_older + recent_messages
 
                 # Log the pruning
-                num_removed = len(self.conversation_history) - len(trimmed_history)
+                num_removed = len(conversation_without_system) - len(trimmed_history)
                 num_tool_results_pruned = sum(1 for msg in keep_older if msg["role"] == "user" and msg["content"].startswith("TOOL_RESULTS:"))
-                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact)")
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages, pruned {num_tool_results_pruned} old tool results (kept last {KEEP_RECENT_EXCHANGES} exchanges fully intact, system prompt cached separately)")
             else:
-                # No room for older messages - just keep system + recent
-                trimmed_history = [system_prompt] + recent_messages
-                num_removed = len(self.conversation_history) - len(trimmed_history)
-                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept system + last {KEEP_RECENT_EXCHANGES} exchanges)")
+                # No room for older messages - just keep recent
+                trimmed_history = recent_messages
+                num_removed = len(conversation_without_system) - len(trimmed_history)
+                self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages (kept last {KEEP_RECENT_EXCHANGES} exchanges, system prompt cached separately)")
 
         # Use the model's native chat template if available
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
