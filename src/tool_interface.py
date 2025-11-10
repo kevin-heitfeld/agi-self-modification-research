@@ -259,12 +259,12 @@ function_name(arg1="value1", arg2="value2")
 
 **HOW TOOL CALLING WORKS:**
 
-When you want to use a tool, call it like a Python function:
-```
-function_name(arg1="value1", arg2="value2")
-```
+When you want to use a tool, separate your reasoning from your action with a blank line:
 
-Then END your response (generate EOS token). The TOOL_RESULTS will come in the NEXT USER message.
+1. Write your reasoning/explanation
+2. Add a BLANK LINE
+3. Call the function in a code block
+4. STOP (generate EOS token)
 
 **IMPORTANT: You can ONLY call individual functions - NOT write Python code!**
 - ❌ NO loops: `for x in list: function(x)` - This will NOT work!
@@ -275,34 +275,41 @@ Then END your response (generate EOS token). The TOOL_RESULTS will come in the N
 You do NOT have access to a Python interpreter. You can ONLY call the documented
 functions one at a time with explicit argument values.
 
-**What happens behind the scenes:**
-- Only the LAST function call in your response is executed
-- It will only be executed if there's no additional text after the function call
-- If you write multiple function calls, only the last one counts
-- If you continue writing after the call, the tool won't be executed
-
 **Example of CORRECT usage:**
 ```
-Let me examine the first layer.
+I'll examine the activation statistics for the first layer to understand
+the activation patterns during processing.
 
 get_activation_statistics(layer_name="model.layers.0.self_attn")
 ```
-(After calling the function, STOP generating. The system will provide TOOL_RESULTS in the next message.)
 
-**Example of INCORRECT usage:**
+Notice: Explanation first, then BLANK LINE, then function call, then STOP.
+
+**Example of INCORRECT usage (no blank line):**
 ```
+Let me examine layer 0:
 get_activation_statistics(layer_name="model.layers.0.self_attn")
+```
+❌ Missing blank line before the function call!
+
+**Another INCORRECT example (text after call):**
+```
+I'll check layer 0.
+
+get_activation_statistics(layer_name="model.layers.0.self_attn")
+
 Then I'll examine the architecture...  ← This prevents execution!
 ```
-The tool call is ignored because there's text after it.
+❌ Don't write anything after the function call!
 
-**Another INCORRECT example:**
+**Yet another INCORRECT example (multiple calls):**
 ```
-for layer in layers:  ← This will NOT work! No Python loops!
-    get_activation_statistics(layer_name=layer)
+I'll examine multiple layers.
+
+get_activation_statistics(layer_name="model.layers.0.self_attn")
+get_activation_statistics(layer_name="model.layers.1.self_attn")
 ```
-You must call the function once with a specific layer name, wait for results,
-then call it again for the next layer in your next response.
+❌ Only ONE function call per message! Wait for TOOL_RESULTS before the next call.
 
 """
 

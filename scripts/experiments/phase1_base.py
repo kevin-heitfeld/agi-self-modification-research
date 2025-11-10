@@ -338,22 +338,26 @@ class Phase1BaseSession(ABC):
                 self.logger.warning(f"⚠ Model generated very short response ({len(response)} chars): '{response}'")
                 self.logger.warning("This might indicate a model loading or generation issue.")
 
-            # Check for multiple tool calls BEFORE parsing (to give feedback even if they're valid)
-            # Look for actual function calls with arguments (containing = signs), not just mentions like `process_text()`
-            # This avoids false positives when model mentions functions in text
-            function_call_with_args_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
-            potential_calls = re.findall(function_call_with_args_pattern, response)
-
-            # Filter to only valid tool names
+            # NEW APPROACH: Look for blank line separator before tool call
+            # The model should separate reasoning from action with a blank line.
+            # We only check the LAST section (after the last blank line) for tool calls.
+            
+            sections = response.split('\n\n')  # Split by blank lines
+            last_section = sections[-1].strip() if sections else response.strip()
+            
+            # Check if last section has a tool call
             tool_names = set(self.tool_interface.tools.keys())
-            # Extract function name from "function_name(arg=value)"
-            all_function_calls = []
-            for call in potential_calls:
+            function_call_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
+            potential_calls_in_last_section = re.findall(function_call_pattern, last_section)
+            
+            tool_calls_in_last_section = []
+            for call in potential_calls_in_last_section:
                 func_name = call.split('(')[0]
                 if func_name in tool_names:
-                    all_function_calls.append(call)
-            has_multiple_calls = len(all_function_calls) > 1
-
+                    tool_calls_in_last_section.append(call)
+            
+            has_multiple_calls = len(tool_calls_in_last_section) > 1
+            
             # Parse the last tool call (only executes if model stopped properly after it)
             tool_call = self.tool_interface.parse_last_tool_call_if_stopped(response)
 
@@ -391,86 +395,91 @@ Just call the tool function directly with proper arguments. NO imports, NO varia
                     })
                     continue  # Go back to get next model response
 
-                # Check if there were tool calls but model didn't stop
-                # Look for actual function calls with arguments, not just mentions
-                function_call_with_args_pattern = r'[a-z_][a-z0-9_]*\([^)]*=\s*[^)]+\)'
-                potential_calls = re.findall(function_call_with_args_pattern, response)
-                tool_names = set(self.tool_interface.tools.keys())
-                function_calls = []
-                for call in potential_calls:
-                    func_name = call.split('(')[0]
-                    if func_name in tool_names:
-                        function_calls.append(call)
-
-                if function_calls:
+                # Check if there were tool calls in the last section but model didn't stop properly
+                if tool_calls_in_last_section:
                     # Detect specific problematic patterns and give targeted feedback
 
-                    # Pattern 1: Multiple function calls
-                    if len(function_calls) > 1:
-                        feedback_msg = f"""INCORRECT: You tried to call multiple functions. Only the LAST one is executed.
+                    # Pattern 1: Multiple function calls in last section
+                    if len(tool_calls_in_last_section) > 1:
+                        feedback_msg = f"""INCORRECT: You tried to call multiple functions in the action section. Only the LAST one is executed.
 
-You called {len(function_calls)} functions:
-{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(function_calls))}
+You called {len(tool_calls_in_last_section)} functions after the blank line:
+{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(tool_calls_in_last_section))}
 
-Only "{function_calls[-1]}" was executed!
+Only "{tool_calls_in_last_section[-1]}" was executed!
 
 ❌ WRONG:
 ```
+I'll examine multiple layers.
+
 get_layer_info(layer_name="model.layers.5")
 get_activation_statistics(layer_name="model.layers.5")
 ```
 
 ✅ CORRECT:
 ```
+I'll examine layer 5 information first.
+
 get_layer_info(layer_name="model.layers.5")
 ```
 
-Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
+Call ONE function per message. Add a blank line before the call, then STOP."""
 
                     # Pattern 2: Variable assignment (x = function(...))
-                    elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', response):
+                    elif re.search(r'\w+\s*=\s*\w+\s*\([^)]*\)', last_section):
                         feedback_msg = """INCORRECT: You're trying to assign the result to a variable. This won't work.
 
 ❌ WRONG:
 ```python
+```
+I'll store the result for later.
+
 result = get_layer_info(layer_name="model.layers.5")
 result
 ```
 
 ✅ CORRECT:
 ```
+I'll get information about layer 5.
+
 get_layer_info(layer_name="model.layers.5")
 ```
 
-Just call the function with NO variable assignment, NO extra lines, then STOP. The TOOL_RESULTS will appear in the next message."""
+Explanation first, blank line, then just the function call with NO variable assignment."""
 
                     # Pattern 3: Text after the function call
-                    elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', response):
+                    elif re.search(r'\w+\s*\([^)]*\)\s*\n+\s*\S', last_section):
                         feedback_msg = """INCORRECT: You wrote text AFTER the function call. This prevents execution.
 
 ❌ WRONG:
 ```
+I'll check layer 5.
+
 get_layer_info(layer_name="model.layers.5")
 Then we'll examine the activations...
 ```
 
 ✅ CORRECT:
 ```
+I'll check layer 5 to understand its structure.
+
 get_layer_info(layer_name="model.layers.5")
 ```
 
-Call the function, then immediately STOP generating. The results will come in the next USER message."""
+Explanation, blank line, function call, then STOP. Don't write anything after the call."""
 
                     else:
                         # Generic feedback
-                        feedback_msg = """INCORRECT: To use a tool, call the function then immediately STOP.
+                        feedback_msg = """INCORRECT: To use a tool properly, separate reasoning from action with a blank line.
 
 ✅ CORRECT format:
 ```
+I'll examine this layer to understand its structure.
+
 function_name(arg1="value1", arg2="value2")
 ```
 
-Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
+Write your reasoning, add a BLANK LINE, call the function, then STOP."""
 
                     self.logger.info("[SYSTEM] Model made tool call but didn't stop - giving targeted feedback")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
@@ -490,16 +499,16 @@ Then STOP generating. The TOOL_RESULTS will come in the next USER message."""
 
                 # Check if multiple calls were made (give feedback even though we executed the last one)
                 if has_multiple_calls:
-                    feedback_msg = f"""NOTICE: You called {len(all_function_calls)} functions in one message. Only the LAST one was executed.
+                    feedback_msg = f"""NOTICE: You called {len(tool_calls_in_last_section)} functions in the action section. Only the LAST one was executed.
 
 You called:
-{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(all_function_calls))}
+{chr(10).join(f"  {i+1}. {call}" for i, call in enumerate(tool_calls_in_last_section))}
 
-Only "{all_function_calls[-1]}" was executed!
+Only "{tool_calls_in_last_section[-1]}" was executed!
 
-Remember: Call ONE function, then STOP. Wait for TOOL_RESULTS before making another call."""
+Remember: Explanation first, blank line, then ONE function call, then STOP."""
 
-                    self.logger.info(f"[SYSTEM] Model made {len(all_function_calls)} tool calls - giving feedback after execution")
+                    self.logger.info(f"[SYSTEM] Model made {len(tool_calls_in_last_section)} tool calls - giving feedback after execution")
                     self.logger.info(f"\n[FEEDBACK TO MODEL] {feedback_msg}\n")
 
                 # Aggressive memory cleanup after tool execution
