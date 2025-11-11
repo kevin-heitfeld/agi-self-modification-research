@@ -78,7 +78,7 @@ def setup_logging(phase_name: str):
 
     # Get logger for this module
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)  # Changed to DEBUG to see detailed diagnostics
 
     # Prevent propagation to root logger (prevents duplicate logs)
     logger.propagate = False
@@ -909,7 +909,8 @@ Your previous response had: "{parse_error}"
 
         # Debug: Log what's being formatted
         self.logger.debug(f"[DEBUG] _format_conversation_for_model: {len(conversation_without_system)} messages (system excluded)")
-        self.logger.debug(f"[DEBUG] First message role: {conversation_without_system[0]['role'] if conversation_without_system else 'NONE'}")
+        if conversation_without_system:
+            self.logger.debug(f"[DEBUG] First message role: {conversation_without_system[0]['role']}")
 
         # Token budget management
         MAX_CONTEXT_TOKENS = 8000
