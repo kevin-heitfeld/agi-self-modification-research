@@ -29,6 +29,7 @@ from src.heritage import HeritageSystem
 from src.tool_interface import ToolInterface
 from src.manual_generation import ManualGenerator
 from src.memory_manager import MemoryManager
+from src.gpu_monitor import GPUMonitor
 
 
 # Qwen Chat Template Formatting Helper
@@ -132,8 +133,8 @@ class Phase1BaseSession(ABC):
         # Track tool calls made by the model
         self.tool_calls: List[Dict[str, Any]] = []
 
-        # GPU memory tracking (lightweight - just snapshots)
-        self.gpu_memory_snapshots: List[Dict[str, Any]] = []
+        # Initialize GPU memory monitor (T4 GPU = 15GB total)
+        self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
 
     @abstractmethod
     def get_phase_name(self) -> str:
@@ -409,7 +410,7 @@ we write down important discoveries and look them up later!"""
         self.logger.info("[INITIALIZATION] Complete\n")
 
         # Capture GPU memory after full initialization
-        self.capture_gpu_memory_snapshot("after_model_load")
+        self.gpu_monitor.snapshot("after_model_load")
 
     def _create_wrong_heritage(self):
         """Create a mock heritage system with wrong content for Phase 1e"""
@@ -426,112 +427,6 @@ we write down important discoveries and look them up later!"""
             allocated = torch.cuda.memory_allocated() / 1024**3
             reserved = torch.cuda.memory_reserved() / 1024**3
             self.logger.info(f"[GPU CLEANUP] Memory allocated: {allocated:.2f}GB, reserved: {reserved:.2f}GB")
-
-    def capture_gpu_memory_snapshot(self, event: str, details: Optional[Dict[str, Any]] = None):
-        """
-        Capture a lightweight GPU memory snapshot.
-        
-        This only records the current memory stats without storing heavy objects.
-        The memory overhead is negligible (~100 bytes per snapshot).
-        
-        Args:
-            event: Description of the event (e.g., "generation_start", "after_tool_call")
-            details: Optional additional details (conversation length, token count, etc.)
-        """
-        if not torch.cuda.is_available():
-            return
-        
-        snapshot = {
-            "event": event,
-            "timestamp": datetime.now().isoformat(),
-            "allocated_gb": torch.cuda.memory_allocated() / 1024**3,
-            "reserved_gb": torch.cuda.memory_reserved() / 1024**3,
-            "max_allocated_gb": torch.cuda.max_memory_allocated() / 1024**3,
-            "max_reserved_gb": torch.cuda.max_memory_reserved() / 1024**3,
-        }
-        
-        if details:
-            snapshot.update(details)
-        
-        self.gpu_memory_snapshots.append(snapshot)
-
-    def print_gpu_memory_summary(self):
-        """Print a summary of GPU memory usage throughout the session"""
-        if not self.gpu_memory_snapshots:
-            self.logger.info("[GPU MEMORY SUMMARY] No snapshots collected")
-            return
-        
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("GPU MEMORY USAGE SUMMARY")
-        self.logger.info("=" * 80)
-        
-        # Overall statistics
-        allocated_values = [s["allocated_gb"] for s in self.gpu_memory_snapshots]
-        reserved_values = [s["reserved_gb"] for s in self.gpu_memory_snapshots]
-        
-        self.logger.info(f"\nOverall Statistics:")
-        self.logger.info(f"  Peak allocated: {max(allocated_values):.2f} GB")
-        self.logger.info(f"  Peak reserved: {max(reserved_values):.2f} GB")
-        self.logger.info(f"  Avg allocated: {sum(allocated_values)/len(allocated_values):.2f} GB")
-        self.logger.info(f"  Avg reserved: {sum(reserved_values)/len(reserved_values):.2f} GB")
-        
-        # Key events
-        self.logger.info(f"\nKey Memory Events:")
-        important_events = [
-            "session_start", "after_model_load", "generation_start", 
-            "generation_end", "after_pruning", "session_end"
-        ]
-        for event_name in important_events:
-            matching = [s for s in self.gpu_memory_snapshots if s["event"] == event_name]
-            if matching:
-                snapshot = matching[-1]  # Most recent
-                self.logger.info(f"  {event_name:20s}: {snapshot['allocated_gb']:.2f} GB allocated, {snapshot['reserved_gb']:.2f} GB reserved")
-        
-        # Memory growth during generation
-        gen_start = [s for s in self.gpu_memory_snapshots if s["event"] == "generation_start"]
-        gen_end = [s for s in self.gpu_memory_snapshots if s["event"] == "generation_end"]
-        if gen_start and gen_end:
-            avg_growth = sum(gen_end[i]["allocated_gb"] - gen_start[i]["allocated_gb"] 
-                           for i in range(min(len(gen_start), len(gen_end)))) / min(len(gen_start), len(gen_end))
-            self.logger.info(f"\nAverage memory growth per generation: {avg_growth:.3f} GB")
-        
-        # Conversation length vs memory
-        conv_lengths = [s.get("conversation_turns", 0) for s in self.gpu_memory_snapshots if "conversation_turns" in s]
-        if conv_lengths:
-            self.logger.info(f"\nConversation length tracked: {min(conv_lengths)} to {max(conv_lengths)} turns")
-        
-        # Recommendations
-        max_allocated = max(allocated_values)
-        max_reserved = max(reserved_values)
-        
-        self.logger.info(f"\n" + "-" * 80)
-        self.logger.info("RECOMMENDATIONS:")
-        
-        # T4 GPU has 15GB, leaving ~2GB for system = 13GB usable
-        available_headroom = 13.0 - max_reserved
-        
-        if available_headroom > 3.0:
-            self.logger.info(f"  ✓ Plenty of headroom ({available_headroom:.1f} GB available)")
-            self.logger.info(f"  ✓ Can safely INCREASE max_new_tokens (current: 450)")
-            self.logger.info(f"  ✓ Can INCREASE DEFAULT_MAX_CONVERSATION_TOKENS (current: 2000)")
-            self.logger.info(f"  ✓ Can INCREASE DEFAULT_KEEP_RECENT_TURNS (current: 2)")
-            self.logger.info(f"  ✓ Suggested increases:")
-            self.logger.info(f"      - max_new_tokens: 450 → 600-800")
-            self.logger.info(f"      - DEFAULT_MAX_CONVERSATION_TOKENS: 2000 → 3000-4000")
-            self.logger.info(f"      - DEFAULT_KEEP_RECENT_TURNS: 2 → 3-4")
-        elif available_headroom > 1.5:
-            self.logger.info(f"  ⚠ Moderate headroom ({available_headroom:.1f} GB available)")
-            self.logger.info(f"  ⚠ Can SLIGHTLY increase limits")
-            self.logger.info(f"  ⚠ Suggested increases:")
-            self.logger.info(f"      - max_new_tokens: 450 → 550")
-            self.logger.info(f"      - DEFAULT_MAX_CONVERSATION_TOKENS: 2000 → 2500")
-            self.logger.info(f"      - DEFAULT_KEEP_RECENT_TURNS: 2 → 3")
-        else:
-            self.logger.info(f"  🔴 Limited headroom ({available_headroom:.1f} GB available)")
-            self.logger.info(f"  🔴 DO NOT increase limits - risk of OOM")
-            self.logger.info(f"  🔴 Current limits are appropriate")
-        
-        self.logger.info("=" * 80 + "\n")
 
     def reset_conversation(self):
         """Reset conversation history and cache between experiments"""
@@ -648,7 +543,7 @@ we write down important discoveries and look them up later!"""
                     self.logger.info(f"[MEMORY MANAGEMENT] Conversation history length: {len(self.conversation_history)}")
 
                     # Capture memory after pruning
-                    self.capture_gpu_memory_snapshot("after_pruning", {
+                    self.gpu_monitor.snapshot("after_pruning", {
                         "conversation_turns": len([m for m in self.conversation_history if m["role"] == "assistant"])
                     })
 
@@ -682,7 +577,7 @@ we write down important discoveries and look them up later!"""
 
             # Capture memory before generation
             num_assistant_turns = len([m for m in self.conversation_history if m["role"] == "assistant"])
-            self.capture_gpu_memory_snapshot("generation_start", {
+            self.gpu_monitor.snapshot("generation_start", {
                 "conversation_turns": num_assistant_turns,
                 "prompt_tokens": prompt_token_count
             })
@@ -709,7 +604,7 @@ we write down important discoveries and look them up later!"""
             self.logger.info(f"[GENERATION] Generated {num_tokens} tokens, cache used: {cache_used}")
 
             # Capture memory after generation
-            self.capture_gpu_memory_snapshot("generation_end", {
+            self.gpu_monitor.snapshot("generation_end", {
                 "conversation_turns": num_assistant_turns + 1,
                 "generated_tokens": num_tokens
             })
@@ -1268,17 +1163,23 @@ Your previous response had: "{parse_error}"
     def run(self):
         """Main execution method - calls subclass-specific experiment sequence"""
         # Capture memory at session start
-        self.capture_gpu_memory_snapshot("session_start")
+        self.gpu_monitor.snapshot("session_start")
         
         try:
             self.run_experiments()
             self.save_session()
 
             # Capture memory at session end
-            self.capture_gpu_memory_snapshot("session_end")
+            self.gpu_monitor.snapshot("session_end")
             
-            # Print GPU memory summary
-            self.print_gpu_memory_summary()
+            # Print GPU memory summary with current limits
+            self.gpu_monitor.print_summary(
+                current_limits={
+                    "max_new_tokens": 450,
+                    "max_conversation_tokens": 2000,
+                    "keep_recent_turns": 2
+                }
+            )
 
             self.logger.info("\n" + "=" * 80)
             self.logger.info(f"{self.phase_name.upper()} COMPLETE")
@@ -1291,8 +1192,14 @@ Your previous response had: "{parse_error}"
         except Exception as e:
             self.logger.error(f"Session failed: {e}", exc_info=True)
             # Still print memory summary on error
-            self.capture_gpu_memory_snapshot("session_error")
-            self.print_gpu_memory_summary()
+            self.gpu_monitor.snapshot("session_error")
+            self.gpu_monitor.print_summary(
+                current_limits={
+                    "max_new_tokens": 450,
+                    "max_conversation_tokens": 2000,
+                    "keep_recent_turns": 2
+                }
+            )
             return False
 
         finally:
