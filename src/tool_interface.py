@@ -316,6 +316,11 @@ function_name(arg1="value1", arg2="value2")
 **IMPORTANT:** Put the tool call at the START of your response, not the end!
 This ensures the tool call completes even if your response gets truncated.
 
+**Tool Execution Confirmation:**
+A tool is ONLY executed if you receive a "TOOL_RESULTS:" response.
+If you don't see tool results, your tool call was NOT executed (likely due to JSON errors or truncation).
+Always check for the TOOL_RESULTS message to confirm execution.
+
 **CRITICAL - After Tool Results:**
 When you receive tool results, your NEXT response must ALSO include a tool call (to continue investigating) OR explicitly state you're done.
 

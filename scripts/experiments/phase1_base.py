@@ -607,11 +607,20 @@ we write down important discoveries and look them up later!"""
                     truncation_warning = (
                         "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 450-token limit.\n"
                         "The JSON appears incomplete.\n\n"
+                        "� **CRITICAL: Your tool call was NOT EXECUTED!**\n"
+                        "A tool is only executed if you receive a TOOL_RESULTS response.\n"
+                        "Since the JSON was incomplete, nothing was saved/processed.\n\n"
                         "💡 **To fix this:**\n"
-                        "- Keep observations concise (focus on key findings, not full details)\n"
-                        "- Save detailed data in memory, provide summary in description\n"
-                        "- Break large observations into multiple smaller ones\n\n"
-                        "Please provide a shorter, complete response.\n"
+                        "1. **PUT THE TOOL CALL FIRST** - Start with the JSON, write commentary after (if needed)\n"
+                        "2. Keep observations concise (focus on key findings, not full details)\n"
+                        "3. Save detailed data in the 'data' field, brief summary in 'description'\n"
+                        "4. Break large observations into multiple smaller ones\n\n"
+                        "**Example of correct format:**\n"
+                        "```json\n"
+                        "{\"tool_call\": {\"function\": \"record_observation\", \"arguments\": {...}}, \"reasoning\": \"brief\"}\n"
+                        "```\n"
+                        "[Optional: Short commentary here]\n\n"
+                        "Please provide a shorter, complete response with tool call FIRST.\n"
                     )
 
                     # Log the truncation warning so we can see what the model sees
@@ -648,6 +657,7 @@ we write down important discoveries and look them up later!"""
                     # Try code blocks from FIRST to LAST (execute in order)
                     json_text = None
                     selected_block_index = None
+                    skipped_complete_blocks = []  # Track complete blocks we skip
 
                     # Iterate through odd indices (code blocks): 1, 3, 5, ...
                     for i in range(1, len(blocks), 2):
@@ -660,16 +670,22 @@ we write down important discoveries and look them up later!"""
                         candidate_json = '\n'.join(lines).strip()
 
                         # Check if this looks like a complete JSON object
-                        if candidate_json.startswith('{') and candidate_json.count('{') == candidate_json.count('}'):
-                            # Looks complete, use this one (first complete block)
+                        is_complete = candidate_json.startswith('{') and candidate_json.count('{') == candidate_json.count('}')
+
+                        if json_text is None and is_complete:
+                            # First complete block - use this one
                             json_text = candidate_json
                             selected_block_index = i
-                            # Log if we're skipping incomplete later blocks
-                            num_blocks = (len(blocks) - 1) // 2
+                            self.logger.info(f"[JSON PARSER] Using code block {(i + 1) // 2} as tool call")
+                        elif json_text is not None and is_complete:
+                            # We already have a complete block, this is another complete block we're skipping
                             block_number = (i + 1) // 2
-                            if block_number < num_blocks:
-                                self.logger.info(f"[JSON PARSER] Using code block {block_number} (first complete), ignoring {num_blocks - block_number} later block(s)")
-                            break
+                            skipped_complete_blocks.append(block_number)
+                            self.logger.warning(f"[JSON PARSER] Skipping complete code block {block_number} (only first tool call is executed)")
+                        # Incomplete blocks are silently ignored (likely truncation)
+
+                    # Store info about skipped complete blocks for later warning to model
+                    self.skipped_complete_blocks = skipped_complete_blocks if json_text else []
 
                     # If no complete block found, use the last block (even if incomplete)
                     if json_text is None:
@@ -971,6 +987,24 @@ Your previous response had: "{parse_error}"
                     )
                     tool_results_msg += save_reminder
                     self.logger.info("[MEMORY REMINDER] Injected save reminder after 3 non-save tool calls")
+
+                # Warn if we skipped complete tool calls (model wrote multiple complete tool calls)
+                if hasattr(self, 'skipped_complete_blocks') and self.skipped_complete_blocks:
+                    block_list = ", ".join(str(b) for b in self.skipped_complete_blocks)
+                    multiple_tool_call_warning = (
+                        f"\n\n⚠️ **MULTIPLE TOOL CALLS DETECTED**: Your response contained multiple complete tool calls.\n"
+                        f"Only the FIRST tool call was executed. Code block(s) {block_list} were ignored.\n\n"
+                        f"**Remember**: You can only execute ONE tool call per response.\n"
+                        f"After receiving the tool results, include your NEXT tool call in the following response.\n"
+                        f"This is the correct pattern:\n"
+                        f"  Turn 1: Call tool_A()\n"
+                        f"  Turn 2: Receive results → Call tool_B()\n"
+                        f"  Turn 3: Receive results → Call tool_C()\n"
+                    )
+                    tool_results_msg += multiple_tool_call_warning
+                    self.logger.info(f"[MULTIPLE TOOL CALLS] Warned model about {len(self.skipped_complete_blocks)} skipped tool call(s)")
+                    # Clear the list for next iteration
+                    self.skipped_complete_blocks = []
 
                 self.conversation_history.append({
                     "role": "user",
