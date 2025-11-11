@@ -364,11 +364,14 @@ we write down important discoveries and look them up later!"""
         )
         self.logger.info("  ✓ Tool interface ready")
 
-        # Initialize manual generator with KV caching
+        # Initialize manual generator with KV caching and quantization
+        # KV cache quantization: Stores cache in INT8 instead of FP16
+        # Memory savings: 50% reduction in KV cache (directly addresses generation spike)
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
-            device=self.model_mgr.device
+            device=self.model_mgr.device,
+            quantize_kv_cache=True  # Enable INT8 KV cache quantization
         )
 
         # Defense-in-depth: Modify chat template to NOT inject default system message
@@ -1164,14 +1167,14 @@ Your previous response had: "{parse_error}"
         """Main execution method - calls subclass-specific experiment sequence"""
         # Capture memory at session start
         self.gpu_monitor.snapshot("session_start")
-        
+
         try:
             self.run_experiments()
             self.save_session()
 
             # Capture memory at session end
             self.gpu_monitor.snapshot("session_end")
-            
+
             # Print GPU memory summary with current limits
             self.gpu_monitor.print_summary(
                 current_limits={

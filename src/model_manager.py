@@ -79,12 +79,13 @@ class ModelManager:
             logger.error(f"✗ Failed to download model: {e}")
             return False
 
-    def load_model(self, use_auth_token: Optional[str] = None) -> bool:
+    def load_model(self, use_auth_token: Optional[str] = None, use_flash_attention: bool = True) -> bool:
         """
         Load model from cache (downloads if not present)
 
         Args:
             use_auth_token: HuggingFace authentication token
+            use_flash_attention: Use Flash Attention 2 for memory/speed optimization (default: True)
 
         Returns:
             True if successful, False otherwise
@@ -105,19 +106,49 @@ class ModelManager:
                 trust_remote_code=True
             )
 
-            # Load model
-            # Use float16 on both GPU and CPU to avoid dtype conversion overhead
-            # (CPU can handle float16, and it matches the cached model dtype)
-            # Use eager attention implementation to enable capturing attention patterns
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=str(self.cache_dir),
-                token=use_auth_token,
-                torch_dtype=torch.float16,
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-                attn_implementation="eager"  # Required for output_attentions=True
-            )
+            # Determine attention implementation
+            # Flash Attention 2: Faster + more memory efficient, but needs flash-attn package
+            # Eager: Required for output_attentions=True (activation inspection)
+            if use_flash_attention:
+                attn_impl = "flash_attention_2"
+                logger.info("Attempting to use Flash Attention 2 for memory/speed optimization")
+            else:
+                attn_impl = "eager"
+                logger.info("Using eager attention (required for activation inspection)")
+
+            # Load model with memory optimizations
+            # Flash Attention 2: Reduces attention memory from O(n²) to O(n)
+            # Note: Flash Attention doesn't support output_attentions=True
+            # If activation inspection is needed, will need to use eager
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    cache_dir=str(self.cache_dir),
+                    token=use_auth_token,
+                    torch_dtype=torch.float16,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                    attn_implementation=attn_impl
+                )
+                logger.info(f"✓ Model loaded with {attn_impl} attention")
+            except Exception as e:
+                if use_flash_attention:
+                    logger.warning(f"⚠ Flash Attention 2 not available: {e}")
+                    logger.warning("⚠ Falling back to eager attention")
+                    logger.warning("⚠ To enable Flash Attention 2: pip install flash-attn --no-build-isolation")
+                    # Fallback to eager
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        cache_dir=str(self.cache_dir),
+                        token=use_auth_token,
+                        torch_dtype=torch.float16,
+                        low_cpu_mem_usage=True,
+                        trust_remote_code=True,
+                        attn_implementation="eager"
+                    )
+                    logger.info("✓ Model loaded with eager attention (fallback)")
+                else:
+                    raise
 
             # Validate model loaded correctly
             if self.model is None:

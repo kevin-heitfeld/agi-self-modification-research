@@ -22,6 +22,13 @@ accelerate==0.25.0
 # Bitsandbytes - For quantization and memory optimization
 bitsandbytes==0.41.3.post2
 
+# Flash Attention 2 - Memory-efficient attention (O(n) instead of O(n²))
+# Reduces attention memory and improves speed 2-4x
+# Install with: pip install flash-attn --no-build-isolation
+# Note: Requires CUDA 11.6+ and compatible GPU
+# Optional: Comment out if installation fails, will fallback to eager attention
+flash-attn>=2.3.0
+
 # Safetensors - Safe and fast model serialization
 safetensors==0.6.2
 

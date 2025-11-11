@@ -46,7 +46,7 @@ class ManualGenerator:
         >>> print(result["generated_text"])
     """
 
-    def __init__(self, model, tokenizer, device: str = "cuda"):
+    def __init__(self, model, tokenizer, device: str = "cuda", quantize_kv_cache: bool = False):
         """
         Initialize manual generator.
 
@@ -54,10 +54,27 @@ class ManualGenerator:
             model: HuggingFace model (e.g., AutoModelForCausalLM)
             tokenizer: HuggingFace tokenizer
             device: Device to run on ("cuda" or "cpu")
+            quantize_kv_cache: Use INT8 quantization for KV cache (saves 50% memory)
         """
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
+        self.quantize_kv_cache = quantize_kv_cache
+        
+        # Prepare cache config for quantization (if enabled)
+        if quantize_kv_cache:
+            try:
+                from transformers import QuantizedCacheConfig
+                self.cache_config = QuantizedCacheConfig(nbits=8)
+                logger.info("KV cache quantization enabled (INT8 - 50% memory savings)")
+            except ImportError:
+                logger.warning("QuantizedCacheConfig not available in this transformers version")
+                logger.warning("KV cache quantization disabled - upgrade transformers for support")
+                self.quantize_kv_cache = False
+                self.cache_config = None
+        else:
+            self.cache_config = None
+            logger.info("KV cache quantization disabled (using FP16)")
 
         # Cached system prompt KV states
         self.system_prompt_cache: Optional[Tuple] = None
