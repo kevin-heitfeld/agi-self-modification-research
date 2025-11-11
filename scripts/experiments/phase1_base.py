@@ -477,6 +477,16 @@ we write down important discoveries and look them up later!"""
                     max_turns_before_clear=3,
                     current_session_turns=turns_in_this_session  # Pass session-specific count
                 )
+                
+                # ADDITIONAL CHECK: Force pruning if KV cache is too large
+                # This prevents OOM even if turn count is low (e.g., after previous pruning)
+                if self.conversation_kv_cache is not None:
+                    cache_length = self.conversation_kv_cache[0][0].shape[2]
+                    max_cache_length = 15000  # Safety limit: 15K tokens (conservative for T4 GPU)
+                    if cache_length > max_cache_length:
+                        should_prune = True
+                        reasons.append(f"cache size ({cache_length} > {max_cache_length} tokens)")
+                        self.logger.warning(f"[MEMORY MANAGEMENT] Cache size threshold exceeded: {cache_length} tokens")
 
                 if should_prune:
                     self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=2)
