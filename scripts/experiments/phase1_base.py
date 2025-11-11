@@ -729,9 +729,12 @@ we write down important discoveries and look them up later!"""
                             func = self.tool_interface.tools[function_name]
                             sig = inspect.signature(func)
                             # Check if there are required parameters (no defaults)
+                            # Note: VAR_KEYWORD (**kwargs) is treated as optional
                             required_params = [
                                 p for p in sig.parameters.values()
-                                if p.default == inspect.Parameter.empty and p.name != 'self'
+                                if p.default == inspect.Parameter.empty 
+                                and p.name != 'self'
+                                and p.kind != inspect.Parameter.VAR_KEYWORD
                             ]
                             if required_params:
                                 # Function has required parameters but arguments field is missing
