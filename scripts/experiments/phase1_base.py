@@ -35,23 +35,23 @@ from src.memory_manager import MemoryManager
 def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool = False) -> str:
     """
     Manually format messages using Qwen chat template format.
-    
+
     This ensures we have complete control over the formatting and avoids
     apply_chat_template() injecting unwanted default system prompts.
-    
+
     Args:
         messages: List of message dicts with 'role' and 'content' keys
                   Roles can be: 'system', 'user', 'assistant'
         add_generation_prompt: If True, add '<|im_start|>assistant\n' at the end
                                to prompt the model to generate a response
-    
+
     Returns:
         Formatted string in Qwen chat format
-        
+
     Example:
         >>> format_qwen_chat([{"role": "system", "content": "You are helpful"}])
         '<|im_start|>system\\nYou are helpful<|im_end|>\\n'
-        
+
         >>> format_qwen_chat([
         ...     {"role": "user", "content": "Hi"},
         ...     {"role": "assistant", "content": "Hello!"}
@@ -63,10 +63,10 @@ def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool
         role = msg["role"]
         content = msg["content"]
         formatted += f"<|im_start|>{role}\n{content}<|im_end|>\n"
-    
+
     if add_generation_prompt:
         formatted += "<|im_start|>assistant\n"
-    
+
     return formatted
 
 
@@ -483,12 +483,12 @@ we write down important discoveries and look them up later!"""
                     # Completely discard the KV cache to prevent corruption
                     # The system prompt cache remains in the generator
                     self.conversation_kv_cache = None
-                    
+
                     # Force garbage collection to free the old cache
                     gc.collect()
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
-                    
+
                     # Reset turn counter for this session since we've pruned history
                     turns_in_this_session = 0
 
@@ -496,16 +496,16 @@ we write down important discoveries and look them up later!"""
                     # Model will naturally continue with reduced context
                     # The system prompt explains memory can be pruned and to use query_memory()
                     self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
-                    
+
                     # Debug: Verify cache was cleared
                     self.logger.debug(f"[DEBUG] conversation_kv_cache after pruning: {self.conversation_kv_cache}")
                     self.logger.debug(f"[DEBUG] Conversation history length: {len(self.conversation_history)}")
-                    
+
                     # Continue the tool loop - model has reduced context but can keep investigating
 
             # Generate response
             conversation_text = self._format_conversation_for_model()
-            
+
             # Debug: Log formatted conversation to diagnose corruption
             if conversation_text:
                 self.logger.debug(f"[DEBUG] Formatted conversation ({len(conversation_text)} chars)")
@@ -519,7 +519,7 @@ we write down important discoveries and look them up later!"""
             # If we have a conversation cache, use it (includes system + all previous turns)
             # Otherwise, it will use just the system prompt cache
             self.logger.debug(f"[DEBUG] Calling generator with past_key_values={'None' if self.conversation_kv_cache is None else 'cached'}")
-            
+
             result = self.generator.generate(
                 prompt=conversation_text,
                 max_new_tokens=400,  # Increased from 300 to 400: enough for reasoning + complete tool call JSON
@@ -551,13 +551,13 @@ we write down important discoveries and look them up later!"""
             if len(response) < 10:
                 self.logger.warning(f"⚠ Model generated very short response ({len(response)} chars): '{response}'")
                 self.logger.warning("This might indicate a model loading or generation issue.")
-            
+
             # Check if generation was truncated at token limit
             # Truncation often results in incomplete JSON that can't be parsed
             if num_tokens >= 400:  # Hit the max_new_tokens limit
                 self.logger.warning(f"⚠ Generation truncated at token limit ({num_tokens} tokens)")
                 self.logger.warning("This may result in incomplete JSON - checking...")
-                
+
                 # If response looks like incomplete JSON, provide helpful feedback
                 if '{' in response and response.count('{') > response.count('}'):
                     self.logger.warning("⚠ Detected incomplete JSON (more { than })")
@@ -570,6 +570,10 @@ we write down important discoveries and look them up later!"""
                         "- Break large observations into multiple smaller ones\n\n"
                         "Please provide a shorter, complete response.\n"
                     )
+
+                    # Log the truncation warning so we can see what the model sees
+                    self.logger.info(f"[USER] {truncation_warning}\n")
+
                     # Add warning to history so model sees it
                     self.conversation_history.append({
                         "role": "user",
@@ -761,6 +765,9 @@ Your previous response had: "{parse_error}"
                         self.logger.info(f"[SYSTEM] No tool call detected, asking for clarification: {parse_error}")
                         self.logger.info(f"\n[FEEDBACK TO MODEL] Asking for clarification\n")
 
+                        # Log the full feedback message so we can see what the model sees
+                        self.logger.info(f"[USER] {feedback_msg}\n")
+
                         self.conversation_history.append({
                             "role": "user",
                             "content": feedback_msg
@@ -785,11 +792,11 @@ Your previous response had: "{parse_error}"
                 # Log the reasoning if provided
                 if json_obj and "reasoning" in json_obj:
                     self.logger.info(f"[MODEL REASONING] {json_obj['reasoning']}")
-                
+
                 # Check for common parameter name errors and provide helpful feedback
                 if isinstance(result, dict) and "error" in result:
                     error_msg = result["error"]
-                    
+
                     # Detect "unexpected keyword argument" errors - common mistake
                     if "unexpected keyword argument" in error_msg:
                         # Extract the wrong argument name from error message
@@ -797,12 +804,12 @@ Your previous response had: "{parse_error}"
                         match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
                         if match:
                             wrong_arg = match.group(1)
-                            
+
                             # Common fixes
                             fixes = {
                                 "layer_names": "layer_name",  # Plural vs singular confusion
                             }
-                            
+
                             if wrong_arg in fixes:
                                 correct_arg = fixes[wrong_arg]
                                 result["hint"] = (
