@@ -439,6 +439,22 @@ we write down important discoveries and look them up later!"""
 
         self.logger.info("[RESET] Conversation history cleared for new experiment (system prompt retained)")
 
+    def _count_observations_in_current_experiment(self) -> int:
+        """
+        Count how many record_observation() calls were made in the current experiment.
+        
+        This looks through conversation history for successful record_observation calls.
+        """
+        count = 0
+        for msg in self.conversation_history:
+            if msg["role"] == "user" and "TOOL_RESULTS:" in msg["content"]:
+                # Check if this was a record_observation call
+                if '"function": "record_observation"' in msg["content"]:
+                    # Check if it was successful (has result, not error)
+                    if '"result":' in msg["content"] and '"error"' not in msg["content"]:
+                        count += 1
+        return count
+
     def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
         """
         Send a message to the model and handle any tool calls.
@@ -464,6 +480,7 @@ we write down important discoveries and look them up later!"""
         response = ""  # Initialize response in case we break early
         generated_in_this_call = False  # Track if we've generated at least once
         turns_in_this_session = 0  # Track assistant turns within THIS chat() session only
+        tools_since_last_save = 0  # Track non-save tool calls to remind about record_observation()
 
         while tool_call_count < max_tool_calls:
             # CRITICAL: Check memory BEFORE each generation (not just at chat() start)
@@ -757,6 +774,15 @@ we write down important discoveries and look them up later!"""
                     else:
                         # First time - ask for clarification
                         confirmation_attempts += 1
+                        
+                        # Count observations saved in this experiment
+                        obs_count = self._count_observations_in_current_experiment()
+                        obs_warning = ""
+                        if obs_count == 0:
+                            obs_warning = "\n\n⚠️ **WARNING**: You haven't saved any observations in this experiment!\nIf you're done, all your findings will be lost."
+                        else:
+                            obs_warning = f"\n\n✓ You've saved {obs_count} observation(s) in this experiment."
+                        
                         feedback_msg = f"""No tool call detected in your response.
 
 **Are you:**
@@ -768,7 +794,7 @@ B) ❌ Forgot to include a tool call (want to continue investigating)
 - Your working memory (this conversation) will be COMPLETELY RESET
 - The next experiment will start with FRESH context
 - **Any unsaved findings will be PERMANENTLY LOST**
-- 💾 Use record_observation() FIRST if you have important discoveries!
+- 💾 Use record_observation() FIRST if you have important discoveries!{obs_warning}
 
 **Please respond:**
 - If **DONE (A)**: Just confirm "I'm done" or provide your summary
@@ -880,6 +906,22 @@ Your previous response had: "{parse_error}"
                 # Add tool results (with truncation applied above if needed)
                 tool_results_json = json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)
                 tool_results_msg = f"TOOL_RESULTS:\n{tool_results_json}"
+
+                # Track if this was a save operation
+                if function_name == "record_observation":
+                    tools_since_last_save = 0  # Reset counter on save
+                else:
+                    tools_since_last_save += 1  # Increment for non-save tools
+                
+                # After 3 non-save tool calls, remind model to save findings
+                if tools_since_last_save >= 3:
+                    save_reminder = (
+                        "\n\n⚠️ **MEMORY REMINDER**: You've made several observations but haven't saved any to long-term memory.\n"
+                        "Consider using record_observation() to save your findings before continuing.\n"
+                        "Remember: Findings not saved will be lost after context resets!"
+                    )
+                    tool_results_msg += save_reminder
+                    self.logger.info("[MEMORY REMINDER] Injected save reminder after 3 non-save tool calls")
 
                 self.conversation_history.append({
                     "role": "user",
