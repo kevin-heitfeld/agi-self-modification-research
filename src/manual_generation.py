@@ -176,7 +176,7 @@ class ManualGenerator:
                 import copy
                 current_cache = copy.deepcopy(self.system_prompt_cache)
                 cache_length = self.system_prompt_length
-                logger.debug(f"Using system prompt cache (length: {cache_length}) - DEEP COPIED for safety")
+                logger.info(f"Using system prompt cache (length: {cache_length}) - DEEP COPIED for safety")
 
                 # Extend attention mask to cover system prompt
                 system_mask = torch.ones((1, cache_length), dtype=torch.long, device=self.device)

@@ -78,7 +78,7 @@ def setup_logging(phase_name: str):
 
     # Get logger for this module
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)  # Changed to DEBUG to see detailed diagnostics
+    logger.setLevel(logging.INFO)  # Revert to INFO for normal runs
 
     # Prevent propagation to root logger (prevents duplicate logs)
     logger.propagate = False
@@ -221,11 +221,11 @@ When you say "I'm done with this experiment", the system will:
    - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
-   - **RESPONSE LIMIT: Maximum 400 tokens per response**
-     - **CRITICAL**: Your responses will be hard-cut at 400 tokens
+   - **RESPONSE LIMIT: Maximum 450 tokens per response**
+     - **CRITICAL**: Your responses will be hard-cut at 450 tokens
      - Incomplete JSON will cause errors and corrupt future responses
      - Always finish your JSON tool calls within the limit
-     - Token budget: Reasoning (~100-150) + JSON (~100-200) + Buffer (~50)
+     - Token budget: Reasoning (~100-150) + JSON (~150-250) + Buffer (~50)
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -250,10 +250,10 @@ When conversation gets long (you'll receive warnings):
 **Response Planning Tips:**
 - **ALWAYS complete your JSON** - incomplete JSON breaks everything
 - Keep reasoning focused (~100-150 tokens maximum)
-- Tool calls with arguments: ~100-200 tokens
+- Tool calls with arguments: ~150-250 tokens
 - Leave ~50 token buffer to ensure JSON closes properly
 - For complex data, use record_observation() first, then just reference it
-- **If your response approaches 400 tokens, STOP and finish the JSON immediately**
+- **If your response approaches 450 tokens, STOP and finish the JSON immediately**
 
 **Example workflow:**
 ```
@@ -514,9 +514,9 @@ we write down important discoveries and look them up later!"""
                     # The system prompt explains memory can be pruned and to use query_memory()
                     self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
 
-                    # Debug: Verify cache was cleared
-                    self.logger.debug(f"[DEBUG] conversation_kv_cache after pruning: {self.conversation_kv_cache}")
-                    self.logger.debug(f"[DEBUG] Conversation history length: {len(self.conversation_history)}")
+                    # Verify cache was cleared (no noisy debug output)
+                    self.logger.info(f"[MEMORY MANAGEMENT] conversation_kv_cache cleared after pruning")
+                    self.logger.info(f"[MEMORY MANAGEMENT] Conversation history length: {len(self.conversation_history)}")
 
                     # Continue the tool loop - model has reduced context but can keep investigating
 
@@ -535,21 +535,20 @@ we write down important discoveries and look them up later!"""
             # Use manual generator with KV caching
             # If we have a conversation cache, use it (includes system + all previous turns)
             # Otherwise, it will use just the system prompt cache
-            self.logger.debug(f"[DEBUG] Calling generator with past_key_values={'None' if self.conversation_kv_cache is None else 'cached'}")
+            # Calling generator (INFO level logs only)
             if self.conversation_kv_cache is not None:
                 cache_len = self.conversation_kv_cache[0][0].shape[2]
-                self.logger.debug(f"[DEBUG] Conversation KV cache length: {cache_len} tokens")
+                self.logger.info(f"Using conversation KV cache (length: {cache_len} tokens)")
             else:
-                self.logger.debug(f"[DEBUG] No conversation cache, will use system cache ({self.system_prompt_tokens} tokens)")
+                self.logger.info(f"No conversation cache, will use system cache ({self.system_prompt_tokens} tokens)")
 
-            # Debug: Log the actual prompt tokens being sent
+            # Prepare prompt token count for telemetry (no noisy debug)
             prompt_token_count = len(self.generator.tokenizer.encode(conversation_text))
-            self.logger.debug(f"[DEBUG] Prompt token count: {prompt_token_count}")
-            self.logger.debug(f"[DEBUG] Prompt preview (first 200 chars): {conversation_text[:200]}")
+            self.logger.info(f"Prompt token count: {prompt_token_count}")
 
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=400,  # Increased from 300 to 400: enough for reasoning + complete tool call JSON
+                max_new_tokens=450,  # Increased slightly to reduce truncation (from 400 to 450)
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
@@ -589,7 +588,7 @@ we write down important discoveries and look them up later!"""
                 if '{' in response and response.count('{') > response.count('}'):
                     self.logger.warning("⚠ Detected incomplete JSON (more { than })")
                     truncation_warning = (
-                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 400-token limit.\n"
+                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 450-token limit.\n"
                         "The JSON appears incomplete.\n\n"
                         "💡 **To fix this:**\n"
                         "- Keep observations concise (focus on key findings, not full details)\n"
