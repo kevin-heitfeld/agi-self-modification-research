@@ -197,6 +197,8 @@ class ManualGenerator:
             else:
                 cache_length = self.system_prompt_length
             
+            logger.debug(f"Using cache, cache_length={cache_length}, input_ids.shape[1]={input_ids.shape[1]}")
+            
             # Position IDs start AFTER the cached sequence
             # For first step: [cache_length, cache_length+1, ..., cache_length+input_len-1]
             position_ids = torch.arange(
@@ -205,6 +207,8 @@ class ManualGenerator:
                 dtype=torch.long,
                 device=self.device
             ).unsqueeze(0)  # [1, seq_len]
+            
+            logger.debug(f"position_ids range: [{cache_length} to {cache_length + input_ids.shape[1] - 1}]")
         else:
             # No cache: use default positions [0, 1, 2, ...]
             position_ids = torch.arange(
@@ -306,6 +310,9 @@ class ManualGenerator:
         
         if return_cache:
             result["past_key_values"] = current_cache
+            if current_cache is not None:
+                final_cache_len = current_cache[0][0].shape[2]
+                logger.debug(f"Returning cache with length: {final_cache_len} tokens")
         
         logger.info(f"Generated {len(generated_tokens)} tokens (stopped: {stopped_reason})")
         
