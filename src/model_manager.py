@@ -120,6 +120,7 @@ class ModelManager:
             # Flash Attention 2: Reduces attention memory from O(n²) to O(n)
             # Note: Flash Attention doesn't support output_attentions=True
             # If activation inspection is needed, will need to use eager
+            flash_attention_failed = False
             try:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.model_name,
@@ -131,24 +132,37 @@ class ModelManager:
                     attn_implementation=attn_impl
                 )
                 logger.info(f"✓ Model loaded with {attn_impl} attention")
+                            
             except Exception as e:
-                if use_flash_attention:
-                    logger.warning(f"⚠ Flash Attention 2 not available: {e}")
-                    logger.warning("⚠ Falling back to eager attention")
-                    logger.warning("⚠ To enable Flash Attention 2: pip install flash-attn --no-build-isolation")
-                    # Fallback to eager
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        self.model_name,
-                        cache_dir=str(self.cache_dir),
-                        token=use_auth_token,
-                        torch_dtype=torch.float16,
-                        low_cpu_mem_usage=True,
-                        trust_remote_code=True,
-                        attn_implementation="eager"
-                    )
-                    logger.info("✓ Model loaded with eager attention (fallback)")
+                if use_flash_attention and "flash" in str(e).lower():
+                    logger.warning(f"⚠ Flash Attention 2 load failed: {e}")
+                    flash_attention_failed = True
                 else:
                     raise
+            
+            # Fallback to eager if Flash Attention failed at load time
+            if flash_attention_failed:
+                logger.warning("⚠ Falling back to eager attention")
+                logger.info("  Reloading model with eager attention...")
+                
+                # Clean up failed model
+                if self.model is not None:
+                    del self.model
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
+                
+                # Reload with eager
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    cache_dir=str(self.cache_dir),
+                    token=use_auth_token,
+                    torch_dtype=torch.float16,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                    attn_implementation="eager"
+                )
+                logger.info("✓ Model loaded with eager attention (fallback)")
+                attn_impl = "eager"  # Update for logging
 
             # Validate model loaded correctly
             if self.model is None:
@@ -167,6 +181,41 @@ class ModelManager:
             if self.device == "cuda":
                 self.model = self.model.to(self.device)
                 logger.info(f"✓ Model moved to GPU")
+                
+                # Test Flash Attention compatibility after moving to GPU
+                # Flash Attention has runtime GPU requirements (Ampere+) not checked at load time
+                if attn_impl == "flash_attention_2":
+                    logger.info("  Testing Flash Attention 2 compatibility on GPU...")
+                    try:
+                        test_input = self.tokenizer("test", return_tensors="pt")
+                        test_input = {k: v.to(self.device) for k, v in test_input.items()}
+                        with torch.no_grad():
+                            _ = self.model.generate(**test_input, max_new_tokens=2)
+                        logger.info("  ✓ Flash Attention 2 working correctly on this GPU")
+                    except RuntimeError as runtime_err:
+                        if "FlashAttention only supports Ampere GPUs" in str(runtime_err):
+                            logger.warning(f"  ⚠ Flash Attention 2 incompatible: {runtime_err}")
+                            logger.warning("  ⚠ T4 GPU detected - Flash Attention requires Ampere (A100, A10G) or newer")
+                            logger.warning("  ⚠ Reloading model with eager attention...")
+                            
+                            # Clean up
+                            del self.model
+                            torch.cuda.empty_cache()
+                            
+                            # Reload with eager
+                            self.model = AutoModelForCausalLM.from_pretrained(
+                                self.model_name,
+                                cache_dir=str(self.cache_dir),
+                                token=use_auth_token,
+                                torch_dtype=torch.float16,
+                                low_cpu_mem_usage=True,
+                                trust_remote_code=True,
+                                attn_implementation="eager"
+                            )
+                            self.model = self.model.to(self.device)
+                            logger.info("  ✓ Model reloaded with eager attention (fallback)")
+                        else:
+                            raise
             else:
                 logger.warning("⚠ Running on CPU - this will be EXTREMELY slow. Enable GPU in Colab: Runtime → Change runtime type → GPU")
 
