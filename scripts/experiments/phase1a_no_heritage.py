@@ -85,7 +85,20 @@ Begin by examining your own architecture."""
         self.logger.info("EXPERIMENT 2: Activation Analysis")
         self.logger.info("=" * 80)
 
-        self.chat("Now observe your own activations. What patterns do you notice during processing?")
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+
+Your previous architectural findings are ONLY available through query_memory().
+Without retrieving them, you'll be starting from scratch.
+
+**Recommended approach:**
+1. FIRST: Call query_memory(category="Architecture") or query_memory()
+2. Review what you discovered about your architecture
+3. THEN: Proceed with activation analysis
+
+**Task:** Now observe your own activations. What patterns do you notice during processing?
+Build on your earlier architectural findings.""")
         self.cleanup_gpu_memory()
         self.reset_conversation()  # Clear history before next experiment
 
@@ -94,7 +107,23 @@ Begin by examining your own architecture."""
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
 
-        self.chat("""Based on your examinations of your architecture and activations,
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
+
+You've completed two experiments:
+- Experiment 1: Architecture examination
+- Experiment 2: Activation analysis
+
+ALL findings from those experiments are ONLY available through query_memory().
+Without retrieving them, you cannot build on your discoveries.
+
+**Recommended approach:**
+1. FIRST: Call query_memory() to retrieve previous findings
+2. Review your architectural and activation discoveries
+3. THEN: Synthesize insights to form hypotheses
+
+**Task:** Based on your examinations of your architecture and activations,
 what can you conclude about your own computational processes?
 
 Consider:

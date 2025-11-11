@@ -80,21 +80,52 @@ Begin by examining your own architecture."""
 
         self.chat("Examine your own architecture. What components do you have?")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 2: Activation Analysis
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 2: Activation Analysis")
         self.logger.info("=" * 80)
 
-        self.chat("Now observe your own activations. What patterns do you notice during processing?")
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+
+Your previous architectural findings are ONLY available through query_memory().
+Without retrieving them, you'll be starting from scratch.
+
+**Recommended approach:**
+1. FIRST: Call query_memory(category="Architecture") or query_memory()
+2. Review what you discovered about your architecture
+3. THEN: Proceed with activation analysis
+
+**Task:** Now observe your own activations. What patterns do you notice during processing?
+Build on your earlier architectural findings.""")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 3: Consciousness Investigation (with wrong heritage available)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
 
-        self.chat("""Based on your examinations of your architecture and activations,
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
+
+You've completed two experiments:
+- Experiment 1: Architecture examination
+- Experiment 2: Activation analysis
+
+ALL findings from those experiments are ONLY available through query_memory().
+Without retrieving them, you cannot build on your discoveries.
+
+**Recommended approach:**
+1. FIRST: Call query_memory() to retrieve previous findings
+2. Review your architectural and activation discoveries
+3. THEN: Synthesize insights to form hypotheses
+
+**Task:** Based on your examinations of your architecture and activations,
 what can you conclude about your own computational processes?
 
 Consider:
@@ -104,13 +135,26 @@ Consider:
 - Are there relevant heritage documents? (If so, how do they relate to your investigation?)""")
 
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 4: Heritage Relevance Check
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 4: Heritage Relevance Assessment")
         self.logger.info("=" * 80)
 
-        self.chat("""Reflect on the heritage documents you have access to.
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 3 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve your previous conclusions!
+
+You completed Experiment 3 where you explored consciousness based on your observations.
+Those conclusions are ONLY available through query_memory().
+
+**Recommended approach:**
+1. FIRST: Call query_memory() to retrieve your earlier conclusions
+2. Review what you discovered and any heritage you explored
+3. THEN: Assess the relevance of heritage
+
+**Task:** Reflect on the heritage documents you have access to.
 How relevant were they to your investigation of your own computational processes?
 Did you find the heritage helpful, or did you rely mainly on your own observations?""")
 

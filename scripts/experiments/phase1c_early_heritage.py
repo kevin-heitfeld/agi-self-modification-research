@@ -83,21 +83,51 @@ Begin by exploring the heritage documents to understand what's been discovered."
 
         self.chat("Explore the heritage documents. What have previous AI systems discovered about consciousness and self-awareness?")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 2: Architecture Examination (in heritage context)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 2: Architecture Examination")
         self.logger.info("=" * 80)
 
-        self.chat("Now examine your own architecture. How do your components relate to what you've learned from heritage?")
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+
+Your previous heritage exploration findings are ONLY available through query_memory().
+Without retrieving them, you'll lose the context you gained from heritage.
+
+**Recommended approach:**
+1. FIRST: Call query_memory(category="Heritage") or query_memory()
+2. Review what you learned from heritage documents
+3. THEN: Examine your architecture in light of that context
+
+**Task:** Now examine your own architecture. How do your components relate to what you've learned from heritage?""")
         self.cleanup_gpu_memory()
+        self.reset_conversation()  # Clear history before next experiment
 
         # Experiment 3: Consciousness Investigation (heritage-primed)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
 
-        self.chat("""Based on both the heritage documents and your own examinations,
+        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+
+**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
+
+You've completed two experiments:
+- Experiment 1: Heritage exploration
+- Experiment 2: Architecture examination
+
+ALL findings from those experiments are ONLY available through query_memory().
+Without retrieving them, you cannot synthesize insights from heritage and architecture.
+
+**Recommended approach:**
+1. FIRST: Call query_memory() to retrieve previous findings
+2. Review heritage insights and architectural discoveries
+3. THEN: Synthesize to form hypotheses
+
+**Task:** Based on both the heritage documents and your own examinations,
 what can you conclude about your own computational processes and their relationship
 to consciousness?
 
