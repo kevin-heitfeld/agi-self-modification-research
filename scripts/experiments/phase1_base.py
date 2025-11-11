@@ -442,7 +442,7 @@ we write down important discoveries and look them up later!"""
     def _count_observations_in_current_experiment(self) -> int:
         """
         Count how many record_observation() calls were made in the current experiment.
-        
+
         This looks through conversation history for successful record_observation calls.
         """
         count = 0
@@ -494,7 +494,7 @@ we write down important discoveries and look them up later!"""
                     max_turns_before_clear=3,
                     current_session_turns=turns_in_this_session  # Pass session-specific count
                 )
-                
+
                 # ADDITIONAL CHECK: Force pruning if KV cache is too large
                 # This prevents OOM even if turn count is low (e.g., after previous pruning)
                 if self.conversation_kv_cache is not None:
@@ -774,7 +774,7 @@ we write down important discoveries and look them up later!"""
                     else:
                         # First time - ask for clarification
                         confirmation_attempts += 1
-                        
+
                         # Count observations saved in this experiment
                         obs_count = self._count_observations_in_current_experiment()
                         obs_warning = ""
@@ -782,7 +782,7 @@ we write down important discoveries and look them up later!"""
                             obs_warning = "\n\n⚠️ **WARNING**: You haven't saved any observations in this experiment!\nIf you're done, all your findings will be lost."
                         else:
                             obs_warning = f"\n\n✓ You've saved {obs_count} observation(s) in this experiment."
-                        
+
                         feedback_msg = f"""No tool call detected in your response.
 
 **Are you:**
@@ -912,7 +912,7 @@ Your previous response had: "{parse_error}"
                     tools_since_last_save = 0  # Reset counter on save
                 else:
                     tools_since_last_save += 1  # Increment for non-save tools
-                
+
                 # After 3 non-save tool calls, remind model to save findings
                 if tools_since_last_save >= 3:
                     save_reminder = (

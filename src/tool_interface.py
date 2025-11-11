@@ -302,21 +302,26 @@ function_name(arg1="value1", arg2="value2")
 
 **You are AUTONOMOUS.** Make decisions and call tools immediately - don't ask permission. When you want to investigate something, just call the tool.
 
-**Format:** Write your reasoning, then provide JSON:
+**Format:** Provide JSON tool call FIRST, then optionally add reasoning/analysis after:
 ```json
 {
-  "reasoning": "Brief explanation of what you're doing",
   "tool_call": {
     "function": "function_name",
     "arguments": {"arg": "value"}
-  }
+  },
+  "reasoning": "Brief explanation of what you're doing (optional)"
 }
 ```
 
+**IMPORTANT:** Put the tool call at the START of your response, not the end!
+This ensures the tool call completes even if your response gets truncated.
+
 **Rules:**
 - Put JSON in ```json ... ``` code blocks
+- Tool call comes FIRST in the JSON object
 - Only ONE function per message
 - Include "arguments" field if function requires parameters
+- Reasoning is optional and can be brief
 - When done with a task, omit JSON and provide your summary
 - Use proper JSON syntax (double quotes, no trailing commas)
 
@@ -324,34 +329,34 @@ function_name(arg1="value1", arg2="value2")
 
 ```json
 {
-  "reasoning": "Getting architecture overview",
   "tool_call": {
     "function": "get_architecture_summary"
-  }
+  },
+  "reasoning": "Getting architecture overview"
 }
 ```
 
 ```json
 {
-  "reasoning": "Examining first layer activations",
   "tool_call": {
     "function": "get_activation_statistics",
     "arguments": {
       "layer_name": "model.layers.0.self_attn"
     }
-  }
+  },
+  "reasoning": "Examining first layer activations"
 }
 ```
 
 ```json
 {
-  "reasoning": "Analyzing multiple layers at once",
   "tool_call": {
     "function": "get_weight_statistics",
     "arguments": {
       "layer_name": ["model.layers.0.mlp.gate_proj.weight", "model.layers.1.mlp.gate_proj.weight"]
     }
-  }
+  },
+  "reasoning": "Analyzing multiple layers at once"
 }
 ```
 
@@ -372,15 +377,17 @@ def get_layer_info(layer_name: str) -> Dict[str, Any]:
 You would call it like this:
 ```json
 {
-  "reasoning": "I'll examine layer 0 to understand its structure",
   "tool_call": {
     "function": "get_layer_info",
     "arguments": {
       "layer_name": "model.layers.0.self_attn"
     }
-  }
+  },
+  "reasoning": "Examining layer 0 structure"
 }
 ```
+
+**Why this format?**
 
 **Why this format?**
 - Python docs are easier to read and understand
