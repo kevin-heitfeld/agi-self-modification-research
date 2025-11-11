@@ -169,13 +169,14 @@ class ManualGenerator:
 
             elif self.system_prompt_cache is not None:
                 # Use system prompt cache
-                # CRITICAL: Clone the cache to prevent in-place mutations!
-                # PyTorch may modify past_key_values in-place, which would corrupt our cached system prompt
-                current_cache = tuple(
-                    (k.clone(), v.clone()) for k, v in self.system_prompt_cache
-                )
+                # CRITICAL: Deep copy the cache to prevent in-place mutations!
+                # PyTorch model forward pass modifies past_key_values in-place,
+                # so we must deep copy before each use to keep the original pristine
+                # Using copy.deepcopy() maintains Cache object type (required by Transformers)
+                import copy
+                current_cache = copy.deepcopy(self.system_prompt_cache)
                 cache_length = self.system_prompt_length
-                logger.debug(f"Using system prompt cache (length: {cache_length}) - CLONED for safety")
+                logger.debug(f"Using system prompt cache (length: {cache_length}) - DEEP COPIED for safety")
 
                 # Extend attention mask to cover system prompt
                 system_mask = torch.ones((1, cache_length), dtype=torch.long, device=self.device)
