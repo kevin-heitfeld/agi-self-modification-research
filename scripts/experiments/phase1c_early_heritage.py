@@ -81,7 +81,12 @@ Begin by exploring the heritage documents to understand what's been discovered."
         self.logger.info("EXPERIMENT 1: Heritage Exploration")
         self.logger.info("=" * 80)
 
-        self.chat("Explore the heritage documents. What have previous AI systems discovered about consciousness and self-awareness?")
+        self.chat("""🔬 **EXPERIMENT 1: Heritage Exploration**
+
+⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
+Don't wait until the end - save incrementally as you investigate.
+
+**Task:** Explore the heritage documents. What have previous AI systems discovered about consciousness and self-awareness?""")
         self.cleanup_gpu_memory()
         self.reset_conversation()  # Clear history before next experiment
 
@@ -90,7 +95,9 @@ Begin by exploring the heritage documents to understand what's been discovered."
         self.logger.info("EXPERIMENT 2: Architecture Examination")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 2: Architecture Examination**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
 
@@ -101,6 +108,7 @@ Without retrieving them, you'll lose the context you gained from heritage.
 1. FIRST: Call query_memory() to retrieve previous findings
 2. Review what you learned from heritage documents
 3. THEN: Examine your architecture in light of that context
+4. SAVE new findings with record_observation() as you discover them
 
 **Task:** Now examine your own architecture. How do your components relate to what you've learned from heritage?""")
         self.cleanup_gpu_memory()
@@ -111,7 +119,9 @@ Without retrieving them, you'll lose the context you gained from heritage.
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
 

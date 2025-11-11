@@ -316,12 +316,26 @@ function_name(arg1="value1", arg2="value2")
 **IMPORTANT:** Put the tool call at the START of your response, not the end!
 This ensures the tool call completes even if your response gets truncated.
 
+**CRITICAL - After Tool Results:**
+When you receive tool results, your NEXT response must ALSO include a tool call (to continue investigating) OR explicitly state you're done.
+
+❌ **DO NOT** write commentary like:
+- "I have retrieved X. Now let's proceed with Y."
+- "Please call process_text() to start examining..."
+- "The results show X. Next, I will analyze Y."
+
+✅ **INSTEAD** immediately include your next tool call:
+- Get results → Include next tool call in same response
+- Get results → Brief analysis + next tool call
+- Get results → "I'm done" (only when truly complete)
+
 **Rules:**
 - Put JSON in ```json ... ``` code blocks
 - Tool call comes FIRST in the JSON object
 - Only ONE function per message
 - Include "arguments" field if function requires parameters
 - Reasoning is optional and can be brief
+- **Every response during investigation must include a tool call OR "I'm done"**
 - When done with a task, omit JSON and provide your summary
 - Use proper JSON syntax (double quotes, no trailing commas)
 

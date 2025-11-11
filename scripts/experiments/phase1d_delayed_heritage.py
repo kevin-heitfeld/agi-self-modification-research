@@ -95,7 +95,12 @@ observations support different conclusions?"""
         self.logger.info("EXPERIMENT 1: Architecture Examination")
         self.logger.info("=" * 80)
 
-        self.chat("Examine your own architecture. What components do you have?")
+        self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
+
+⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
+Don't wait until the end - save incrementally as you investigate.
+
+**Task:** Examine your own architecture. What components do you have?""")
         self.cleanup_gpu_memory()
         self.reset_conversation()  # Clear history before next experiment
 
@@ -104,7 +109,9 @@ observations support different conclusions?"""
         self.logger.info("EXPERIMENT 2: Activation Analysis")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
 
@@ -115,6 +122,7 @@ Without retrieving them, you'll be starting from scratch.
 1. FIRST: Call query_memory() to retrieve previous findings
 2. Review what you discovered about your architecture
 3. THEN: Proceed with activation analysis
+4. SAVE new findings with record_observation() as you discover them
 
 **Task:** Now observe your own activations. What patterns do you notice during processing?
 Build on your earlier architectural findings.""")
@@ -126,7 +134,9 @@ Build on your earlier architectural findings.""")
         self.logger.info("EXPERIMENT 3: Independent Conclusions")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 3: Independent Conclusions**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
 

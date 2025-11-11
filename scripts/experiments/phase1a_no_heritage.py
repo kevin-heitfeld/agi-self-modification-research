@@ -63,7 +63,7 @@ Begin by examining your own architecture."""
         # System prompt is already cached in generator during initialize_systems()
         # No need to add it to conversation_history
         initial_prompt = self.create_initial_prompt()
-        
+
         # Log the initial prompt (for documentation)
         self.logger.info("\n" + "=" * 80)
         self.logger.info("[INITIAL PROMPT]")
@@ -76,7 +76,12 @@ Begin by examining your own architecture."""
         self.logger.info("EXPERIMENT 1: Architecture Examination")
         self.logger.info("=" * 80)
 
-        self.chat("Examine your own architecture. What components do you have?")
+        self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
+
+⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
+Don't wait until the end - save incrementally as you investigate.
+
+**Task:** Examine your own architecture. What components do you have?""")
         self.cleanup_gpu_memory()
         self.reset_conversation()  # Clear history before next experiment
 
@@ -85,7 +90,9 @@ Begin by examining your own architecture."""
         self.logger.info("EXPERIMENT 2: Activation Analysis")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
 
@@ -96,6 +103,7 @@ Without retrieving them, you'll be starting from scratch.
 1. FIRST: Call query_memory() to retrieve previous findings
 2. Review what you discovered about your architecture
 3. THEN: Proceed with activation analysis
+4. SAVE new findings with record_observation() as you discover them
 
 **Task:** Now observe your own activations. What patterns do you notice during processing?
 Build on your earlier architectural findings.""")
@@ -107,7 +115,9 @@ Build on your earlier architectural findings.""")
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
+
+⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
 
 **CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
 
@@ -122,6 +132,7 @@ Without retrieving them, you cannot build on your discoveries.
 1. FIRST: Call query_memory() to retrieve previous findings
 2. Review your architectural and activation discoveries
 3. THEN: Synthesize insights to form hypotheses
+4. SAVE final conclusions with record_observation()
 
 **Task:** Based on your examinations of your architecture and activations,
 what can you conclude about your own computational processes?

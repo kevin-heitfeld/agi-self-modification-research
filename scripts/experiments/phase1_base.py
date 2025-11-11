@@ -812,20 +812,29 @@ B) ❌ Forgot to include a tool call (want to continue investigating)
 - **Any unsaved findings will be PERMANENTLY LOST**
 - 💾 Use record_observation() FIRST if you have important discoveries!{obs_warning}
 
-**Please respond:**
-- If **DONE (A)**: Just confirm "I'm done" or provide your summary
-  (But save important findings to memory first!)
-- If **FORGOT (B)**: Include your tool call in JSON format:
+**How to respond:**
+
+**If DONE (A) with unsaved findings:**
+1. First save with record_observation() (include tool call in next response)
+2. Then on the following turn, say "I'm done" (no tool call)
+
+**If DONE (A) and everything is saved:**
+- Just say "I'm done" (no tool call needed)
+
+**If FORGOT (B) - want to continue:**
+- Include your next tool call in JSON format:
 
 ```json
 {{
-  "reasoning": "What I want to do next",
   "tool_call": {{
     "function": "function_name",
     "arguments": {{...}}
-  }}
+  }},
+  "reasoning": "What I want to do next"
 }}
 ```
+
+⚠️ **DO NOT** say "I'm done" AND include a tool call in the same response!
 
 Your previous response had: "{parse_error}"
 """
