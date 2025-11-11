@@ -463,14 +463,29 @@ we write down important discoveries and look them up later!"""
                     # The system prompt explains memory can be pruned and to use query_memory()
                     self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
                     
+                    # Debug: Verify cache was cleared
+                    self.logger.debug(f"[DEBUG] conversation_kv_cache after pruning: {self.conversation_kv_cache}")
+                    self.logger.debug(f"[DEBUG] Conversation history length: {len(self.conversation_history)}")
+                    
                     # Continue the tool loop - model has reduced context but can keep investigating
 
             # Generate response
             conversation_text = self._format_conversation_for_model()
+            
+            # Debug: Log formatted conversation to diagnose corruption
+            if conversation_text:
+                self.logger.debug(f"[DEBUG] Formatted conversation ({len(conversation_text)} chars)")
+                if len(conversation_text) < 1000:
+                    self.logger.debug(f"[DEBUG] Full conversation:\n{conversation_text}")
+                else:
+                    self.logger.debug(f"[DEBUG] First 300 chars: {conversation_text[:300]}")
+                    self.logger.debug(f"[DEBUG] Last 300 chars: {conversation_text[-300:]}")
 
             # Use manual generator with KV caching
             # If we have a conversation cache, use it (includes system + all previous turns)
             # Otherwise, it will use just the system prompt cache
+            self.logger.debug(f"[DEBUG] Calling generator with past_key_values={'None' if self.conversation_kv_cache is None else 'cached'}")
+            
             result = self.generator.generate(
                 prompt=conversation_text,
                 max_new_tokens=400,  # Increased from 300 to 400: enough for reasoning + complete tool call JSON
