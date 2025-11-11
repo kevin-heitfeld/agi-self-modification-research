@@ -164,19 +164,28 @@ class WeightInspector:
         # Return all layers except the one we're checking
         return [name for name in self._shared_weights[ptr] if name != layer_name]
     
-    def get_layer_names(self, filter_pattern: Optional[str] = None) -> List[str]:
+    def get_layer_names(self, filter_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get list of all layer names in the model.
+        Get summary of layer names in the model with patterns.
+        
+        Instead of returning a huge list of individual layer names (which can cause OOM),
+        returns a structured summary showing layer patterns and a sample of actual names.
         
         Args:
             filter_pattern: Optional string to filter layer names (case-insensitive)
             
         Returns:
-            List of layer names
+            Dictionary containing:
+                - total_layers: Total count of matching layers
+                - patterns: Dict mapping layer patterns to counts
+                - sample_names: List of ~20 example layer names
+                - note: Instructions for accessing specific layers
             
         Example:
             >>> inspector.get_layer_names(filter_pattern="attention")
-            ['layer.0.attention.q.weight', 'layer.0.attention.k.weight', ...]
+            {'total_layers': 144, 
+             'patterns': {'model.layers.{N}.self_attn.q_proj.weight': 36, ...},
+             'sample_names': ['model.layers.0.self_attn.q_proj.weight', ...]}
         """
         names = list(self.layers.keys())
         
@@ -184,7 +193,23 @@ class WeightInspector:
             pattern_lower = filter_pattern.lower()
             names = [n for n in names if pattern_lower in n.lower()]
         
-        return sorted(names)
+        names = sorted(names)
+        
+        # Extract patterns by replacing numbers with {N}
+        import re
+        pattern_counts = {}
+        for name in names:
+            # Replace all numbers with {N} to create a pattern
+            pattern = re.sub(r'\b\d+\b', '{N}', name)
+            pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
+        
+        # Return summary instead of full list to prevent OOM
+        return {
+            'total_layers': len(names),
+            'patterns': pattern_counts,
+            'sample_names': names[:20] if len(names) > 20 else names,
+            'note': 'To examine specific layers, use get_weight_statistics() or describe_layer() with the full layer name. Pattern {N} represents layer indices (0-35).'
+        }
     
     def get_layer_weights(self, layer_name: str) -> Dict[str, Any]:
         """
@@ -279,10 +304,12 @@ class WeightInspector:
                     results.append(result)
                 except Exception as e:
                     logger.error(f"Error getting statistics for layer '{single_layer}': {e}")
+                    # Get layer names summary (now returns dict, not list)
+                    layer_names_info = self.get_layer_names()
                     results.append({
                         "layer_name": single_layer,
                         "error": str(e),
-                        "available_layers": self.get_layer_names()[:10]  # Show first 10 as hint
+                        "available_layers_sample": layer_names_info.get("sample_names", [])
                     })
             return results
         

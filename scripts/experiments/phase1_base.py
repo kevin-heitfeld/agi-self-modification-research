@@ -265,7 +265,7 @@ Turn 4: Brief findings (150 tokens) + record_observation() to save detailed anal
 Turn 8: [SYSTEM WARNING: Memory limit approaching]
 Turn 9: Call record_observation() to save recent unsaved findings
 Turn 10: [SYSTEM: Old turns pruned, working memory reset]
-Turn 11: Call query_memory(category="architecture") to retrieve earlier findings
+Turn 11: Call query_memory() to retrieve earlier findings
 ```
 
 This is exactly how humans do research - we don't keep everything in our heads,

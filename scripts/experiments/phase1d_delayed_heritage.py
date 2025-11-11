@@ -112,7 +112,7 @@ Your previous architectural findings are ONLY available through query_memory().
 Without retrieving them, you'll be starting from scratch.
 
 **Recommended approach:**
-1. FIRST: Call query_memory(category="Architecture") or query_memory()
+1. FIRST: Call query_memory() to retrieve previous findings
 2. Review what you discovered about your architecture
 3. THEN: Proceed with activation analysis
 

@@ -416,23 +416,34 @@ def get_weight_summary() -> Dict[str, Any]:
         {'total_parameters': 3090339840, 'num_layers': 288, ...}
     \"\"\"
 
-def get_layer_names(filter_pattern: Optional[str] = None) -> List[str]:
+def get_layer_names(filter_pattern: Optional[str] = None) -> Dict[str, Any]:
     \"\"\"
-    Get all layer names, optionally filtered by pattern.
+    Get summary of layer names with patterns (optimized to prevent OOM).
+
+    Instead of returning all layer names (which can be huge), returns a structured
+    summary showing layer patterns and example names.
 
     Args:
         filter_pattern: Substring to filter layer names (case-insensitive).
-                       If None, returns all layers.
+                       If None, includes all layers.
 
     Returns:
-        List of layer names matching the filter.
+        Dict containing:
+        - total_layers: Total number of matching layers
+        - patterns: Dict mapping layer patterns to counts (e.g., "model.layers.{N}.mlp.gate_proj.weight": 36)
+        - sample_names: List of ~20 example layer names
+        - note: Instructions for examining specific layers
 
     Examples:
         >>> get_layer_names()
-        ['model.embed_tokens.weight', 'model.layers.0.self_attn.q_proj.weight', ...]
+        {'total_layers': 288, 
+         'patterns': {'model.layers.{N}.self_attn.q_proj.weight': 36, ...},
+         'sample_names': ['model.embed_tokens.weight', 'model.layers.0.self_attn.q_proj.weight', ...]}
 
         >>> get_layer_names(filter_pattern="attention")
-        ['model.layers.0.self_attn.q_proj.weight', ...]
+        {'total_layers': 144,
+         'patterns': {'model.layers.{N}.self_attn.q_proj.weight': 36, ...},
+         'sample_names': ['model.layers.0.self_attn.q_proj.weight', ...]}
     \"\"\"
 
 def get_weight_statistics(layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:

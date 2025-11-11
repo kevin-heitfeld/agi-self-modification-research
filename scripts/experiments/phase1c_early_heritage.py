@@ -98,7 +98,7 @@ Your previous heritage exploration findings are ONLY available through query_mem
 Without retrieving them, you'll lose the context you gained from heritage.
 
 **Recommended approach:**
-1. FIRST: Call query_memory(category="Heritage") or query_memory()
+1. FIRST: Call query_memory() to retrieve previous findings
 2. Review what you learned from heritage documents
 3. THEN: Examine your architecture in light of that context
 
