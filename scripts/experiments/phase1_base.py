@@ -427,8 +427,15 @@ we write down important discoveries and look them up later!"""
         system_msg = [msg for msg in self.conversation_history if msg["role"] == "system"]
         self.conversation_history = system_msg
 
-        # Clear the conversation KV cache (system prompt cache remains)
+        # CRITICAL: Clear the conversation KV cache completely
+        # This forces the next generation to start fresh with ONLY system prompt cache
+        # Without this, position IDs get misaligned because the generator expects
+        # the cache to match the conversation history length
         self.conversation_kv_cache = None
+
+        # NOTE: The system prompt cache (self.generator.system_prompt_cache) remains,
+        # so the next generation will correctly use system cache + new input,
+        # with position IDs calculated from system_prompt_length
 
         self.logger.info("[RESET] Conversation history cleared for new experiment (system prompt retained)")
 
@@ -519,6 +526,16 @@ we write down important discoveries and look them up later!"""
             # If we have a conversation cache, use it (includes system + all previous turns)
             # Otherwise, it will use just the system prompt cache
             self.logger.debug(f"[DEBUG] Calling generator with past_key_values={'None' if self.conversation_kv_cache is None else 'cached'}")
+            if self.conversation_kv_cache is not None:
+                cache_len = self.conversation_kv_cache[0][0].shape[2]
+                self.logger.debug(f"[DEBUG] Conversation KV cache length: {cache_len} tokens")
+            else:
+                self.logger.debug(f"[DEBUG] No conversation cache, will use system cache ({self.system_prompt_tokens} tokens)")
+
+            # Debug: Log the actual prompt tokens being sent
+            prompt_token_count = len(self.generator.tokenizer.encode(conversation_text))
+            self.logger.debug(f"[DEBUG] Prompt token count: {prompt_token_count}")
+            self.logger.debug(f"[DEBUG] Prompt preview (first 200 chars): {conversation_text[:200]}")
 
             result = self.generator.generate(
                 prompt=conversation_text,
@@ -890,6 +907,10 @@ Your previous response had: "{parse_error}"
             if msg["role"] != "system"
         ]
 
+        # Debug: Log what's being formatted
+        self.logger.debug(f"[DEBUG] _format_conversation_for_model: {len(conversation_without_system)} messages (system excluded)")
+        self.logger.debug(f"[DEBUG] First message role: {conversation_without_system[0]['role'] if conversation_without_system else 'NONE'}")
+
         # Token budget management
         MAX_CONTEXT_TOKENS = 8000
         KEEP_RECENT_EXCHANGES = 2
@@ -921,6 +942,10 @@ Your previous response had: "{parse_error}"
         # Format using our manual chat template helper
         # This ensures consistent formatting with the cached system prompt
         formatted = format_qwen_chat(trimmed_history, add_generation_prompt=True)
+
+        # Debug: Log formatted output
+        self.logger.debug(f"[DEBUG] Formatted conversation length: {len(formatted)} chars")
+        self.logger.debug(f"[DEBUG] Formatted starts with: {formatted[:100] if formatted else 'EMPTY'}")
 
         return formatted
 
