@@ -225,11 +225,11 @@ When you say "I'm done with this experiment", the system will:
    - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
-   - **RESPONSE LIMIT: Maximum 450 tokens per response**
-     - **CRITICAL**: Your responses will be hard-cut at 450 tokens
+   - **RESPONSE LIMIT: Maximum 500 tokens per response**
+     - **CRITICAL**: Your responses will be hard-cut at 500 tokens
      - Incomplete JSON will cause errors and corrupt future responses
      - Always finish your JSON tool calls within the limit
-     - Token budget: Reasoning (~100-150) + JSON (~150-250) + Buffer (~50)
+     - Token budget: Reasoning (~150-200) + JSON (~200-250) + Buffer (~50)
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -253,11 +253,11 @@ When conversation gets long (you'll receive warnings):
 
 **Response Planning Tips:**
 - **ALWAYS complete your JSON** - incomplete JSON breaks everything
-- Keep reasoning focused (~100-150 tokens maximum)
-- Tool calls with arguments: ~150-250 tokens
+- Keep reasoning focused (~150-200 tokens maximum)
+- Tool calls with arguments: ~200-250 tokens
 - Leave ~50 token buffer to ensure JSON closes properly
 - For complex data, use record_observation() first, then just reference it
-- **If your response approaches 450 tokens, STOP and finish the JSON immediately**
+- **If your response approaches 500 tokens, STOP and finish the JSON immediately**
 
 **Example workflow:**
 ```
@@ -587,7 +587,7 @@ we write down important discoveries and look them up later!"""
 
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=450,  # Increased slightly to reduce truncation (from 400 to 450)
+                max_new_tokens=500,  # Increased with memory optimizations (Flash Attention 2 + KV quantization)
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
@@ -633,7 +633,7 @@ we write down important discoveries and look them up later!"""
                 if '{' in response and response.count('{') > response.count('}'):
                     self.logger.warning("⚠ Detected incomplete JSON (more { than })")
                     truncation_warning = (
-                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 450-token limit.\n"
+                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 500-token limit.\n"
                         "The JSON appears incomplete.\n\n"
                         "� **CRITICAL: Your tool call was NOT EXECUTED!**\n"
                         "A tool is only executed if you receive a TOOL_RESULTS response.\n"
@@ -1178,7 +1178,7 @@ Your previous response had: "{parse_error}"
             # Print GPU memory summary with current limits
             self.gpu_monitor.print_summary(
                 current_limits={
-                    "max_new_tokens": 450,
+                    "max_new_tokens": 500,
                     "max_conversation_tokens": 2000,
                     "keep_recent_turns": 2
                 }
@@ -1198,7 +1198,7 @@ Your previous response had: "{parse_error}"
             self.gpu_monitor.snapshot("session_error")
             self.gpu_monitor.print_summary(
                 current_limits={
-                    "max_new_tokens": 450,
+                    "max_new_tokens": 500,
                     "max_conversation_tokens": 2000,
                     "keep_recent_turns": 2
                 }

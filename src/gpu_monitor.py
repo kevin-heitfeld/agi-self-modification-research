@@ -33,7 +33,7 @@ class GPUMonitor:
         monitor = GPUMonitor(logger)
         monitor.snapshot("model_loaded")
         # ... run experiments ...
-        monitor.snapshot("generation_complete", {"tokens": 450})
+        monitor.snapshot("generation_complete", {"tokens": 500})
         monitor.print_summary()
     """
     
@@ -155,7 +155,7 @@ class GPUMonitor:
         
         Args:
             current_limits: Optional dict with current limits for recommendations
-                           (e.g., {"max_new_tokens": 450, "max_conversation_tokens": 2000})
+                           (e.g., {"max_new_tokens": 500, "max_conversation_tokens": 2000})
             include_recommendations: Whether to include limit increase recommendations
         """
         if not self.cuda_available:
