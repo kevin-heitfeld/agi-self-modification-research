@@ -752,7 +752,20 @@ we write down important discoveries and look them up later!"""
             except json.JSONDecodeError as e:
                 parse_error = f"Invalid JSON: {str(e)}"
             except Exception as e:
-                parse_error = f"Error parsing tool call: {str(e)}"
+                # Check for common formatting errors
+                error_msg = str(e)
+
+                # Detect unclosed code block (``` without closing ```)
+                if "No JSON object found in response" in error_msg or "Could not find complete JSON object" in error_msg:
+                    # Check if response has opening ``` but no closing ```
+                    if response.count('```') == 1:
+                        parse_error = "Missing closing ``` for code block. You opened a code block with ``` but forgot to close it."
+                    elif response.count('```') % 2 != 0:
+                        parse_error = "Unmatched ``` code block markers. Make sure each ``` has a closing ```."
+                    else:
+                        parse_error = f"Error parsing tool call: {error_msg}"
+                else:
+                    parse_error = f"Error parsing tool call: {error_msg}"
 
             if tool_call is None:
                 # No valid tool call - check if this is intentional (task complete) or an error
