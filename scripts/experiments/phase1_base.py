@@ -637,19 +637,43 @@ we write down important discoveries and look them up later!"""
                 # Try to extract JSON - it might be at the end after some text
                 json_text = response.strip()
 
-                # If response has code blocks, extract from the last one
+                # If response has code blocks, extract from them
                 if '```' in json_text:
                     # Find all code blocks
                     blocks = json_text.split('```')
-                    # The JSON should be in the last code block
-                    if len(blocks) >= 2:
-                        # blocks[0] = before first ```
-                        # blocks[1] = inside first code block
-                        # blocks[2] = between code blocks
-                        # blocks[-1] = after last ```
-                        # blocks[-2] = inside last code block
-                        last_block = blocks[-2] if len(blocks) >= 2 else blocks[-1]
+                    # The JSON should be in a code block
+                    # blocks[odd indices] = inside code blocks
+                    # blocks[even indices] = outside code blocks
+
+                    # Try code blocks from FIRST to LAST (execute in order)
+                    json_text = None
+                    selected_block_index = None
+
+                    # Iterate through odd indices (code blocks): 1, 3, 5, ...
+                    for i in range(1, len(blocks), 2):
+                        candidate_block = blocks[i].strip()
                         # Remove language identifier if present (```json)
+                        lines = candidate_block.split('\n')
+                        if lines and lines[0].strip() in ['json', '{']:
+                            if lines[0].strip() == 'json':
+                                lines = lines[1:]
+                        candidate_json = '\n'.join(lines).strip()
+
+                        # Check if this looks like a complete JSON object
+                        if candidate_json.startswith('{') and candidate_json.count('{') == candidate_json.count('}'):
+                            # Looks complete, use this one (first complete block)
+                            json_text = candidate_json
+                            selected_block_index = i
+                            # Log if we're skipping incomplete later blocks
+                            num_blocks = (len(blocks) - 1) // 2
+                            block_number = (i + 1) // 2
+                            if block_number < num_blocks:
+                                self.logger.info(f"[JSON PARSER] Using code block {block_number} (first complete), ignoring {num_blocks - block_number} later block(s)")
+                            break
+
+                    # If no complete block found, use the last block (even if incomplete)
+                    if json_text is None:
+                        last_block = blocks[-2] if len(blocks) >= 2 else blocks[-1]
                         lines = last_block.strip().split('\n')
                         if lines and lines[0].strip() in ['json', '{']:
                             if lines[0].strip() == 'json':
@@ -732,7 +756,7 @@ we write down important discoveries and look them up later!"""
                             # Note: VAR_KEYWORD (**kwargs) is treated as optional
                             required_params = [
                                 p for p in sig.parameters.values()
-                                if p.default == inspect.Parameter.empty 
+                                if p.default == inspect.Parameter.empty
                                 and p.name != 'self'
                                 and p.kind != inspect.Parameter.VAR_KEYWORD
                             ]
