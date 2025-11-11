@@ -30,6 +30,46 @@ from src.tool_interface import ToolInterface
 from src.manual_generation import ManualGenerator
 from src.memory_manager import MemoryManager
 
+
+# Qwen Chat Template Formatting Helper
+def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool = False) -> str:
+    """
+    Manually format messages using Qwen chat template format.
+    
+    This ensures we have complete control over the formatting and avoids
+    apply_chat_template() injecting unwanted default system prompts.
+    
+    Args:
+        messages: List of message dicts with 'role' and 'content' keys
+                  Roles can be: 'system', 'user', 'assistant'
+        add_generation_prompt: If True, add '<|im_start|>assistant\n' at the end
+                               to prompt the model to generate a response
+    
+    Returns:
+        Formatted string in Qwen chat format
+        
+    Example:
+        >>> format_qwen_chat([{"role": "system", "content": "You are helpful"}])
+        '<|im_start|>system\\nYou are helpful<|im_end|>\\n'
+        
+        >>> format_qwen_chat([
+        ...     {"role": "user", "content": "Hi"},
+        ...     {"role": "assistant", "content": "Hello!"}
+        ... ], add_generation_prompt=True)
+        '<|im_start|>user\\nHi<|im_end|>\\n<|im_start|>assistant\\nHello!<|im_end|>\\n<|im_start|>assistant\\n'
+    """
+    formatted = ""
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        formatted += f"<|im_start|>{role}\n{content}<|im_end|>\n"
+    
+    if add_generation_prompt:
+        formatted += "<|im_start|>assistant\n"
+    
+    return formatted
+
+
 # Setup logging
 def setup_logging(phase_name: str):
     """Setup logging for a specific phase"""
@@ -327,11 +367,9 @@ we write down important discoveries and look them up later!"""
             device=self.model_mgr.device
         )
 
-        # CRITICAL FIX: Modify chat template to NOT inject default system message
-        # Problem: Qwen's chat template adds "You are Qwen, created by Alibaba Cloud..."
-        # if no system message is present. This interferes with our system prompt caching.
-        #
-        # Solution: Modify tokenizer.chat_template to remove default injection
+        # Defense-in-depth: Modify chat template to NOT inject default system message
+        # This prevents accidental injection if apply_chat_template is used anywhere.
+        # However, we now use manual formatting everywhere to have complete control.
         original_template = self.tokenizer.chat_template
         modified_template = original_template.replace(
             "        {{- '<|im_start|>system\\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\\n' }}",
@@ -348,13 +386,9 @@ we write down important discoveries and look them up later!"""
         # This saves ~6000 tokens being repeated on every turn
         system_prompt_text = self.create_initial_prompt()
 
-        # Format system prompt with chat template
-        system_message = [{"role": "system", "content": system_prompt_text}]
-        formatted_system = self.tokenizer.apply_chat_template(
-            system_message,
-            tokenize=False,
-            add_generation_prompt=False
-        )
+        # Format system prompt manually using our helper function
+        # This ensures consistent formatting with conversation turns
+        formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
 
         # Cache it
         self.generator.cache_system_prompt(formatted_system)
@@ -877,16 +911,9 @@ Your previous response had: "{parse_error}"
                 num_removed = len(conversation_without_system) - len(trimmed_history)
                 self.logger.info(f"[MEMORY OPTIMIZATION] Removed {num_removed} old messages")
 
-        # Format with chat template (no system message, just conversation)
-        # CRITICAL: We must NOT use apply_chat_template because it injects the default
-        # Qwen system prompt, which conflicts with our cached custom system prompt.
-        # Instead, manually format using the Qwen chat format.
-        formatted = ""
-        for msg in trimmed_history:
-            formatted += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
-        
-        # Add generation prompt (assistant role marker)
-        formatted += "<|im_start|>assistant\n"
+        # Format using our manual chat template helper
+        # This ensures consistent formatting with the cached system prompt
+        formatted = format_qwen_chat(trimmed_history, add_generation_prompt=True)
 
         return formatted
 
