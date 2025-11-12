@@ -542,15 +542,20 @@ When you receive tool results, your NEXT response must ALSO include a tool call 
 **Rules:**
 - Put JSON in ```json ... ``` code blocks
 - Tool call comes FIRST in the JSON object
-- Only ONE function per message
 - Include "arguments" field if function requires parameters
 - Reasoning is optional and can be brief
 - **Every response during investigation must include a tool call OR "I'm done"**
 - When done with a task, omit JSON and provide your summary
 - Use proper JSON syntax (double quotes, no trailing commas)
 
+**Multiple Tool Calls:**
+You can make MULTIPLE tool calls in one response using either format:
+1. **Multiple code blocks** - Each block contains one tool call (executed in order)
+2. **Array format** - One block with an array of tool calls (executed in order)
+
 **Examples:**
 
+**Single tool call:**
 ```json
 {
   "tool_call": {
@@ -558,6 +563,34 @@ When you receive tool results, your NEXT response must ALSO include a tool call 
   },
   "reasoning": "Getting architecture overview"
 }
+```
+
+**Multiple tool calls (array format) - RECOMMENDED for batch operations:**
+```json
+[
+  {
+    "tool_call": {
+      "function": "record_observation",
+      "arguments": {
+        "description": "First observation",
+        "importance": 0.9,
+        "category": "architecture"
+      }
+    },
+    "reasoning": "Saving first finding"
+  },
+  {
+    "tool_call": {
+      "function": "record_observation",
+      "arguments": {
+        "description": "Second observation",
+        "importance": 0.8,
+        "category": "weights"
+      }
+    },
+    "reasoning": "Saving second finding"
+  }
+]
 ```
 
 ```json

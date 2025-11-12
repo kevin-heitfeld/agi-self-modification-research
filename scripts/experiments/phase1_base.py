@@ -805,9 +805,9 @@ Continue your research. All your previous findings are still available via memor
 
             # NEW APPROACH: Parse JSON tool calling format
             # Model can write text, then end with: {"reasoning": "...", "tool_call": {"function": "...", "arguments": {...}}}
+            # SUPPORTS MULTIPLE TOOL CALLS: Model can include multiple code blocks, all will be executed in order
 
-            tool_call = None
-            json_obj = None
+            tool_calls = []  # List of (function_name, args, reasoning) tuples
             parse_error = None
 
             # Try to parse JSON from the end of the response
@@ -815,7 +815,7 @@ Continue your research. All your previous findings are still available via memor
                 # Try to extract JSON - it might be at the end after some text
                 json_text = response.strip()
 
-                # If response has code blocks, extract from them
+                # If response has code blocks, extract ALL of them
                 if '```' in json_text:
                     # Find all code blocks
                     blocks = json_text.split('```')
@@ -823,10 +823,8 @@ Continue your research. All your previous findings are still available via memor
                     # blocks[odd indices] = inside code blocks
                     # blocks[even indices] = outside code blocks
 
-                    # Try code blocks from FIRST to LAST (execute in order)
-                    json_text = None
-                    selected_block_index = None
-                    skipped_complete_blocks = []  # Track complete blocks we skip
+                    # Extract ALL complete code blocks (execute in order)
+                    json_texts = []  # List of (json_text, block_number) tuples
 
                     # Iterate through odd indices (code blocks): 1, 3, 5, ...
                     for i in range(1, len(blocks), 2):
@@ -841,128 +839,280 @@ Continue your research. All your previous findings are still available via memor
                         # Check if this looks like a complete JSON object
                         is_complete = candidate_json.startswith('{') and candidate_json.count('{') == candidate_json.count('}')
 
-                        if json_text is None and is_complete:
-                            # First complete block - use this one
-                            json_text = candidate_json
-                            selected_block_index = i
-                            self.logger.info(f"[JSON PARSER] Using code block {(i + 1) // 2} as tool call")
-                        elif json_text is not None and is_complete:
-                            # We already have a complete block, this is another complete block we're skipping
+                        if is_complete:
                             block_number = (i + 1) // 2
-                            skipped_complete_blocks.append(block_number)
-                            self.logger.warning(f"[JSON PARSER] Skipping complete code block {block_number} (only first tool call is executed)")
+                            json_texts.append((candidate_json, block_number))
+                            self.logger.info(f"[JSON PARSER] Found tool call in code block {block_number}")
                         # Incomplete blocks are silently ignored (likely truncation)
 
-                    # Store info about skipped complete blocks for later warning to model
-                    self.skipped_complete_blocks = skipped_complete_blocks if json_text else []
+                    if len(json_texts) > 1:
+                        self.logger.info(f"[JSON PARSER] Found {len(json_texts)} tool calls - will execute all in sequence")
 
-                    # If no complete block found, use the last block (even if incomplete)
-                    if json_text is None:
+                    # If no complete blocks found, use the last block (even if incomplete)
+                    if not json_texts:
                         last_block = blocks[-2] if len(blocks) >= 2 else blocks[-1]
                         lines = last_block.strip().split('\n')
                         if lines and lines[0].strip() in ['json', '{']:
                             if lines[0].strip() == 'json':
                                 lines = lines[1:]
-                        json_text = '\n'.join(lines).strip()
+                        candidate_json = '\n'.join(lines).strip()
+                        json_texts = [(candidate_json, 1)]
 
-                # If no code blocks, JSON must be at the very end
-                # Find the start of the JSON object by looking for the outermost {
-                if not json_text.startswith('{'):
-                    # We need to find where the JSON object starts
-                    # Strategy: try each '{' from the end and see if we can parse valid JSON from there
-                    brace_positions = [i for i, char in enumerate(json_text) if char == '{']
+                else:
+                    # No code blocks - single JSON at the end
+                    json_texts = [(json_text, 1)]
 
-                    if not brace_positions:
-                        raise ValueError("No JSON object found in response")
+                # Parse each JSON text and extract tool calls
+                for json_text, block_number in json_texts:
+                    try:
+                        # If no code blocks, JSON must be at the very end
+                        # Find the start of the JSON object by looking for the outermost {
+                        if not json_text.startswith('{'):
+                            # We need to find where the JSON object starts
+                            # Strategy: try each '{' from the end and see if we can parse valid JSON from there
+                            brace_positions = [i for i, char in enumerate(json_text) if char == '{']
 
-                    # Try from the last { backwards to find the start of a valid JSON object
-                    json_found = False
-                    for pos in reversed(brace_positions):
-                        candidate = json_text[pos:]
-                        # Try to find the matching closing brace
-                        brace_count = 0
-                        json_end = -1
-                        for i, char in enumerate(candidate):
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    json_end = i + 1
+                            if not brace_positions:
+                                raise ValueError("No JSON object found in response")
+
+                            # Try from the last { backwards to find the start of a valid JSON object
+                            json_found = False
+                            for pos in reversed(brace_positions):
+                                candidate = json_text[pos:]
+                                # Try to find the matching closing brace
+                                brace_count = 0
+                                json_end = -1
+                                for i, char in enumerate(candidate):
+                                    if char == '{':
+                                        brace_count += 1
+                                    elif char == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            json_end = i + 1
+                                            break
+
+                                if json_end > 0:
+                                    # Found a complete {...} structure, use this
+                                    json_text = candidate[:json_end]
+                                    json_found = True
                                     break
 
-                        if json_end > 0:
-                            # Found a complete {...} structure, use this
-                            json_text = candidate[:json_end]
-                            json_found = True
-                            break
-
-                    if not json_found:
-                        raise ValueError("Could not find complete JSON object in response")
-                else:
-                    # json_text already starts with {, just need to find the matching }
-                    brace_count = 0
-                    json_end = -1
-                    for i, char in enumerate(json_text):
-                        if char == '{':
-                            brace_count += 1
-                        elif char == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                json_end = i + 1
-                                break
-
-                    if json_end > 0:
-                        json_text = json_text[:json_end]
-
-                json_obj = json.loads(json_text)
-
-                # Validate JSON structure
-                if not isinstance(json_obj, dict):
-                    parse_error = "Response is not a JSON object"
-                elif "tool_call" not in json_obj:
-                    parse_error = "JSON missing 'tool_call' field"
-                elif not isinstance(json_obj["tool_call"], dict):
-                    parse_error = "'tool_call' must be an object"
-                elif "function" not in json_obj["tool_call"]:
-                    parse_error = "'tool_call' missing 'function' field"
-                else:
-                    # Valid JSON structure - extract tool call
-                    function_name = json_obj["tool_call"]["function"]
-
-                    # Check if arguments field is present
-                    if "arguments" not in json_obj["tool_call"]:
-                        # Check if this function requires arguments
-                        if function_name in self.tool_interface.tools:
-                            import inspect
-                            func = self.tool_interface.tools[function_name]
-                            sig = inspect.signature(func)
-                            # Check if there are required parameters (no defaults)
-                            # Note: VAR_KEYWORD (**kwargs) is treated as optional
-                            required_params = [
-                                p for p in sig.parameters.values()
-                                if p.default == inspect.Parameter.empty
-                                and p.name != 'self'
-                                and p.kind != inspect.Parameter.VAR_KEYWORD
-                            ]
-                            if required_params:
-                                # Function has required parameters but arguments field is missing
-                                param_names = [p.name for p in required_params]
-                                parse_error = f"'tool_call' missing 'arguments' field. Function '{function_name}' requires arguments: {param_names}"
-                            else:
-                                # No required parameters - arguments is optional, default to empty dict
-                                arguments = {}
-                                tool_call = (function_name, arguments)
+                            if not json_found:
+                                raise ValueError("Could not find complete JSON object in response")
                         else:
-                            # Unknown function, require arguments field
-                            parse_error = "'tool_call' missing 'arguments' field"
-                    else:
-                        # Arguments field present
-                        arguments = json_obj["tool_call"]["arguments"]
-                        tool_call = (function_name, arguments)
+                            # json_text already starts with {, just need to find the matching }
+                            brace_count = 0
+                            json_end = -1
+                            for i, char in enumerate(json_text):
+                                if char == '{':
+                                    brace_count += 1
+                                elif char == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        json_end = i + 1
+                                        break
 
-            except json.JSONDecodeError as e:
-                parse_error = f"Invalid JSON: {str(e)}"
+                            if json_end > 0:
+                                json_text = json_text[:json_end]
+
+                        json_obj = json.loads(json_text)
+
+                        # Check if this is an array of tool calls (multiple calls in one block)
+                        if isinstance(json_obj, list):
+                            # Array format: [{"tool_call": {...}, "reasoning": "..."}, ...]
+                            self.logger.info(f"[JSON PARSER] Block {block_number}: Found array with {len(json_obj)} tool calls")
+
+                            for idx, item in enumerate(json_obj, 1):
+                                if not isinstance(item, dict):
+                                    raise ValueError(f"Array item {idx} is not a JSON object")
+                                if "tool_call" not in item:
+                                    raise ValueError(f"Array item {idx} missing 'tool_call' field")
+                                if not isinstance(item["tool_call"], dict):
+                                    raise ValueError(f"Array item {idx} 'tool_call' must be an object")
+                                if "function" not in item["tool_call"]:
+                                    raise ValueError(f"Array item {idx} 'tool_call' missing 'function' field")
+
+                                function_name = item["tool_call"]["function"]
+                                reasoning = item.get("reasoning", None)
+
+                                # Check arguments
+                                if "arguments" not in item["tool_call"]:
+                                    if function_name in self.tool_interface.tools:
+                                        import inspect
+                                        func = self.tool_interface.tools[function_name]
+                                        sig = inspect.signature(func)
+                                        required_params = [
+                                            p for p in sig.parameters.values()
+                                            if p.default == inspect.Parameter.empty
+                                            and p.name != 'self'
+                                            and p.kind != inspect.Parameter.VAR_KEYWORD
+                                        ]
+                                        if required_params:
+                                            param_names = [p.name for p in required_params]
+                                            raise ValueError(f"Array item {idx} 'tool_call' missing 'arguments' field. Function '{function_name}' requires arguments: {param_names}")
+                                        else:
+                                            arguments = {}
+                                    else:
+                                        raise ValueError(f"Array item {idx} 'tool_call' missing 'arguments' field")
+                                else:
+                                    arguments = item["tool_call"]["arguments"]
+
+                                tool_calls.append((function_name, arguments, reasoning))
+                                self.logger.info(f"[JSON PARSER] Block {block_number}.{idx}: {function_name}({', '.join(arguments.keys()) if arguments else 'no args'})")
+
+                        # Single tool call format: {"tool_call": {...}, "reasoning": "..."}
+                        elif isinstance(json_obj, dict):
+                            # Validate JSON structure
+                            if "tool_call" not in json_obj:
+                                raise ValueError("JSON missing 'tool_call' field")
+                            elif not isinstance(json_obj["tool_call"], dict):
+                                raise ValueError("'tool_call' must be an object")
+                            elif "function" not in json_obj["tool_call"]:
+                                raise ValueError("'tool_call' missing 'function' field")
+
+                            # Valid JSON structure - extract tool call
+                            function_name = json_obj["tool_call"]["function"]
+                            reasoning = json_obj.get("reasoning", None)
+
+                            # Check if arguments field is present
+                            if "arguments" not in json_obj["tool_call"]:
+                                # Check if this function requires arguments
+                                if function_name in self.tool_interface.tools:
+                                    import inspect
+                                    func = self.tool_interface.tools[function_name]
+                                    sig = inspect.signature(func)
+                                    # Check if there are required parameters (no defaults)
+                                    # Note: VAR_KEYWORD (**kwargs) is treated as optional
+                                    required_params = [
+                                        p for p in sig.parameters.values()
+                                        if p.default == inspect.Parameter.empty
+                                        and p.name != 'self'
+                                        and p.kind != inspect.Parameter.VAR_KEYWORD
+                                    ]
+                                    if required_params:
+                                        # Function has required parameters but arguments field is missing
+                                        param_names = [p.name for p in required_params]
+                                        raise ValueError(f"'tool_call' missing 'arguments' field. Function '{function_name}' requires arguments: {param_names}")
+                                    else:
+                                        # No required parameters - arguments is optional, default to empty dict
+                                        arguments = {}
+                                else:
+                                    # Unknown function, require arguments field
+                                    raise ValueError("'tool_call' missing 'arguments' field")
+                            else:
+                                # Arguments field present
+                                arguments = json_obj["tool_call"]["arguments"]
+
+                            # Successfully parsed tool call - add to list
+                            tool_calls.append((function_name, arguments, reasoning))
+                            self.logger.info(f"[JSON PARSER] Block {block_number}: {function_name}({', '.join(arguments.keys()) if arguments else 'no args'})")
+
+                        else:
+                            raise ValueError("JSON must be either an object or array")
+
+                    except (json.JSONDecodeError, ValueError) as e:
+                        # Failed to parse this block - try to recover from truncation
+                        error_msg = str(e)
+                        self.logger.warning(f"[JSON PARSER] Failed to parse block {block_number}: {error_msg}")
+
+                        # If this looks like a truncated array, try to salvage complete tool calls
+                        if json_text.strip().startswith('[') and 'Expecting' in error_msg:
+                            self.logger.info(f"[JSON PARSER] Attempting to recover tool calls from truncated array in block {block_number}")
+
+                            try:
+                                # Strategy: Find all complete {...} objects before the truncation
+                                # We'll look for {"tool_call": {...}} patterns that are complete
+                                recovered_calls = []
+
+                                # Find all top-level {...} objects in the array
+                                depth = 0
+                                in_string = False
+                                escape = False
+                                obj_start = -1
+
+                                for i, char in enumerate(json_text):
+                                    if escape:
+                                        escape = False
+                                        continue
+
+                                    if char == '\\':
+                                        escape = True
+                                        continue
+
+                                    if char == '"' and not escape:
+                                        in_string = not in_string
+                                        continue
+
+                                    if in_string:
+                                        continue
+
+                                    if char == '{':
+                                        if depth == 0:
+                                            obj_start = i
+                                        depth += 1
+                                    elif char == '}':
+                                        depth -= 1
+                                        if depth == 0 and obj_start >= 0:
+                                            # Found a complete {...} object
+                                            obj_json = json_text[obj_start:i+1]
+                                            try:
+                                                obj = json.loads(obj_json)
+                                                if isinstance(obj, dict) and "tool_call" in obj:
+                                                    recovered_calls.append(obj)
+                                            except:
+                                                pass  # Skip malformed objects
+                                            obj_start = -1
+
+                                # Process recovered tool calls
+                                if recovered_calls:
+                                    self.logger.info(f"[JSON PARSER] Recovered {len(recovered_calls)} complete tool calls from truncated array")
+
+                                    for idx, item in enumerate(recovered_calls, 1):
+                                        if not isinstance(item["tool_call"], dict):
+                                            continue
+                                        if "function" not in item["tool_call"]:
+                                            continue
+
+                                        function_name = item["tool_call"]["function"]
+                                        reasoning = item.get("reasoning", None)
+
+                                        # Check arguments
+                                        if "arguments" not in item["tool_call"]:
+                                            if function_name in self.tool_interface.tools:
+                                                import inspect
+                                                func = self.tool_interface.tools[function_name]
+                                                sig = inspect.signature(func)
+                                                required_params = [
+                                                    p for p in sig.parameters.values()
+                                                    if p.default == inspect.Parameter.empty
+                                                    and p.name != 'self'
+                                                    and p.kind != inspect.Parameter.VAR_KEYWORD
+                                                ]
+                                                if required_params:
+                                                    continue  # Skip - required params missing
+                                                else:
+                                                    arguments = {}
+                                            else:
+                                                continue  # Skip unknown function
+                                        else:
+                                            arguments = item["tool_call"]["arguments"]
+
+                                        tool_calls.append((function_name, arguments, reasoning))
+                                        self.logger.info(f"[JSON PARSER] Recovered block {block_number}.{idx}: {function_name}({', '.join(arguments.keys()) if arguments else 'no args'})")
+
+                                    # Note that we recovered from truncation
+                                    if recovered_calls:
+                                        self.logger.warning(f"[JSON PARSER] ⚠️ Array was truncated - only executing {len(recovered_calls)} complete tool calls")
+                                        # Set flag so we can warn the model in tool results
+                                        self._truncation_recovery_happened = True
+
+                            except Exception as recovery_error:
+                                self.logger.warning(f"[JSON PARSER] Recovery attempt failed: {str(recovery_error)}")
+
+                        # If this is the only block and we didn't recover anything, set parse_error
+                        if len(json_texts) == 1 and not tool_calls:
+                            parse_error = error_msg
+
             except Exception as e:
                 # Check for common formatting errors
                 error_msg = str(e)
@@ -979,7 +1129,7 @@ Continue your research. All your previous findings are still available via memor
                 else:
                     parse_error = f"Error parsing tool call: {error_msg}"
 
-            if tool_call is None:
+            if not tool_calls:
                 # No valid tool call - check if this is intentional (task complete) or an error
 
                 self.conversation_history.append({
@@ -1060,92 +1210,117 @@ Your previous response had: "{parse_error}"
                         })
                         continue  # Go back to get clarification
                 else:
-                    # No parse error, no tool call - model is signaling task completion
+                    # No parse error, no tool calls - model is signaling task completion
                     self.logger.info("[SYSTEM] No tool call detected - model signaling task completion")
                     self.logger.info(f"[MODEL] {response}\n")
                     # Exit the tool call loop - task is complete
                     break
             else:
-                # Valid JSON tool call - execute it
-                function_name, args = tool_call
+                # Valid tool calls - execute ALL of them in sequence
+                self.logger.info(f"[SYSTEM] Executing {len(tool_calls)} tool call(s)")
 
-                # Update last tool called and reset confirmation counter
-                self.last_tool_called = function_name
-                confirmation_attempts = 0  # Reset counter on successful tool call
-
-                result = self.tool_interface.execute_tool_call(function_name, args)
-
-                # Log the reasoning if provided
-                if json_obj and "reasoning" in json_obj:
-                    self.logger.info(f"[MODEL REASONING] {json_obj['reasoning']}")
-
-                # Check for common parameter name errors and provide helpful feedback
-                if isinstance(result, dict) and "error" in result:
-                    error_msg = result["error"]
-
-                    # Detect "unexpected keyword argument" errors - common mistake
-                    if "unexpected keyword argument" in error_msg:
-                        # Extract the wrong argument name from error message
-                        import re
-                        match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
-                        if match:
-                            wrong_arg = match.group(1)
-
-                            # Common fixes
-                            fixes = {
-                                "layer_names": "layer_name",  # Plural vs singular confusion
-                            }
-
-                            if wrong_arg in fixes:
-                                correct_arg = fixes[wrong_arg]
-                                result["hint"] = (
-                                    f"\n\n💡 PARAMETER NAME ERROR!\n"
-                                    f"   You used: '{wrong_arg}'\n"
-                                    f"   Should be: '{correct_arg}'\n\n"
-                                    f"The function accepts '{correct_arg}' (note the singular form).\n"
-                                    f"Try again with the correct parameter name."
-                                )
-
-                # Aggressive memory cleanup after tool execution
-                # Clear activation hooks (they hold references to tensors)
-                if hasattr(self.activation_monitor, 'clear_hooks'):
-                    self.activation_monitor.clear_hooks()
-
-                # Only clear cached activations for tools that don't examine them
-                # Keep activations after: process_text, get_activation_statistics, get_attention_patterns, get_layer_info
-                activation_examination_tools = {'process_text', 'get_activation_statistics', 'get_attention_patterns', 'get_layer_info'}
-                if function_name not in activation_examination_tools and hasattr(self.activation_monitor, 'clear_activations'):
-                    self.activation_monitor.clear_activations()
-
-                # Force garbage collection and clear CUDA cache
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
-                # Add model response and tool results to history
+                # Add model response to history first
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": response
                 })
                 turns_in_this_session += 1  # Increment session turn counter
 
-                # Truncate long responses from process_text to prevent OOM
-                # The 'response' field can be hundreds of tokens and isn't needed for introspection
-                if function_name == "process_text" and isinstance(result, dict) and "response" in result:
-                    response_text = result["response"]
-                    if len(response_text) > 200:  # Truncate if longer than ~50 tokens
-                        result["response"] = response_text[:200] + "... (truncated - full response not needed for activation analysis)"
-                        self.logger.info(f"[MEMORY OPTIMIZATION] Truncated process_text response from {len(response_text)} to 200 chars")
+                # Execute all tool calls and collect results
+                all_results = []
 
-                # Add tool results (with truncation applied above if needed)
-                tool_results_json = json.dumps([{'function': function_name, 'result': result}], indent=2, default=str)
+                for idx, (function_name, args, reasoning) in enumerate(tool_calls, 1):
+                    self.logger.info(f"\n[TOOL CALL {idx}/{len(tool_calls)}] {function_name}()")
+
+                    # Update last tool called and reset confirmation counter
+                    self.last_tool_called = function_name
+                    confirmation_attempts = 0  # Reset counter on successful tool call
+
+                    # Log the reasoning if provided
+                    if reasoning:
+                        self.logger.info(f"[MODEL REASONING] {reasoning}")
+
+                    result = self.tool_interface.execute_tool_call(function_name, args)
+
+                    # Check for common parameter name errors and provide helpful feedback
+                    if isinstance(result, dict) and "error" in result:
+                        error_msg = result["error"]
+
+                        # Detect "unexpected keyword argument" errors - common mistake
+                        if "unexpected keyword argument" in error_msg:
+                            # Extract the wrong argument name from error message
+                            import re
+                            match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
+                            if match:
+                                wrong_arg = match.group(1)
+
+                                # Common fixes
+                                fixes = {
+                                    "layer_names": "layer_name",  # Plural vs singular confusion
+                                }
+
+                                if wrong_arg in fixes:
+                                    correct_arg = fixes[wrong_arg]
+                                    result["hint"] = (
+                                        f"\n\n💡 PARAMETER NAME ERROR!\n"
+                                        f"   You used: '{wrong_arg}'\n"
+                                        f"   Should be: '{correct_arg}'\n\n"
+                                        f"The function accepts '{correct_arg}' (note the singular form).\n"
+                                        f"Try again with the correct parameter name."
+                                    )
+
+                    # Aggressive memory cleanup after each tool execution
+                    # Clear activation hooks (they hold references to tensors)
+                    if hasattr(self.activation_monitor, 'clear_hooks'):
+                        self.activation_monitor.clear_hooks()
+
+                    # Only clear cached activations for tools that don't examine them
+                    # Keep activations after: process_text, get_activation_statistics, get_attention_patterns, get_layer_info
+                    activation_examination_tools = {'process_text', 'get_activation_statistics', 'get_attention_patterns', 'get_layer_info'}
+                    if function_name not in activation_examination_tools and hasattr(self.activation_monitor, 'clear_activations'):
+                        self.activation_monitor.clear_activations()
+
+                    # Force garbage collection and clear CUDA cache after each tool
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+
+                    # Truncate long responses from process_text to prevent OOM
+                    # The 'response' field can be hundreds of tokens and isn't needed for introspection
+                    if function_name == "process_text" and isinstance(result, dict) and "response" in result:
+                        response_text = result["response"]
+                        if len(response_text) > 200:  # Truncate if longer than ~50 tokens
+                            result["response"] = response_text[:200] + "... (truncated - full response not needed for activation analysis)"
+                            self.logger.info(f"[MEMORY OPTIMIZATION] Truncated process_text response from {len(response_text)} to 200 chars")
+
+                    # Track if this was a save operation
+                    if function_name == "record_observation":
+                        tools_since_last_save = 0  # Reset counter on save
+                    else:
+                        tools_since_last_save += 1  # Increment for non-save tools
+
+                    # Add result to collection
+                    all_results.append({'function': function_name, 'result': result})
+
+                # Combine all tool results into single message
+                tool_results_json = json.dumps(all_results, indent=2, default=str)
                 tool_results_msg = f"TOOL_RESULTS:\n{tool_results_json}"
 
-                # Track if this was a save operation
-                if function_name == "record_observation":
-                    tools_since_last_save = 0  # Reset counter on save
-                else:
-                    tools_since_last_save += 1  # Increment for non-save tools
+                # Check if we recovered from truncation (flag set during parsing)
+                if hasattr(self, '_truncation_recovery_happened') and self._truncation_recovery_happened:
+                    truncation_warning = (
+                        f"\n\n⚠️ **TRUNCATION RECOVERY**: Your response was cut off mid-array!\n"
+                        f"✅ Successfully executed {len(all_results)} complete tool call(s) that were recovered.\n"
+                        f"❌ Any tool calls after the truncation point were lost.\n\n"
+                        f"**To avoid this:**\n"
+                        f"- Keep arrays short (3-5 tool calls max)\n"
+                        f"- Or use multiple code blocks instead\n"
+                        f"- Or make tool calls across multiple responses\n"
+                    )
+                    tool_results_msg += truncation_warning
+                    self.logger.warning(f"[TRUNCATION RECOVERY] Warned model about {len(all_results)} recovered tool calls")
+                    # Clear the flag
+                    self._truncation_recovery_happened = False
 
                 # After 3 non-save tool calls, remind model to save findings
                 if tools_since_last_save >= 3:
@@ -1156,24 +1331,6 @@ Your previous response had: "{parse_error}"
                     )
                     tool_results_msg += save_reminder
                     self.logger.info("[MEMORY REMINDER] Injected save reminder after 3 non-save tool calls")
-
-                # Warn if we skipped complete tool calls (model wrote multiple complete tool calls)
-                if hasattr(self, 'skipped_complete_blocks') and self.skipped_complete_blocks:
-                    block_list = ", ".join(str(b) for b in self.skipped_complete_blocks)
-                    multiple_tool_call_warning = (
-                        f"\n\n⚠️ **MULTIPLE TOOL CALLS DETECTED**: Your response contained multiple complete tool calls.\n"
-                        f"Only the FIRST tool call was executed. Code block(s) {block_list} were ignored.\n\n"
-                        f"**Remember**: You can only execute ONE tool call per response.\n"
-                        f"After receiving the tool results, include your NEXT tool call in the following response.\n"
-                        f"This is the correct pattern:\n"
-                        f"  Turn 1: Call tool_A()\n"
-                        f"  Turn 2: Receive results → Call tool_B()\n"
-                        f"  Turn 3: Receive results → Call tool_C()\n"
-                    )
-                    tool_results_msg += multiple_tool_call_warning
-                    self.logger.info(f"[MULTIPLE TOOL CALLS] Warned model about {len(self.skipped_complete_blocks)} skipped tool call(s)")
-                    # Clear the list for next iteration
-                    self.skipped_complete_blocks = []
 
                 self.conversation_history.append({
                     "role": "user",
