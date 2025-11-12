@@ -79,31 +79,34 @@ class ModelManager:
         # Detect GPU tier based on memory and compute capability
         if "A100" in self.gpu_name or "A10" in self.gpu_name:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
+            # Conservative: 5000 * 5 = 25K cache (safer than 8000 * 5 = 40K)
             limits = {
-                "max_new_tokens": 1200,  # Increased from 800
-                "max_conversation_tokens": 8000,  # Increased from 4000
-                "keep_recent_turns": 6,  # Increased from 4
+                "max_new_tokens": 1000,  # More conservative than 1200
+                "max_conversation_tokens": 5000,  # Safer than 8000 (prevents excessive cache)
+                "keep_recent_turns": 5,  # Balanced retention
                 "gpu_profile": "high_end_ampere"
             }
             logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) - using generous limits")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
-            # Increased limits based on actual usage: only 6.45GB avg with 4.6GB headroom
+            # Conservative: cache is 5x conversation tokens (4000 * 5 = 20K cache, safe margin)
+            # Previous 6000 tokens caused OOM (30K cache reached 22,985 tokens)
             limits = {
-                "max_new_tokens": 1000,  # Increased from 750
-                "max_conversation_tokens": 6000,  # Increased from 3500
-                "keep_recent_turns": 5,  # Increased from 3
+                "max_new_tokens": 850,  # Modest increase from 750
+                "max_conversation_tokens": 4000,  # Safer than 6000 (prevents 30K cache OOM)
+                "keep_recent_turns": 4,  # Balanced context retention
                 "gpu_profile": "l4_ada"
             }
             logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with Flash Attention")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
+            # Conservative: 2500 * 5 = 12.5K cache (safer than 3500 * 5 = 17.5K)
             limits = {
-                "max_new_tokens": 700,  # Increased from 500
-                "max_conversation_tokens": 3500,  # Increased from 2000
-                "keep_recent_turns": 3,  # Increased from 2
+                "max_new_tokens": 600,  # Modest increase from 500
+                "max_conversation_tokens": 2500,  # Safer than 3500
+                "keep_recent_turns": 3,  # Balanced retention
                 "gpu_profile": "t4_turing"
             }
             logger.info(f"✓ T4 GPU detected ({self.gpu_name}) - using balanced limits")
