@@ -39,9 +39,103 @@ class ModelManager:
         self.model: Optional[PreTrainedModel] = None
         self.tokenizer: Optional[PreTrainedTokenizer] = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # Detect GPU capabilities for optimal configuration
+        self.gpu_name = None
+        self.gpu_memory_gb = 0.0
+        self.gpu_compute_capability = None
+        if self.device == "cuda":
+            self.gpu_name = torch.cuda.get_device_name(0)
+            self.gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            # Get compute capability (e.g., 7.5 for T4, 8.0 for A100, 8.9 for L4)
+            props = torch.cuda.get_device_properties(0)
+            self.gpu_compute_capability = f"{props.major}.{props.minor}"
+            logger.info(f"GPU detected: {self.gpu_name}")
+            logger.info(f"GPU memory: {self.gpu_memory_gb:.1f} GB")
+            logger.info(f"Compute capability: {self.gpu_compute_capability}")
 
         logger.info(f"ModelManager initialized for {model_name}")
         logger.info(f"Device: {self.device}")
+
+    def get_optimal_limits(self) -> Dict[str, int]:
+        """
+        Get optimal token limits based on detected GPU capabilities.
+        
+        Returns:
+            Dict with recommended limits for max_new_tokens, max_conversation_tokens, keep_recent_turns
+        """
+        # Default conservative limits (CPU or unknown GPU)
+        limits = {
+            "max_new_tokens": 400,
+            "max_conversation_tokens": 1500,
+            "keep_recent_turns": 2,
+            "gpu_profile": "conservative"
+        }
+        
+        if self.device != "cuda":
+            logger.info("CPU detected - using conservative limits")
+            return limits
+        
+        # Detect GPU tier based on memory and compute capability
+        if "A100" in self.gpu_name or "A10" in self.gpu_name:
+            # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
+            limits = {
+                "max_new_tokens": 800,
+                "max_conversation_tokens": 4000,
+                "keep_recent_turns": 4,
+                "gpu_profile": "high_end_ampere"
+            }
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) - using generous limits")
+            
+        elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
+            # L4 (24 GB) - Ada Lovelace
+            limits = {
+                "max_new_tokens": 750,
+                "max_conversation_tokens": 3500,
+                "keep_recent_turns": 3,
+                "gpu_profile": "l4_ada"
+            }
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with Flash Attention")
+            
+        elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
+            # T4 (16 GB) - Turing
+            limits = {
+                "max_new_tokens": 500,
+                "max_conversation_tokens": 2000,
+                "keep_recent_turns": 2,
+                "gpu_profile": "t4_turing"
+            }
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) - using balanced limits")
+            
+        elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
+            # V100 (16-32 GB) - Volta
+            limits = {
+                "max_new_tokens": 600,
+                "max_conversation_tokens": 2500,
+                "keep_recent_turns": 3,
+                "gpu_profile": "v100_volta"
+            }
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) - using moderate limits")
+            
+        elif self.gpu_memory_gb >= 10:
+            # Other GPU with decent memory (P100, etc.)
+            limits = {
+                "max_new_tokens": 450,
+                "max_conversation_tokens": 1800,
+                "keep_recent_turns": 2,
+                "gpu_profile": "moderate"
+            }
+            logger.info(f"✓ GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) - using moderate limits")
+            
+        else:
+            # Small GPU or unknown
+            logger.warning(f"⚠ Small GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) - using conservative limits")
+        
+        logger.info(f"  Recommended limits: max_new_tokens={limits['max_new_tokens']}, "
+                   f"max_conversation_tokens={limits['max_conversation_tokens']}, "
+                   f"keep_recent_turns={limits['keep_recent_turns']}")
+        
+        return limits
 
     def download_model(self, use_auth_token: Optional[str] = None) -> bool:
         """

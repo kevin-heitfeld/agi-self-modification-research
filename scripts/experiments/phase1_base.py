@@ -215,21 +215,29 @@ When you say "I'm done with this experiment", the system will:
 
         This teaches the model to use record_observation() proactively
         to prevent data loss when old tool results are pruned.
+        
+        Uses dynamic token limits based on detected GPU.
         """
-        return """🧠 MEMORY MANAGEMENT - HOW YOUR MEMORY WORKS:
+        max_tokens = self.optimal_limits['max_new_tokens']
+        # Calculate token budgets based on limit
+        reasoning_tokens = int(max_tokens * 0.45)  # 45% for reasoning
+        json_tokens = int(max_tokens * 0.45)        # 45% for JSON
+        buffer_tokens = max_tokens - reasoning_tokens - json_tokens  # Remainder for buffer
+        
+        return f"""🧠 MEMORY MANAGEMENT - HOW YOUR MEMORY WORKS:
 
 **Your memory has two systems (like human memory):**
 
 1. **Working Memory (this conversation):**
-   - Holds recent context (last ~3 conversation turns)
+   - Holds recent context (last ~{self.optimal_limits['keep_recent_turns']} conversation turns)
    - **VERY limited capacity** - GPU memory constraint
    - Old turns are automatically pruned when conversation gets long
    - Think of this as your "active thoughts" or "scratch pad"
-   - **RESPONSE LIMIT: Maximum 500 tokens per response**
-     - **CRITICAL**: Your responses will be hard-cut at 500 tokens
+   - **RESPONSE LIMIT: Maximum {max_tokens} tokens per response**
+     - **CRITICAL**: Your responses will be hard-cut at {max_tokens} tokens
      - Incomplete JSON will cause errors and corrupt future responses
      - Always finish your JSON tool calls within the limit
-     - Token budget: Reasoning (~150-200) + JSON (~200-250) + Buffer (~50)
+     - Token budget: Reasoning (~{reasoning_tokens}) + JSON (~{json_tokens}) + Buffer (~{buffer_tokens})
 
 2. **Long-Term Memory (observations database):**
    - Unlimited capacity
@@ -253,11 +261,11 @@ When conversation gets long (you'll receive warnings):
 
 **Response Planning Tips:**
 - **ALWAYS complete your JSON** - incomplete JSON breaks everything
-- Keep reasoning focused (~150-200 tokens maximum)
-- Tool calls with arguments: ~200-250 tokens
-- Leave ~50 token buffer to ensure JSON closes properly
+- Keep reasoning focused (~{reasoning_tokens} tokens maximum)
+- Tool calls with arguments: ~{json_tokens} tokens
+- Leave ~{buffer_tokens} token buffer to ensure JSON closes properly
 - For complex data, use record_observation() first, then just reference it
-- **If your response approaches 500 tokens, STOP and finish the JSON immediately**
+- **If your response approaches {max_tokens} tokens, STOP and finish the JSON immediately**
 
 **Example workflow:**
 ```
@@ -269,9 +277,6 @@ Turn 4: Brief findings (150 tokens) + record_observation() to save detailed anal
 Turn 8: [SYSTEM WARNING: Memory limit approaching]
 Turn 9: Call record_observation() to save recent unsaved findings
 Turn 10: [SYSTEM: Old turns pruned, working memory reset]
-Turn 11: Call query_memory() to retrieve earlier findings
-```
-
 This is exactly how humans do research - we don't keep everything in our heads,
 we write down important discoveries and look them up later!"""
 
@@ -296,6 +301,13 @@ we write down important discoveries and look them up later!"""
         self.tokenizer = self.model_mgr.tokenizer
         assert self.model is not None, "Model is None after loading"
         assert self.tokenizer is not None, "Tokenizer is None after loading"
+        
+        # Get optimal limits based on detected GPU
+        self.optimal_limits = self.model_mgr.get_optimal_limits()
+        self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
+        self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
+        self.logger.info(f"  max_conversation_tokens: {self.optimal_limits['max_conversation_tokens']}")
+        self.logger.info(f"  keep_recent_turns: {self.optimal_limits['keep_recent_turns']}")
 
         # Validate model actually works by testing generation
         self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
@@ -587,7 +599,7 @@ we write down important discoveries and look them up later!"""
 
             result = self.generator.generate(
                 prompt=conversation_text,
-                max_new_tokens=500,  # Increased with memory optimizations (Flash Attention 2 + KV quantization)
+                max_new_tokens=self.optimal_limits['max_new_tokens'],  # Auto-configured based on GPU
                 temperature=0.7,
                 do_sample=True,
                 past_key_values=self.conversation_kv_cache,
@@ -632,10 +644,11 @@ we write down important discoveries and look them up later!"""
                 # If response looks like incomplete JSON, provide helpful feedback
                 if '{' in response and response.count('{') > response.count('}'):
                     self.logger.warning("⚠ Detected incomplete JSON (more { than })")
+                    token_limit = self.optimal_limits['max_new_tokens']
                     truncation_warning = (
-                        "\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the 500-token limit.\n"
+                        f"\n⚠️ [TRUNCATION DETECTED] Your last response was cut off at the {token_limit}-token limit.\n"
                         "The JSON appears incomplete.\n\n"
-                        "� **CRITICAL: Your tool call was NOT EXECUTED!**\n"
+                        "🚫 **CRITICAL: Your tool call was NOT EXECUTED!**\n"
                         "A tool is only executed if you receive a TOOL_RESULTS response.\n"
                         "Since the JSON was incomplete, nothing was saved/processed.\n\n"
                         "💡 **To fix this:**\n"
@@ -1177,11 +1190,7 @@ Your previous response had: "{parse_error}"
 
             # Print GPU memory summary with current limits
             self.gpu_monitor.print_summary(
-                current_limits={
-                    "max_new_tokens": 500,
-                    "max_conversation_tokens": 2000,
-                    "keep_recent_turns": 2
-                }
+                current_limits=self.optimal_limits
             )
 
             self.logger.info("\n" + "=" * 80)
@@ -1197,11 +1206,7 @@ Your previous response had: "{parse_error}"
             # Still print memory summary on error
             self.gpu_monitor.snapshot("session_error")
             self.gpu_monitor.print_summary(
-                current_limits={
-                    "max_new_tokens": 500,
-                    "max_conversation_tokens": 2000,
-                    "keep_recent_turns": 2
-                }
+                current_limits=self.optimal_limits
             )
             return False
 
