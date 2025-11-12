@@ -28,12 +28,10 @@ class MemoryManager:
     2. Pruning old tool results to reduce memory
     3. Implementing sliding window to keep only recent turns
     4. Resetting KV cache when limits are exceeded
-    """
     
-    # Default limits for memory management
-    DEFAULT_MAX_CONVERSATION_TOKENS = 2000
-    DEFAULT_MAX_TURNS_BEFORE_CLEAR = 3
-    DEFAULT_KEEP_RECENT_TURNS = 2
+    Note: All memory limits are now GPU-adaptive and must be provided by the caller
+    (typically from ModelManager.get_optimal_limits()).
+    """
     
     def __init__(self, logger: Optional[logging.Logger] = None):
         """
@@ -70,8 +68,8 @@ class MemoryManager:
     def should_prune_memory(
         self,
         conversation_history: List[Dict[str, str]],
-        max_conversation_tokens: int = DEFAULT_MAX_CONVERSATION_TOKENS,
-        max_turns_before_clear: int = DEFAULT_MAX_TURNS_BEFORE_CLEAR,
+        max_conversation_tokens: int,
+        max_turns_before_clear: int,
         current_session_turns: Optional[int] = None
     ) -> tuple[bool, List[str]]:
         """
@@ -152,7 +150,7 @@ class MemoryManager:
     def reset_conversation_with_sliding_window(
         self,
         conversation_history: List[Dict[str, str]],
-        keep_recent_turns: int = DEFAULT_KEEP_RECENT_TURNS
+        keep_recent_turns: int
     ) -> List[Dict[str, str]]:
         """
         Reset conversation history to keep only recent turns (sliding window).
@@ -222,7 +220,7 @@ class MemoryManager:
     def log_memory_pruning(
         self,
         reasons: List[str],
-        keep_recent_turns: int = DEFAULT_KEEP_RECENT_TURNS
+        keep_recent_turns: int
     ):
         """
         Log memory pruning operation with reasons.

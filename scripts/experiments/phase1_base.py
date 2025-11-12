@@ -215,7 +215,7 @@ When you say "I'm done with this experiment", the system will:
 
         This teaches the model to use record_observation() proactively
         to prevent data loss when old tool results are pruned.
-        
+
         Uses dynamic token limits based on detected GPU.
         """
         max_tokens = self.optimal_limits['max_new_tokens']
@@ -223,7 +223,7 @@ When you say "I'm done with this experiment", the system will:
         reasoning_tokens = int(max_tokens * 0.45)  # 45% for reasoning
         json_tokens = int(max_tokens * 0.45)        # 45% for JSON
         buffer_tokens = max_tokens - reasoning_tokens - json_tokens  # Remainder for buffer
-        
+
         return f"""🧠 MEMORY MANAGEMENT - HOW YOUR MEMORY WORKS:
 
 **Your memory has two systems (like human memory):**
@@ -339,14 +339,14 @@ we write down important discoveries and look them up later!"""
         self.tokenizer = self.model_mgr.tokenizer
         assert self.model is not None, "Model is None after loading"
         assert self.tokenizer is not None, "Tokenizer is None after loading"
-        
+
         # Get optimal limits based on detected GPU
         self.optimal_limits = self.model_mgr.get_optimal_limits()
         self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
         self.logger.info(f"  max_conversation_tokens: {self.optimal_limits['max_conversation_tokens']}")
         self.logger.info(f"  keep_recent_turns: {self.optimal_limits['keep_recent_turns']}")
-        
+
         # Update GPU monitor with actual detected GPU memory
         if self.model_mgr.device == "cuda":
             self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
@@ -480,63 +480,63 @@ we write down important discoveries and look them up later!"""
     def _generate_memory_briefing(self) -> str:
         """
         Generate compact memory briefing for model context.
-        
+
         This creates a token-efficient summary of what the model has learned
         so far, suitable for injection after memory pruning or at session start.
-        
+
         Returns:
             Formatted briefing string, or empty string if no memory exists
         """
         try:
             briefing_data = self.memory.get_briefing(max_items=10)
-            
+
             stats = briefing_data['stats']
             obs_total = stats.get('observations', {}).get('total', 0)
-            
+
             if obs_total == 0:
                 return ""  # No memory to brief
-            
+
             # Format the briefing
             briefing = f"""## 🧠 YOUR MEMORY FROM PREVIOUS WORK
 
 **Session Memory Stats:**
 - Observations: {obs_total}"""
-            
+
             # Add other layer stats if they exist
             if briefing_data.get('has_patterns'):
                 pattern_count = stats.get('patterns', {}).get('total_patterns', 0)
                 briefing += f"\n- Patterns: {pattern_count}"
-            
+
             if briefing_data.get('has_theories'):
                 theory_count = stats.get('theories', {}).get('total_theories', 0)
                 briefing += f"\n- Theories: {theory_count}"
-            
+
             if briefing_data.get('has_beliefs'):
                 belief_count = stats.get('beliefs', {}).get('total_beliefs', 0)
                 briefing += f"\n- Beliefs: {belief_count}"
-            
+
             # Add top findings
             if briefing_data['top_findings']:
                 briefing += "\n\n**Recent Important Findings (Top 10):**"
                 for i, finding in enumerate(briefing_data['top_findings'], 1):
                     briefing += f"\n{i}. [{finding['id']}] {finding['description']} (importance: {finding['importance']:.2f})"
-            
+
             # Add category distribution
             if briefing_data['category_distribution']:
                 briefing += "\n\n**Categories Explored:**"
                 # Show top 5 categories
                 for cat, count in list(briefing_data['category_distribution'].items())[:5]:
                     briefing += f"\n- {cat}: {count} observations"
-                
+
                 # If more categories exist, mention them
                 total_cats = len(briefing_data['category_distribution'])
                 if total_cats > 5:
                     briefing += f"\n- ...and {total_cats - 5} more categories"
-            
+
             briefing += "\n\n💡 Use get_memory_stats() or query_memory_advanced() to explore your previous work in detail!"
-            
+
             return briefing
-            
+
         except Exception as e:
             self.logger.error(f"Error generating memory briefing: {e}")
             return ""  # Return empty string on error
@@ -676,7 +676,7 @@ Your working memory was pruned to stay within token limits, but your long-term m
 Continue your research. All your previous findings are still available via memory queries."""
                         })
                         self.logger.info("[MEMORY BRIEFING] Injected memory summary after pruning")
-                    
+
                     self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
 
                     # Verify cache was cleared (no noisy debug output)
