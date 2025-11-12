@@ -346,6 +346,11 @@ we write down important discoveries and look them up later!"""
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
         self.logger.info(f"  max_conversation_tokens: {self.optimal_limits['max_conversation_tokens']}")
         self.logger.info(f"  keep_recent_turns: {self.optimal_limits['keep_recent_turns']}")
+        
+        # Update GPU monitor with actual detected GPU memory
+        if self.model_mgr.device == "cuda":
+            self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
+            self.logger.info(f"  GPU monitor updated: {self.gpu_monitor.gpu_total_gb:.1f} GB total")
 
         # Validate model actually works by testing generation
         self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
@@ -614,16 +619,22 @@ we write down important discoveries and look them up later!"""
             if generated_in_this_call:
                 should_prune, reasons = self.memory_manager.should_prune_memory(
                     self.conversation_history,
-                    max_conversation_tokens=2000,
-                    max_turns_before_clear=3,
+                    max_conversation_tokens=self.optimal_limits['max_conversation_tokens'],
+                    max_turns_before_clear=self.optimal_limits['keep_recent_turns'],
                     current_session_turns=turns_in_this_session  # Pass session-specific count
                 )
 
                 # ADDITIONAL CHECK: Force pruning if KV cache is too large
                 # This prevents OOM even if turn count is low (e.g., after previous pruning)
+                # Scale max cache based on GPU profile:
+                # - T4 (15GB): 15K tokens (conservative)
+                # - L4 (24GB): 20K tokens (more headroom)
+                # - A100 (40GB): 25K tokens (generous)
                 if self.conversation_kv_cache is not None:
                     cache_length = self.conversation_kv_cache[0][0].shape[2]
-                    max_cache_length = 15000  # Safety limit: 15K tokens (conservative for T4 GPU)
+                    # Calculate max cache based on max_conversation_tokens (which scales with GPU)
+                    # Use 5x the conversation limit as cache limit (conversation is ~20% of total cache)
+                    max_cache_length = self.optimal_limits['max_conversation_tokens'] * 5
                     if cache_length > max_cache_length:
                         should_prune = True
                         reasons.append(f"cache size ({cache_length} > {max_cache_length} tokens)")
@@ -752,7 +763,9 @@ Continue your research. All your previous findings are still available via memor
 
             # Check if generation was truncated at token limit
             # Truncation often results in incomplete JSON that can't be parsed
-            if num_tokens >= 400:  # Hit the max_new_tokens limit
+            # Check if we're within 10% of the limit (accounts for rounding)
+            truncation_threshold = int(self.optimal_limits['max_new_tokens'] * 0.9)
+            if num_tokens >= truncation_threshold:
                 self.logger.warning(f"⚠ Generation truncated at token limit ({num_tokens} tokens)")
                 self.logger.warning("This may result in incomplete JSON - checking...")
 
@@ -1202,9 +1215,9 @@ Your previous response had: "{parse_error}"
         if conversation_without_system:
             self.logger.debug(f"[DEBUG] First message role: {conversation_without_system[0]['role']}")
 
-        # Token budget management
-        MAX_CONTEXT_TOKENS = 8000
-        KEEP_RECENT_EXCHANGES = 2
+        # Token budget management - use dynamic limits based on GPU
+        MAX_CONTEXT_TOKENS = self.optimal_limits['max_conversation_tokens']
+        KEEP_RECENT_EXCHANGES = self.optimal_limits['keep_recent_turns']
 
         trimmed_history = conversation_without_system
 
