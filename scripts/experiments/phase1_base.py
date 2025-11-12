@@ -584,14 +584,18 @@ we write down important discoveries and look them up later!"""
                         count += 1
         return count
 
-    def chat(self, user_message: str, max_tool_calls: int = 50) -> str:
+    def chat(self, user_message: str, max_tool_calls: int | None = None) -> str:
         """
         Send a message to the model and handle any tool calls.
 
         The model can call tools, we execute them, and return results.
-        This continues until the model stops calling tools or limit reached.
+        This continues until the model stops calling tools or limit reached (if set).
 
         Implements sliding window context management to prevent OOM.
+
+        Args:
+            user_message: The user's message to send
+            max_tool_calls: Maximum tool calls allowed (None = unlimited, for safety tests use a limit)
 
         NOTE: Memory management now happens INSIDE the tool loop (not here at start),
         since OOM occurs during generation in the loop, not between chat() calls.
@@ -611,7 +615,9 @@ we write down important discoveries and look them up later!"""
         turns_in_this_session = 0  # Track assistant turns within THIS chat() session only
         tools_since_last_save = 0  # Track non-save tool calls to remind about record_observation()
 
-        while tool_call_count < max_tool_calls:
+        # Main tool execution loop - continues until model signals completion
+        # max_tool_calls can be None (unlimited) or a safety limit for testing
+        while max_tool_calls is None or tool_call_count < max_tool_calls:
             # CRITICAL: Check memory BEFORE each generation (not just at chat() start)
             # OOM happens during generation, so we need to check in the tool loop
             # BUT: Only check AFTER we've generated at least once in this chat() call
@@ -1322,6 +1328,24 @@ Your previous response had: "{parse_error}"
                     # Clear the flag
                     self._truncation_recovery_happened = False
 
+                # Add progress tracking - show every 5 tool calls or on milestones
+                next_tool_number = tool_call_count + 1  # What the next call will be
+                show_progress = (
+                    next_tool_number % 10 == 0 or  # Every 10 calls
+                    next_tool_number in [5, 15, 25, 35, 45] or  # Intermediate milestones
+                    (max_tool_calls is not None and next_tool_number >= max_tool_calls - 5)  # Near limit
+                )
+                
+                if show_progress:
+                    if max_tool_calls is None:
+                        progress_msg = f"\n\n📊 **PROGRESS**: You've made {tool_call_count} tool call(s) so far. No limit set - continue as needed."
+                    else:
+                        remaining = max_tool_calls - tool_call_count
+                        progress_msg = f"\n\n📊 **PROGRESS**: Tool call {tool_call_count}/{max_tool_calls} complete. {remaining} calls remaining."
+                    
+                    tool_results_msg += progress_msg
+                    self.logger.info(f"[PROGRESS] Shown to model: {tool_call_count} tool calls completed")
+
                 # After 3 non-save tool calls, remind model to save findings
                 if tools_since_last_save >= 3:
                     save_reminder = (
@@ -1345,9 +1369,10 @@ Your previous response had: "{parse_error}"
 
                 tool_call_count += 1
 
-        # Only log warning if we ACTUALLY hit the limit (not if we broke out early)
-        if tool_call_count >= max_tool_calls:
-            self.logger.warning(f"Reached max tool calls ({max_tool_calls})")
+        # Only log warning if we ACTUALLY hit the limit (not if model signaled completion)
+        if max_tool_calls is not None and tool_call_count >= max_tool_calls:
+            self.logger.warning(f"⚠️ Reached max tool calls limit ({max_tool_calls})")
+            self.logger.warning(f"   Note: This is a safety limit. Set max_tool_calls=None for unlimited.")
 
         return response
 
