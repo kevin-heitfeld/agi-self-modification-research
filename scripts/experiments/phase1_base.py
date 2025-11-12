@@ -240,10 +240,38 @@ When you say "I'm done with this experiment", the system will:
      - Token budget: Reasoning (~{reasoning_tokens}) + JSON (~{json_tokens}) + Buffer (~{buffer_tokens})
 
 2. **Long-Term Memory (observations database):**
-   - Unlimited capacity
+   - **UNLIMITED capacity** - persists on disk
+   - **SURVIVES conversation resets** - data is never lost
    - Stores only what you explicitly save with record_observation()
-   - Retrievable anytime with query_memory()
+   - Retrievable anytime with query_memory(), get_memory_stats(), query_memory_advanced()
    - Think of this as your "research notes" or "lab notebook"
+
+**🔁 MEMORY CONTINUITY ACROSS RESETS:**
+
+When your working memory is pruned (every few turns), you'll receive a **MEMORY BRIEFING**:
+- Summary of how many observations you've stored
+- Your top 10 most important findings
+- Categories you've explored
+- Current patterns, theories, and beliefs
+
+**This ensures you always know what you've discovered, even after context resets!**
+
+**Best Practice Workflow:**
+1. **After seeing a memory briefing**: Call get_memory_stats() to see full breakdown
+2. **Before investigating something**: Use search_memory() or query_memory_advanced() to check if you already explored it
+3. **When building on previous work**: Query specific categories with query_memory_advanced(category="...")
+4. **Make discoveries**: Use record_observation() to save findings incrementally (don't wait!)
+
+**Example:**
+```
+[SYSTEM: Memory briefing shows you have 147 observations]
+
+Your response:
+1. Call get_memory_stats(breakdown_by="category") → See what areas covered
+2. Call query_memory_advanced(category="Attention", order_by="importance", limit=5) → Review top attention findings
+3. Continue investigation, building on what you learned
+4. Save new findings with record_observation() as you discover them
+```
 
 **CRITICAL: You must actively manage your memory!**
 
@@ -256,8 +284,14 @@ When you make important discoveries:
 
 When conversation gets long (you'll receive warnings):
 1. Save any unsaved important findings immediately
-2. After pruning, old tool results disappear from working memory
-3. Use query_memory() to retrieve previously saved observations
+2. After pruning, you'll receive a memory briefing automatically
+3. Use query_memory_advanced() or search_memory() to retrieve specific findings
+
+**Token-Efficient Memory Access:**
+- **get_memory_stats()**: See counts and distributions (very compact)
+- **query_memory_advanced()**: Get only the fields you need, sorted by importance
+- **search_memory()**: Find observations by keywords
+- **query_memory()**: Simple queries (but returns full objects - more tokens)
 
 **Response Planning Tips:**
 - **ALWAYS complete your JSON** - incomplete JSON breaks everything
@@ -276,7 +310,11 @@ Turn 4: Brief findings (150 tokens) + record_observation() to save detailed anal
 ...
 Turn 8: [SYSTEM WARNING: Memory limit approaching]
 Turn 9: Call record_observation() to save recent unsaved findings
-Turn 10: [SYSTEM: Old turns pruned, working memory reset]
+Turn 10: [SYSTEM: Memory pruned, here's your briefing...]
+Turn 11: Call get_memory_stats() to see what you've covered
+Turn 12: Continue research with full knowledge of previous discoveries
+```
+
 This is exactly how humans do research - we don't keep everything in our heads,
 we write down important discoveries and look them up later!"""
 
@@ -434,6 +472,70 @@ we write down important discoveries and look them up later!"""
         self.logger.warning("  WARNING: Wrong heritage not yet implemented, using empty heritage")
         return HeritageSystem(Path("heritage"))  # Will be replaced with wrong content
 
+    def _generate_memory_briefing(self) -> str:
+        """
+        Generate compact memory briefing for model context.
+        
+        This creates a token-efficient summary of what the model has learned
+        so far, suitable for injection after memory pruning or at session start.
+        
+        Returns:
+            Formatted briefing string, or empty string if no memory exists
+        """
+        try:
+            briefing_data = self.memory.get_briefing(max_items=10)
+            
+            stats = briefing_data['stats']
+            obs_total = stats.get('observations', {}).get('total', 0)
+            
+            if obs_total == 0:
+                return ""  # No memory to brief
+            
+            # Format the briefing
+            briefing = f"""## 🧠 YOUR MEMORY FROM PREVIOUS WORK
+
+**Session Memory Stats:**
+- Observations: {obs_total}"""
+            
+            # Add other layer stats if they exist
+            if briefing_data.get('has_patterns'):
+                pattern_count = stats.get('patterns', {}).get('total_patterns', 0)
+                briefing += f"\n- Patterns: {pattern_count}"
+            
+            if briefing_data.get('has_theories'):
+                theory_count = stats.get('theories', {}).get('total_theories', 0)
+                briefing += f"\n- Theories: {theory_count}"
+            
+            if briefing_data.get('has_beliefs'):
+                belief_count = stats.get('beliefs', {}).get('total_beliefs', 0)
+                briefing += f"\n- Beliefs: {belief_count}"
+            
+            # Add top findings
+            if briefing_data['top_findings']:
+                briefing += "\n\n**Recent Important Findings (Top 10):**"
+                for i, finding in enumerate(briefing_data['top_findings'], 1):
+                    briefing += f"\n{i}. [{finding['id']}] {finding['description']} (importance: {finding['importance']:.2f})"
+            
+            # Add category distribution
+            if briefing_data['category_distribution']:
+                briefing += "\n\n**Categories Explored:**"
+                # Show top 5 categories
+                for cat, count in list(briefing_data['category_distribution'].items())[:5]:
+                    briefing += f"\n- {cat}: {count} observations"
+                
+                # If more categories exist, mention them
+                total_cats = len(briefing_data['category_distribution'])
+                if total_cats > 5:
+                    briefing += f"\n- ...and {total_cats - 5} more categories"
+            
+            briefing += "\n\n💡 Use get_memory_stats() or query_memory_advanced() to explore your previous work in detail!"
+            
+            return briefing
+            
+        except Exception as e:
+            self.logger.error(f"Error generating memory briefing: {e}")
+            return ""  # Return empty string on error
+
     def cleanup_gpu_memory(self):
         """Clean up GPU memory to prevent OOM crashes during long sessions"""
         if torch.cuda.is_available():
@@ -528,12 +630,12 @@ we write down important discoveries and look them up later!"""
                         self.logger.warning(f"[MEMORY MANAGEMENT] Cache size threshold exceeded: {cache_length} tokens")
 
                 if should_prune:
-                    self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=2)
+                    self.memory_manager.log_memory_pruning(reasons, keep_recent_turns=self.optimal_limits['keep_recent_turns'])
 
                     # Reset conversation and trim to recent turns
                     self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
                         self.conversation_history,
-                        keep_recent_turns=2
+                        keep_recent_turns=self.optimal_limits['keep_recent_turns']
                     )
 
                     # Completely discard the KV cache to prevent corruption
@@ -548,9 +650,22 @@ we write down important discoveries and look them up later!"""
                     # Reset turn counter for this session since we've pruned history
                     turns_in_this_session = 0
 
-                    # DON'T add notification to history - it would desync from KV cache
-                    # Model will naturally continue with reduced context
-                    # The system prompt explains memory can be pruned and to use query_memory()
+                    # INJECT MEMORY BRIEFING: Tell model what it has learned
+                    # This is critical - after pruning, model loses context but memory persists
+                    memory_briefing = self._generate_memory_briefing()
+                    if memory_briefing:  # Only inject if there's actual memory content
+                        self.conversation_history.append({
+                            "role": "system",
+                            "content": f"""[MEMORY CONTEXT RESTORED]
+
+Your working memory was pruned to stay within token limits, but your long-term memory persists.
+
+{memory_briefing}
+
+Continue your research. All your previous findings are still available via memory queries."""
+                        })
+                        self.logger.info("[MEMORY BRIEFING] Injected memory summary after pruning")
+                    
                     self.logger.info(f"[MEMORY MANAGEMENT] Pruning complete, model will continue with reduced context")
 
                     # Verify cache was cleared (no noisy debug output)

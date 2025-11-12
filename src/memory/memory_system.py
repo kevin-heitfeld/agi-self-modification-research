@@ -557,6 +557,60 @@ class MemorySystem:
 
         return summary
 
+    def get_briefing(self, max_items: int = 10) -> Dict[str, Any]:
+        """
+        Generate compact memory briefing for model context.
+        
+        This provides a token-efficient summary of what the model has
+        learned so far, suitable for injection into conversation context
+        after memory pruning or at session start.
+        
+        Args:
+            max_items: Maximum number of top findings to include
+            
+        Returns:
+            Dict with stats and top findings (token-efficient)
+            
+        Example:
+            >>> briefing = memory.get_briefing(max_items=10)
+            >>> print(f"Total observations: {briefing['stats']['observations']['total']}")
+            >>> for finding in briefing['top_findings']:
+            ...     print(f"{finding['id']}: {finding['description']}")
+        """
+        stats = self.get_memory_stats()
+        
+        # Get top observations by importance
+        top_obs = self.observations.query(
+            min_importance=0.0,  # Get all
+            limit=None  # Get all first
+        )
+        
+        # Sort by importance (query returns by timestamp)
+        top_obs = sorted(top_obs, key=lambda x: x.importance, reverse=True)[:max_items]
+        
+        # Get category distribution
+        obs_stats = self.observations.get_statistics()
+        category_dist = obs_stats.get('by_category', {})
+        
+        return {
+            'stats': stats,
+            'top_findings': [
+                {
+                    'id': obs.id,
+                    'description': obs.description[:150] + ('...' if len(obs.description) > 150 else ''),  # Truncate long descriptions
+                    'importance': obs.importance,
+                    'category': obs.category,
+                    'timestamp': obs.timestamp
+                }
+                for obs in top_obs
+            ],
+            'category_distribution': dict(sorted(category_dist.items(), key=lambda x: x[1], reverse=True)),
+            'has_patterns': stats.get('patterns', {}).get('total_patterns', 0) > 0,
+            'has_theories': stats.get('theories', {}).get('total_theories', 0) > 0,
+            'has_beliefs': stats.get('beliefs', {}).get('total_beliefs', 0) > 0,
+            'total_observations': len(top_obs) if top_obs else 0
+        }
+
     def what_have_i_learned_recently(self, hours: int = 24) -> str:
         """
         Summarize recent learning.

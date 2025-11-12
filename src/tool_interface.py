@@ -130,6 +130,9 @@ class ToolInterface:
         if self.memory:
             self.tools['record_observation'] = self._record_observation
             self.tools['query_memory'] = self._query_memory
+            self.tools['get_memory_stats'] = self._get_memory_stats
+            self.tools['query_memory_advanced'] = self._query_memory_advanced
+            self.tools['search_memory'] = self._search_memory
 
         # Heritage tools
         if self.heritage_docs:
@@ -198,6 +201,208 @@ class ToolInterface:
         observations = self.memory.observations.query(**kwargs)
         return [{"id": obs.id, "description": obs.description, "data": obs.data}
                 for obs in observations]
+
+    def _get_memory_stats(self, layer: Optional[str] = None, breakdown_by: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get statistics about memory contents without retrieving full data.
+        
+        This is token-efficient way to see what you've stored before
+        querying for full details.
+        
+        Args:
+            layer: Specific layer to get stats for ("observations", "patterns", "theories", "beliefs")
+                   If None, returns stats for all layers
+            breakdown_by: How to break down stats ("category", "type", "importance_range")
+                         
+        Returns:
+            Dictionary with statistics
+            
+        Examples:
+            >>> get_memory_stats()  # Overview of all layers
+            >>> get_memory_stats(layer="observations", breakdown_by="category")
+            >>> get_memory_stats(layer="beliefs", breakdown_by="confidence_range")
+        """
+        if layer == "observations" or layer is None:
+            obs_stats = self.memory.observations.get_statistics()
+            if layer == "observations":
+                return obs_stats
+        
+        if layer is None:
+            # Return full overview
+            return self.memory.get_memory_stats()
+        elif layer == "patterns":
+            return self.memory.patterns.get_statistics()
+        elif layer == "theories":
+            return self.memory.theories.get_statistics()
+        elif layer == "beliefs":
+            return self.memory.beliefs.get_statistics()
+        else:
+            return {"error": f"Unknown layer: {layer}. Valid layers: observations, patterns, theories, beliefs"}
+
+    def _query_memory_advanced(
+        self,
+        layer: str = "observations",
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        min_importance: Optional[float] = None,
+        fields: Optional[List[str]] = None,
+        order_by: str = "timestamp",
+        order_dir: str = "desc",
+        limit: int = 10,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Advanced memory query with field selection, sorting, and pagination.
+        
+        This is more token-efficient than query_memory() because you can:
+        1. Select only the fields you need (not full objects)
+        2. Sort by importance/timestamp
+        3. Paginate through large result sets
+        
+        Args:
+            layer: Which memory layer to query ("observations", "patterns", "theories", "beliefs")
+            tags: Filter by tags (returns items matching ANY tag)
+            category: Filter by category
+            min_importance: Minimum importance score (0.0-1.0)
+            fields: Which fields to return (e.g., ["id", "description", "importance"])
+                   If None, returns all fields
+            order_by: Sort by this field ("timestamp", "importance", "confidence")
+            order_dir: Sort direction ("asc" or "desc")
+            limit: Maximum results per page
+            offset: Number of results to skip (for pagination)
+            
+        Returns:
+            Dictionary with:
+            - results: List of matching items (with only requested fields)
+            - total_count: Total number of matching items
+            - returned_count: Number in this response
+            - has_more: Boolean indicating more results available
+            
+        Examples:
+            >>> # Get top 10 most important observations
+            >>> query_memory_advanced(
+            ...     fields=["id", "description", "importance"],
+            ...     order_by="importance",
+            ...     limit=10
+            ... )
+            
+            >>> # Get next page of results
+            >>> query_memory_advanced(
+            ...     fields=["id", "description"],
+            ...     order_by="importance",
+            ...     limit=10,
+            ...     offset=10
+            ... )
+            
+            >>> # Filter by category and get summaries only
+            >>> query_memory_advanced(
+            ...     category="Architecture",
+            ...     fields=["id", "description"],
+            ...     order_by="importance"
+            ... )
+        """
+        if layer != "observations":
+            return {"error": "Currently only 'observations' layer is supported. Other layers coming soon."}
+        
+        # Query with filters (no limit initially)
+        all_results = self.memory.observations.query(
+            tags=tags,
+            category=category,
+            min_importance=min_importance,
+            limit=None  # Get all to handle sorting and pagination ourselves
+        )
+        
+        # Sort results
+        if order_by == "importance":
+            all_results = sorted(all_results, key=lambda x: x.importance, reverse=(order_dir == "desc"))
+        elif order_by == "timestamp":
+            all_results = sorted(all_results, key=lambda x: x.timestamp, reverse=(order_dir == "desc"))
+        
+        # Apply pagination
+        total_count = len(all_results)
+        paginated_results = all_results[offset:offset + limit]
+        
+        # Select fields
+        if fields:
+            formatted_results = []
+            for obs in paginated_results:
+                item = {}
+                for field in fields:
+                    if hasattr(obs, field):
+                        value = getattr(obs, field)
+                        # Truncate long descriptions
+                        if field == "description" and isinstance(value, str) and len(value) > 200:
+                            value = value[:200] + "..."
+                        item[field] = value
+                formatted_results.append(item)
+        else:
+            # Return full objects
+            formatted_results = [
+                {
+                    "id": obs.id,
+                    "description": obs.description,
+                    "category": obs.category,
+                    "importance": obs.importance,
+                    "timestamp": obs.timestamp,
+                    "tags": obs.tags,
+                    "data": obs.data
+                }
+                for obs in paginated_results
+            ]
+        
+        return {
+            "results": formatted_results,
+            "total_count": total_count,
+            "returned_count": len(formatted_results),
+            "has_more": (offset + limit) < total_count,
+            "query_info": {
+                "layer": layer,
+                "order_by": order_by,
+                "order_dir": order_dir,
+                "limit": limit,
+                "offset": offset
+            }
+        }
+
+    def _search_memory(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search memory for observations matching query text.
+        
+        Performs full-text search across observation descriptions.
+        
+        Args:
+            query: Search query (searches in descriptions)
+            limit: Maximum results
+            
+        Returns:
+            List of matching observations with relevance scores
+            
+        Example:
+            >>> search_memory("attention mechanisms")
+            >>> search_memory("gradient flow", limit=5)
+        """
+        query_lower = query.lower()
+        all_obs = self.memory.observations.query(limit=None)
+        
+        # Simple relevance scoring based on keyword matches
+        results = []
+        for obs in all_obs:
+            desc_lower = obs.description.lower()
+            # Count occurrences of query terms
+            relevance = desc_lower.count(query_lower)
+            if relevance > 0:
+                results.append({
+                    "id": obs.id,
+                    "description": obs.description[:200] + ("..." if len(obs.description) > 200 else ""),
+                    "importance": obs.importance,
+                    "category": obs.category,
+                    "relevance_score": relevance
+                })
+        
+        # Sort by relevance, then importance
+        results.sort(key=lambda x: (x["relevance_score"], x["importance"]), reverse=True)
+        
+        return results[:limit]
 
     def _list_heritage_documents(self) -> List[Dict[str, Any]]:
         """List all available heritage documents"""
@@ -923,6 +1128,120 @@ def query_memory(tags: Optional[List[str]] = None,
 
         >>> query_memory(tags=["attention", "weights"])
         [{'id': 'obs_12347', ...}, ...]
+    \"\"\"
+
+def get_memory_stats(layer: Optional[str] = None, breakdown_by: Optional[str] = None) -> Dict[str, Any]:
+    \"\"\"
+    Get statistics about memory contents without retrieving full data.
+    
+    This is more token-efficient than query_memory() - use this FIRST
+    to see what you've stored before retrieving details.
+    
+    Args:
+        layer: Specific layer ("observations", "patterns", "theories", "beliefs")
+               If None, returns stats for all layers
+        breakdown_by: How to break down stats ("category", "type", "importance_range")
+                     
+    Returns:
+        Dict with statistics (counts, distributions, etc.)
+        
+    Examples:
+        >>> # Get overview of everything
+        >>> get_memory_stats()
+        {'observations': {'total': 147, ...}, 'patterns': {...}, ...}
+        
+        >>> # Get observation breakdown by category
+        >>> get_memory_stats(layer="observations", breakdown_by="category")
+        {'by_category': {'Architecture': 52, 'Weights': 31, ...}}
+        
+        >>> # See what beliefs you've formed
+        >>> get_memory_stats(layer="beliefs")
+        {'total_beliefs': 3, 'by_confidence': {...}}
+    \"\"\"
+
+def query_memory_advanced(
+    layer: str = "observations",
+    tags: Optional[List[str]] = None,
+    category: Optional[str] = None,
+    min_importance: Optional[float] = None,
+    fields: Optional[List[str]] = None,
+    order_by: str = "timestamp",
+    order_dir: str = "desc",
+    limit: int = 10,
+    offset: int = 0
+) -> Dict[str, Any]:
+    \"\"\"
+    Advanced memory query with field selection, sorting, and pagination.
+    
+    More powerful and token-efficient than query_memory():
+    - Select only the fields you need (saves tokens!)
+    - Sort by importance or timestamp
+    - Paginate through large result sets
+    
+    Args:
+        layer: Which layer ("observations", "patterns", "theories", "beliefs")
+        tags: Filter by tags (matching ANY tag)
+        category: Filter by category
+        min_importance: Minimum importance (0.0-1.0)
+        fields: Which fields to return (e.g., ["id", "description", "importance"])
+               If None, returns all fields
+        order_by: Sort by "timestamp" or "importance"
+        order_dir: "asc" or "desc"
+        limit: Max results per page (default: 10)
+        offset: Results to skip (for pagination)
+        
+    Returns:
+        Dict with:
+        - results: List of items (with only requested fields)
+        - total_count: Total matching items
+        - returned_count: Items in this response
+        - has_more: Boolean (more results available)
+        
+    Examples:
+        >>> # Get top 10 most important findings (summaries only)
+        >>> query_memory_advanced(
+        ...     fields=["id", "description", "importance"],
+        ...     order_by="importance",
+        ...     limit=10
+        ... )
+        
+        >>> # Get next page
+        >>> query_memory_advanced(
+        ...     fields=["id", "description"],
+        ...     order_by="importance",
+        ...     limit=10,
+        ...     offset=10
+        ... )
+        
+        >>> # Filter and sort
+        >>> query_memory_advanced(
+        ...     category="Attention",
+        ...     fields=["id", "description"],
+        ...     order_by="importance",
+        ...     min_importance=0.7
+        ... )
+    \"\"\"
+
+def search_memory(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    \"\"\"
+    Search memory for observations matching query text.
+    
+    Full-text search across observation descriptions.
+    
+    Args:
+        query: Search query (keywords to find)
+        limit: Maximum results (default: 10)
+        
+    Returns:
+        List of matching observations with relevance scores
+        
+    Examples:
+        >>> search_memory("attention mechanisms")
+        [{'id': 'obs_145', 'description': '...attention...', 
+          'relevance_score': 3, ...}, ...]
+          
+        >>> search_memory("gradient flow", limit=5)
+        [{'id': 'obs_89', 'description': '...gradient...', ...}, ...]
     \"\"\"
 ```
 """
