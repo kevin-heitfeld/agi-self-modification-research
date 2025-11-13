@@ -127,19 +127,32 @@ class ManualGenerator:
                     residual_length=128  # Residual for better accuracy
                 )
                 logger.debug("Created HQQ quantized cache for system prompt (new API)")
-            except (TypeError, ImportError) as e:
-                # Fallback to deprecated API (transformers 4.45-4.56)
-                logger.debug(f"New API failed ({e}), trying deprecated API")
-                past_key_values = self.QuantizedCache(
-                    config=self.model.config,
-                    nbits=8,  # 8-bit quantization (50% memory savings) - 4-bit was too aggressive
-                    axis_key=0,  # Quantize along key dimension
-                    axis_value=0,  # Quantize along value dimension
-                    q_group_size=64,  # Group size for quantization
-                    residual_length=128  # Residual for better accuracy
-                )
-                logger.debug("Created HQQ quantized cache for system prompt (deprecated API)")
-            logger.info("  Using HQQ 8-bit quantized cache for system prompt")
+            except ImportError as e:
+                # HQQ library not installed
+                logger.warning(f"HQQ library not installed ({e}), falling back to standard cache")
+                logger.warning("To use HQQ quantization, install: pip install hqq")
+                self.quantize_kv_cache = False  # Disable quantization for this session
+                past_key_values = None
+            except TypeError as e:
+                # API mismatch - try without backend parameter
+                logger.debug(f"New API failed ({e}), trying older API")
+                try:
+                    past_key_values = self.QuantizedCache(
+                        config=self.model.config,
+                        nbits=8,  # 8-bit quantization (50% memory savings) - 4-bit was too aggressive
+                        axis_key=0,  # Quantize along key dimension
+                        axis_value=0,  # Quantize along value dimension
+                        q_group_size=64,  # Group size for quantization
+                        residual_length=128  # Residual for better accuracy
+                    )
+                    logger.debug("Created HQQ quantized cache for system prompt (older API)")
+                except Exception as e2:
+                    logger.warning(f"Failed to create quantized cache ({e2}), using standard cache")
+                    self.quantize_kv_cache = False
+                    past_key_values = None
+
+            if past_key_values is not None:
+                logger.info("  Using HQQ 8-bit quantized cache for system prompt")
 
         # Forward pass to get KV cache
         with torch.no_grad():
@@ -245,8 +258,9 @@ class ManualGenerator:
                     # Regenerate quantized cache from scratch
                     # This is fast (8747 tokens ~0.5s) and avoids all mutation/corruption issues
                     logger.debug(f"Regenerating HQQ quantized cache for system prompt ({self.system_prompt_length} tokens)")
-                    
+
                     # Create empty quantized cache
+                    current_cache = None
                     try:
                         current_cache = self.QuantizedCache(
                             backend='hqq',
@@ -257,19 +271,35 @@ class ManualGenerator:
                             q_group_size=64,
                             residual_length=128
                         )
-                    except (TypeError, ImportError):
-                        current_cache = self.QuantizedCache(
-                            config=self.model.config,
-                            nbits=8,  # 8-bit, not 4-bit (too aggressive)
-                            axis_key=0,
-                            axis_value=0,
-                            q_group_size=64,
-                            residual_length=128
-                        )                    # Run forward pass to populate the cache
-                    with torch.no_grad():
-                        _ = self.model(
-                            input_ids=self.system_prompt_input_ids,
-                            attention_mask=torch.ones_like(self.system_prompt_input_ids),
+                    except ImportError:
+                        # HQQ not installed - should not happen if cache was created, but handle gracefully
+                        logger.warning("HQQ not available during regeneration, using standard cache")
+                        self.quantize_kv_cache = False
+                        import copy
+                        current_cache = copy.deepcopy(self.system_prompt_cache)
+                    except TypeError:
+                        # Try older API
+                        try:
+                            current_cache = self.QuantizedCache(
+                                config=self.model.config,
+                                nbits=8,  # 8-bit, not 4-bit (too aggressive)
+                                axis_key=0,
+                                axis_value=0,
+                                q_group_size=64,
+                                residual_length=128
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to regenerate quantized cache ({e}), using standard cache")
+                            self.quantize_kv_cache = False
+                            import copy
+                            current_cache = copy.deepcopy(self.system_prompt_cache)
+
+                    # Run forward pass to populate the cache (only if we have a quantized cache)
+                    if current_cache is not None and self.quantize_kv_cache:
+                        with torch.no_grad():
+                            _ = self.model(
+                                input_ids=self.system_prompt_input_ids,
+                                attention_mask=torch.ones_like(self.system_prompt_input_ids),
                             use_cache=True,
                             past_key_values=current_cache,
                             return_dict=True
