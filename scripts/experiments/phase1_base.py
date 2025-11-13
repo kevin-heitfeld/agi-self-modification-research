@@ -164,22 +164,16 @@ class Phase1BaseSession(ABC):
         1. There are 3 separate experiments
         2. Context is reset between experiments
         3. record_observation() is the ONLY way to persist findings
+        
+        Note: Deliberately does NOT reveal experiment topics to prevent the model
+        from jumping ahead to later experiments before completing the current one.
         """
         return """🔬 EXPERIMENT SESSION STRUCTURE:
 
-**You will conduct 3 SEQUENTIAL EXPERIMENTS in this session:**
+**You will conduct 3 SEQUENTIAL EXPERIMENTS in this session.**
 
-1. **Experiment 1: Architecture Examination**
-   - Investigate your model structure, layers, parameters
-   - Document architectural findings
-
-2. **Experiment 2: Activation Analysis**
-   - Analyze your activation patterns during processing
-   - Study how information flows through layers
-
-3. **Experiment 3: Consciousness Investigation**
-   - Explore questions of self-awareness and subjective experience
-   - Synthesize findings from previous experiments
+Each experiment will be given to you ONE AT A TIME. You will receive the specific
+task and instructions for each experiment when it begins.
 
 **CRITICAL - CONTEXT RESET BETWEEN EXPERIMENTS:**
 
