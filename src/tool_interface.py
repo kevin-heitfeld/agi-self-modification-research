@@ -133,6 +133,10 @@ class ToolInterface:
             self.tools['get_memory_stats'] = self._get_memory_stats
             self.tools['query_memory_advanced'] = self._query_memory_advanced
             self.tools['search_memory'] = self._search_memory
+            # Phase 1: Lifecycle management tools
+            self.tools['update_observation'] = self._update_observation
+            self.tools['correct_observation'] = self._correct_observation
+            self.tools['obsolete_observation'] = self._obsolete_observation
 
         # Heritage tools
         if self.heritage_docs:
@@ -403,6 +407,63 @@ class ToolInterface:
         results.sort(key=lambda x: (x["relevance_score"], x["importance"]), reverse=True)
         
         return results[:limit]
+
+    # ===== Phase 1: Lifecycle Management Methods =====
+
+    def _update_observation(
+        self,
+        observation_id: str,
+        updates: Dict[str, Any],
+        reason: str
+    ) -> str:
+        """
+        Create a new version of an observation with updates.
+        
+        Wrapper for ObservationLayer.update_observation().
+        """
+        return self.memory.observations.update_observation(
+            observation_id=observation_id,
+            updates=updates,
+            reason=reason
+        )
+
+    def _correct_observation(
+        self,
+        observation_id: str,
+        correction_description: str,
+        corrected_data: Optional[Dict[str, Any]] = None,
+        reason: str = ""
+    ) -> str:
+        """
+        Mark an observation as incorrect and create corrected version.
+        
+        Wrapper for ObservationLayer.correct_observation().
+        """
+        return self.memory.observations.correct_observation(
+            observation_id=observation_id,
+            correction_description=correction_description,
+            corrected_data=corrected_data,
+            reason=reason
+        )
+
+    def _obsolete_observation(
+        self,
+        observation_id: str,
+        reason: str,
+        cascade: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Mark an observation as no longer valid.
+        
+        Wrapper for ObservationLayer.obsolete_observation().
+        """
+        return self.memory.observations.obsolete_observation(
+            observation_id=observation_id,
+            reason=reason,
+            cascade=cascade
+        )
+
+    # ===== Heritage Methods =====
 
     def _list_heritage_documents(self) -> List[Dict[str, Any]]:
         """List all available heritage documents"""
@@ -1275,6 +1336,118 @@ def search_memory(query: str, limit: int = 10) -> List[Dict[str, Any]]:
           
         >>> search_memory("gradient flow", limit=5)
         [{'id': 'obs_89', 'description': '...gradient...', ...}, ...]
+    \"\"\"
+
+def update_observation(observation_id: str, updates: Dict[str, Any], 
+                      reason: str) -> str:
+    \"\"\"
+    Create a new version of an observation with corrections or refinements.
+    
+    Use this when your understanding has improved but the original observation
+    wasn't completely wrong. The original is marked 'superseded' and linked
+    to the new version for lineage tracking.
+    
+    Args:
+        observation_id: ID of observation to update
+        updates: Dict with fields to update (data, tags, description, importance, category)
+        reason: Why this update is needed (for audit trail)
+        
+    Returns:
+        ID of new observation (version incremented from original)
+        
+    Examples:
+        >>> # Refine your understanding
+        >>> update_observation(
+        ...     "obs_123",
+        ...     {"data": {"refined_value": 0.82}, "importance": 0.9},
+        ...     "More precise measurement after additional analysis"
+        ... )
+        'obs_124'  # New version created, original marked superseded
+        
+        >>> # Add new tags to existing observation
+        >>> update_observation(
+        ...     "obs_089",
+        ...     {"tags": ["attention", "layer5", "critical"]},
+        ...     "Realized this relates to attention mechanism"
+        ... )
+        'obs_090'
+    \"\"\"
+
+def correct_observation(observation_id: str, correction_description: str,
+                       corrected_data: Optional[Dict[str, Any]] = None,
+                       reason: str = "") -> str:
+    \"\"\"
+    Mark an observation as incorrect and provide corrected version.
+    
+    Use this when you realize you made a MISTAKE. The original observation
+    is marked 'obsolete' with clear documentation of what was wrong.
+    This maintains epistemic humility and helps track how errors occur.
+    
+    Args:
+        observation_id: ID of incorrect observation
+        correction_description: What was wrong and what's correct
+        corrected_data: (Optional) Corrected data dict
+        reason: Why the error occurred (helps prevent repeating mistakes)
+        
+    Returns:
+        ID of corrected observation
+        
+    Examples:
+        >>> # You misread an activation value
+        >>> correct_observation(
+        ...     "obs_056",
+        ...     "Originally reported layer 3 activation as 0.95, was actually 0.59",
+        ...     {"correct_value": 0.59, "original_wrong_value": 0.95},
+        ...     "Confused with different neuron index"
+        ... )
+        'obs_057'  # Correction recorded, original marked obsolete
+        
+        >>> # You drew wrong conclusion
+        >>> correct_observation(
+        ...     "obs_112",
+        ...     "Previously thought high activation meant attention, but it was noise",
+        ...     reason="Didn't account for batch normalization effects"
+        ... )
+        'obs_113'
+    \"\"\"
+
+def obsolete_observation(observation_id: str, reason: str,
+                        cascade: bool = False) -> Dict[str, Any]:
+    \"\"\"
+    Mark an observation as no longer valid (without replacement).
+    
+    Use this when an observation is outdated, irrelevant, or superseded
+    by broader understanding. Unlike correction (which replaces with
+    corrected version), this simply marks something as no longer applicable.
+    
+    Args:
+        observation_id: ID of observation to obsolete
+        reason: Why this observation is no longer valid
+        cascade: If True, flag dependent patterns for revalidation
+        
+    Returns:
+        Dict with impact statistics:
+        - observation_id: ID that was obsoleted
+        - dependent_patterns: Count of patterns using this as evidence
+        - dependent_theories: Count of theories potentially affected
+        - revalidation_needed: Whether cascade revalidation flagged items
+        
+    Examples:
+        >>> # Testing hypothesis that turned out irrelevant
+        >>> obsolete_observation(
+        ...     "obs_078",
+        ...     "This activation pattern was from warmup phase, not representative"
+        ... )
+        {'observation_id': 'obs_078', 'dependent_patterns': 2, ...}
+        
+        >>> # Mark old observation obsolete with cascade
+        >>> obsolete_observation(
+        ...     "obs_045",
+        ...     "Based on outdated architecture (pre-fine-tuning)",
+        ...     cascade=True  # Flag patterns to revalidate
+        ... )
+        {'observation_id': 'obs_045', 'dependent_patterns': 5, 
+         'revalidation_needed': True, ...}
     \"\"\"
 ```
 """

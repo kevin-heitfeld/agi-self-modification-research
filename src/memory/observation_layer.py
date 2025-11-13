@@ -24,12 +24,15 @@ Date: November 7, 2025
 import json
 import time
 import uuid
+import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from enum import Enum
 import sqlite3
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ObservationType(Enum):
@@ -48,7 +51,7 @@ class ObservationType(Enum):
 
 @dataclass
 class Observation:
-    """A single observation record."""
+    """A single observation record with versioning and lifecycle management."""
     id: str
     timestamp: float
     type: ObservationType
@@ -57,6 +60,14 @@ class Observation:
     data: Dict[str, Any]
     tags: List[str]
     importance: float  # 0.0-1.0 scale
+    
+    # Versioning and lifecycle (Phase 1: Correction & Versioning)
+    status: str = "active"  # active | obsolete | deprecated | superseded
+    version: int = 1  # Version number for tracking revisions
+    replaced_by: Optional[str] = None  # ID of newer observation that replaces this
+    corrects: Optional[str] = None  # ID of observation being corrected
+    obsolete_reason: Optional[str] = None  # Why this was obsoleted/deprecated
+    updated_at: Optional[float] = None  # When this version was created (for updates)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
@@ -104,6 +115,9 @@ class ObservationLayer:
         >>> modifications = layer.query(type=ObservationType.MODIFICATION)
         >>> layer5_events = layer.query(tags=['layer5'])
     """
+    
+    # Column list for SELECT statements (including Phase 1 fields)
+    SELECT_COLUMNS = "id, timestamp, type, category, description, data, tags, importance, status, version, replaced_by, corrects, obsolete_reason, updated_at"
 
     def __init__(self, storage_dir: str):
         """
@@ -138,7 +152,15 @@ class ObservationLayer:
                 description TEXT NOT NULL,
                 data TEXT NOT NULL,
                 tags TEXT NOT NULL,
-                importance REAL NOT NULL
+                importance REAL NOT NULL,
+                
+                -- Phase 1: Versioning and lifecycle management
+                status TEXT DEFAULT 'active',
+                version INTEGER DEFAULT 1,
+                replaced_by TEXT,
+                corrects TEXT,
+                obsolete_reason TEXT,
+                updated_at REAL
             )
         """)
 
@@ -221,8 +243,9 @@ class ObservationLayer:
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO observations
-            (id, timestamp, type, category, description, data, tags, importance)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, timestamp, type, category, description, data, tags, importance, 
+             status, version, replaced_by, corrects, obsolete_reason, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             observation.id,
             observation.timestamp,
@@ -231,7 +254,13 @@ class ObservationLayer:
             observation.description,
             json.dumps(observation.data),
             json.dumps(observation.tags),
-            observation.importance
+            observation.importance,
+            observation.status,
+            observation.version,
+            observation.replaced_by,
+            observation.corrects,
+            observation.obsolete_reason,
+            observation.updated_at
         ))
 
         # Store tags
@@ -252,26 +281,33 @@ class ObservationLayer:
 
         return obs_id
 
-    def get(self, observation_id: str) -> Optional[Observation]:
+    def get(self, observation_id: str, include_obsolete: bool = False) -> Optional[Observation]:
         """
         Get a specific observation by ID.
 
         Args:
             observation_id: The observation ID
+            include_obsolete: If False (default), return None for obsolete observations
 
         Returns:
-            Observation if found, None otherwise
+            Observation if found and not obsolete (unless include_obsolete=True), None otherwise
         """
         # Check cache first
         if observation_id in self.cache:
-            return self.cache[observation_id]
+            obs = self.cache[observation_id]
+            if not include_obsolete and obs.status != 'active':
+                return None
+            return obs
 
         # Query database
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT id, timestamp, type, category, description, data, tags, importance
+        
+        status_clause = "" if include_obsolete else "AND status = 'active'"
+        
+        cursor.execute(f"""
+            SELECT {self.SELECT_COLUMNS}
             FROM observations
-            WHERE id = ?
+            WHERE id = ? {status_clause}
         """, (observation_id,))
 
         row = cursor.fetchone()
@@ -280,20 +316,25 @@ class ObservationLayer:
 
         return self._row_to_observation(row)
 
-    def get_recent(self, limit: int = 100) -> List[Observation]:
+    def get_recent(self, limit: int = 100, include_obsolete: bool = False) -> List[Observation]:
         """
         Get most recent observations.
 
         Args:
             limit: Maximum number to return
+            include_obsolete: If False (default), exclude obsolete observations
 
         Returns:
             List of observations, newest first
         """
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT id, timestamp, type, category, description, data, tags, importance
+        
+        status_clause = "" if include_obsolete else "WHERE status = 'active'"
+        
+        cursor.execute(f"""
+            SELECT {self.SELECT_COLUMNS}
             FROM observations
+            {status_clause}
             ORDER BY timestamp DESC
             LIMIT ?
         """, (limit,))
@@ -308,7 +349,8 @@ class ObservationLayer:
         min_importance: Optional[float] = None,
         start_time: Optional[float] = None,
         end_time: Optional[float] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        include_obsolete: bool = False
     ) -> List[Observation]:
         """
         Query observations with filters.
@@ -321,17 +363,22 @@ class ObservationLayer:
             start_time: Start timestamp
             end_time: End timestamp
             limit: Maximum results
+            include_obsolete: If False (default), exclude obsolete observations
 
         Returns:
             List of matching observations
         """
-        # Build query
-        query_parts = ["SELECT DISTINCT o.id, o.timestamp, o.type, o.category, o.description, o.data, o.tags, o.importance FROM observations o"]
+        # Build query with Phase 1 columns
+        query_parts = [f"SELECT DISTINCT {', '.join([f'o.{col}' for col in self.SELECT_COLUMNS.split(', ')])} FROM observations o"]
         where_parts = []
         params = []
 
         if tags:
             query_parts.append("JOIN observation_tags ot ON o.id = ot.observation_id")
+
+        # Add status filter by default
+        if not include_obsolete:
+            where_parts.append("o.status = 'active'")
 
         if obs_type:
             where_parts.append("o.type = ?")
@@ -503,7 +550,10 @@ class ObservationLayer:
             import csv
             with open(filepath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(['id', 'timestamp', 'type', 'category', 'description', 'importance'])
+                writer.writerow([
+                    'id', 'timestamp', 'type', 'category', 'description', 'importance',
+                    'status', 'version', 'replaced_by', 'corrects', 'obsolete_reason', 'updated_at'
+                ])
                 for obs in observations:
                     writer.writerow([
                         obs.id,
@@ -511,8 +561,237 @@ class ObservationLayer:
                         obs.type.value,
                         obs.category,
                         obs.description,
-                        obs.importance
+                        obs.importance,
+                        obs.status,
+                        obs.version,
+                        obs.replaced_by,
+                        obs.corrects,
+                        obs.obsolete_reason,
+                        obs.updated_at
                     ])
+
+    # ===== Phase 1: Lifecycle Management Methods =====
+
+    def update_observation(
+        self,
+        observation_id: str,
+        updates: Dict[str, Any],
+        reason: str
+    ) -> str:
+        """
+        Create a new version of an observation with updates.
+        
+        The original observation is marked as 'superseded' and a new version
+        is created with the updates applied. This preserves the full history.
+        
+        Args:
+            observation_id: ID of observation to update
+            updates: Dictionary of fields to update (e.g., {'importance': 0.9, 'description': '...'})
+            reason: Human-readable reason for the update
+            
+        Returns:
+            ID of the new observation version
+            
+        Example:
+            >>> new_id = layer.update_observation(
+            ...     "obs_abc123",
+            ...     {"importance": 0.9, "description": "Corrected importance"},
+            ...     "Realized this observation is more important than initially thought"
+            ... )
+        """
+        # Get original observation
+        original = self.get(observation_id)
+        if not original:
+            raise ValueError(f"Observation {observation_id} not found")
+        
+        if original.status != "active":
+            raise ValueError(f"Cannot update observation {observation_id} with status '{original.status}'")
+        
+        # Create new version with updates
+        new_data = original.data.copy()
+        new_tags = original.tags.copy()
+        new_description = original.description
+        new_importance = original.importance
+        new_category = original.category
+        
+        # Apply updates
+        if 'data' in updates:
+            new_data.update(updates['data'])
+        if 'tags' in updates:
+            new_tags = updates['tags']
+        if 'description' in updates:
+            new_description = updates['description']
+        if 'importance' in updates:
+            new_importance = updates['importance']
+        if 'category' in updates:
+            new_category = updates['category']
+        
+        # Record new version
+        new_id = self.record(
+            obs_type=original.type,
+            category=new_category,
+            description=new_description,
+            data=new_data,
+            tags=new_tags,
+            importance=new_importance
+        )
+        
+        # Update new observation's metadata
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE observations
+            SET version = ?, corrects = ?, updated_at = ?
+            WHERE id = ?
+        """, (original.version + 1, observation_id, time.time(), new_id))
+        
+        # Mark original as superseded
+        cursor.execute("""
+            UPDATE observations
+            SET status = 'superseded', replaced_by = ?, obsolete_reason = ?
+            WHERE id = ?
+        """, (new_id, reason, observation_id))
+        
+        self.conn.commit()
+        
+        # Update cache
+        if observation_id in self.cache:
+            del self.cache[observation_id]
+        
+        logger.info(f"Updated observation {observation_id} → {new_id} (v{original.version + 1}): {reason}")
+        return new_id
+
+    def correct_observation(
+        self,
+        observation_id: str,
+        correction_description: str,
+        corrected_data: Optional[Dict[str, Any]] = None,
+        reason: str = ""
+    ) -> str:
+        """
+        Mark an observation as incorrect and create a corrected version.
+        
+        This is semantically stronger than update - it means "this was wrong".
+        The original is marked 'obsolete' (not just 'superseded').
+        
+        Args:
+            observation_id: ID of incorrect observation
+            correction_description: Corrected description
+            corrected_data: Corrected data (optional)
+            reason: Why the original was incorrect
+            
+        Returns:
+            ID of the corrected observation
+            
+        Example:
+            >>> corrected_id = layer.correct_observation(
+            ...     "obs_abc123",
+            ...     "Layer 5 actually has LOW importance (not high)",
+            ...     {"layer": 5, "importance_level": "low"},
+            ...     "Initial analysis was based on flawed assumption"
+            ... )
+        """
+        # Get original observation
+        original = self.get(observation_id)
+        if not original:
+            raise ValueError(f"Observation {observation_id} not found")
+        
+        # Create corrected observation
+        corrected_id = self.record(
+            obs_type=original.type,
+            category=original.category,
+            description=correction_description,
+            data=corrected_data if corrected_data is not None else original.data,
+            tags=original.tags + ["correction"],
+            importance=original.importance
+        )
+        
+        # Update metadata
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE observations
+            SET corrects = ?, version = ?, updated_at = ?
+            WHERE id = ?
+        """, (observation_id, original.version + 1, time.time(), corrected_id))
+        
+        # Mark original as obsolete
+        cursor.execute("""
+            UPDATE observations
+            SET status = 'obsolete', replaced_by = ?, obsolete_reason = ?
+            WHERE id = ?
+        """, (corrected_id, reason or "Corrected by newer observation", observation_id))
+        
+        self.conn.commit()
+        
+        # Update cache
+        if observation_id in self.cache:
+            del self.cache[observation_id]
+        
+        logger.info(f"Corrected observation {observation_id} → {corrected_id}: {reason}")
+        return corrected_id
+
+    def obsolete_observation(
+        self,
+        observation_id: str,
+        reason: str,
+        cascade: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Mark an observation as no longer valid without creating a replacement.
+        
+        Use this when you determine an observation was simply wrong or
+        no longer applicable (vs. update/correct which create new versions).
+        
+        Args:
+            observation_id: ID of observation to obsolete
+            reason: Why this observation is being obsoleted
+            cascade: If True, mark dependent patterns for revalidation
+            
+        Returns:
+            Dictionary with statistics on affected patterns/theories/beliefs
+            
+        Example:
+            >>> stats = layer.obsolete_observation(
+            ...     "obs_abc123",
+            ...     "This was a duplicate observation",
+            ...     cascade=True
+            ... )
+            >>> print(f"Affected {stats['patterns_flagged']} patterns")
+        """
+        # Get observation
+        obs = self.get(observation_id)
+        if not obs:
+            raise ValueError(f"Observation {observation_id} not found")
+        
+        # Mark as obsolete
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE observations
+            SET status = 'obsolete', obsolete_reason = ?, updated_at = ?
+            WHERE id = ?
+        """, (reason, time.time(), observation_id))
+        
+        self.conn.commit()
+        
+        # Update cache
+        if observation_id in self.cache:
+            del self.cache[observation_id]
+        
+        stats = {
+            "observation_id": observation_id,
+            "status": "obsolete",
+            "reason": reason,
+            "patterns_flagged": 0,
+            "cascade_enabled": cascade
+        }
+        
+        # If cascade is enabled, we'd mark dependent patterns for revalidation
+        # This would require pattern layer integration - leaving as placeholder
+        if cascade:
+            logger.info(f"Cascade revalidation requested for obs {observation_id} (not yet implemented)")
+            stats["cascade_note"] = "Cascade flagging not yet implemented - will be done during consolidation"
+        
+        logger.info(f"Obsoleted observation {observation_id}: {reason}")
+        return stats
 
     def _row_to_observation(self, row: tuple) -> Observation:
         """Convert database row to Observation object."""
@@ -524,7 +803,14 @@ class ObservationLayer:
             description=row[4],
             data=json.loads(row[5]),
             tags=json.loads(row[6]),
-            importance=row[7]
+            importance=row[7],
+            # Phase 1 fields (with defaults for backward compatibility)
+            status=row[8] if len(row) > 8 else "active",
+            version=row[9] if len(row) > 9 else 1,
+            replaced_by=row[10] if len(row) > 10 else None,
+            corrects=row[11] if len(row) > 11 else None,
+            obsolete_reason=row[12] if len(row) > 12 else None,
+            updated_at=row[13] if len(row) > 13 else None
         )
 
     def __del__(self):
