@@ -204,9 +204,9 @@ class ObservationLayer:
         obs_type: ObservationType,
         category: str,
         description: str,
-        data: Dict[str, Any],
-        tags: List[str],
-        importance: float = 0.5
+        importance: float,
+        data: Optional[Dict[str, Any]] = None,
+        tags: Optional[List[str]] = None
     ) -> str:
         """
         Record a new observation.
@@ -215,13 +215,14 @@ class ObservationLayer:
             obs_type: Type of observation
             category: Category within type
             description: Human-readable description
-            data: Structured data about the observation
-            tags: Optional tags for organization
             importance: Importance score (0.0-1.0)
+            data: Structured data about the observation (optional, defaults to {})
+            tags: Tags for organization (optional, defaults to [])
 
         Returns:
             Observation ID
         """
+        data = data or {}
         tags = tags or []
 
         # Generate unique ID using UUID to avoid collisions

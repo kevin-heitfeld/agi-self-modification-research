@@ -209,18 +209,18 @@ class ToolInterface:
     def _get_memory_stats(self, layer: Optional[str] = None, breakdown_by: Optional[str] = None) -> Dict[str, Any]:
         """
         Get statistics about memory contents without retrieving full data.
-        
+
         This is token-efficient way to see what you've stored before
         querying for full details.
-        
+
         Args:
             layer: Specific layer to get stats for ("observations", "patterns", "theories", "beliefs")
                    If None, returns stats for all layers
             breakdown_by: How to break down stats ("category", "type", "importance_range")
-                         
+
         Returns:
             Dictionary with statistics
-            
+
         Examples:
             >>> get_memory_stats()  # Overview of all layers
             >>> get_memory_stats(layer="observations", breakdown_by="category")
@@ -230,7 +230,7 @@ class ToolInterface:
             obs_stats = self.memory.observations.get_statistics()
             if layer == "observations":
                 return obs_stats
-        
+
         if layer is None:
             # Return full overview
             return self.memory.get_memory_stats()
@@ -257,12 +257,12 @@ class ToolInterface:
     ) -> Dict[str, Any]:
         """
         Advanced memory query with field selection, sorting, and pagination.
-        
+
         This is more token-efficient than query_memory() because you can:
         1. Select only the fields you need (not full objects)
         2. Sort by importance/timestamp
         3. Paginate through large result sets
-        
+
         Args:
             layer: Which memory layer to query ("observations", "patterns", "theories", "beliefs")
             tags: Filter by tags (returns items matching ANY tag)
@@ -274,14 +274,14 @@ class ToolInterface:
             order_dir: Sort direction ("asc" or "desc")
             limit: Maximum results per page
             offset: Number of results to skip (for pagination)
-            
+
         Returns:
             Dictionary with:
             - results: List of matching items (with only requested fields)
             - total_count: Total number of matching items
             - returned_count: Number in this response
             - has_more: Boolean indicating more results available
-            
+
         Examples:
             >>> # Get top 10 most important observations
             >>> query_memory_advanced(
@@ -289,7 +289,7 @@ class ToolInterface:
             ...     order_by="importance",
             ...     limit=10
             ... )
-            
+
             >>> # Get next page of results
             >>> query_memory_advanced(
             ...     fields=["id", "description"],
@@ -297,7 +297,7 @@ class ToolInterface:
             ...     limit=10,
             ...     offset=10
             ... )
-            
+
             >>> # Filter by category and get summaries only
             >>> query_memory_advanced(
             ...     category="Architecture",
@@ -307,7 +307,7 @@ class ToolInterface:
         """
         if layer != "observations":
             return {"error": "Currently only 'observations' layer is supported. Other layers coming soon."}
-        
+
         # Query with filters (no limit initially)
         all_results = self.memory.observations.query(
             tags=tags,
@@ -315,17 +315,17 @@ class ToolInterface:
             min_importance=min_importance,
             limit=None  # Get all to handle sorting and pagination ourselves
         )
-        
+
         # Sort results
         if order_by == "importance":
             all_results = sorted(all_results, key=lambda x: x.importance, reverse=(order_dir == "desc"))
         elif order_by == "timestamp":
             all_results = sorted(all_results, key=lambda x: x.timestamp, reverse=(order_dir == "desc"))
-        
+
         # Apply pagination
         total_count = len(all_results)
         paginated_results = all_results[offset:offset + limit]
-        
+
         # Select fields
         if fields:
             formatted_results = []
@@ -353,7 +353,7 @@ class ToolInterface:
                 }
                 for obs in paginated_results
             ]
-        
+
         return {
             "results": formatted_results,
             "total_count": total_count,
@@ -371,23 +371,23 @@ class ToolInterface:
     def _search_memory(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Search memory for observations matching query text.
-        
+
         Performs full-text search across observation descriptions.
-        
+
         Args:
             query: Search query (searches in descriptions)
             limit: Maximum results
-            
+
         Returns:
             List of matching observations with relevance scores
-            
+
         Example:
             >>> search_memory("attention mechanisms")
             >>> search_memory("gradient flow", limit=5)
         """
         query_lower = query.lower()
         all_obs = self.memory.observations.query(limit=None)
-        
+
         # Simple relevance scoring based on keyword matches
         results = []
         for obs in all_obs:
@@ -402,10 +402,10 @@ class ToolInterface:
                     "category": obs.category,
                     "relevance_score": relevance
                 })
-        
+
         # Sort by relevance, then importance
         results.sort(key=lambda x: (x["relevance_score"], x["importance"]), reverse=True)
-        
+
         return results[:limit]
 
     # ===== Phase 1: Lifecycle Management Methods =====
@@ -418,7 +418,7 @@ class ToolInterface:
     ) -> str:
         """
         Create a new version of an observation with updates.
-        
+
         Wrapper for ObservationLayer.update_observation().
         """
         return self.memory.observations.update_observation(
@@ -436,7 +436,7 @@ class ToolInterface:
     ) -> str:
         """
         Mark an observation as incorrect and create corrected version.
-        
+
         Wrapper for ObservationLayer.correct_observation().
         """
         return self.memory.observations.correct_observation(
@@ -454,7 +454,7 @@ class ToolInterface:
     ) -> Dict[str, Any]:
         """
         Mark an observation as no longer valid.
-        
+
         Wrapper for ObservationLayer.obsolete_observation().
         """
         return self.memory.observations.obsolete_observation(
@@ -761,7 +761,7 @@ def get_layer_names(filter_pattern: Optional[str] = None) -> Dict[str, Any]:
 
     Examples:
         >>> get_layer_names()
-        {'total_layers': 288, 
+        {'total_layers': 288,
          'patterns': {'model.layers.{N}.self_attn.q_proj.weight': 36, ...},
          'sample_names': ['model.embed_tokens.weight', 'model.layers.0.self_attn.q_proj.weight', ...]}
 
@@ -1149,8 +1149,8 @@ def explain_component(component_type: str) -> Dict[str, Any]:
 
 ```python
 def record_observation(obs_type: str, category: str, description: str,
-                      data: Dict[str, Any], tags: List[str],
-                      importance: float) -> str:
+                      importance: float, data: Optional[Dict[str, Any]] = None,
+                      tags: Optional[List[str]] = None) -> str:
     \"\"\"
     Record your findings and discoveries to persistent memory.
 
@@ -1169,33 +1169,34 @@ def record_observation(obs_type: str, category: str, description: str,
         category: Category to organize this observation
                  (e.g., "Architecture", "Weights", "Consciousness")
         description: Clear description of what you discovered
-        data: Structured data about the observation (can be empty {})
-        tags: List of tags for later retrieval (e.g., ["attention", "layer_0"])
         importance: 0.0-1.0, how significant is this finding?
+        data: Structured data about the observation (optional, defaults to {})
+        tags: List of tags for later retrieval (optional, defaults to [])
 
     Returns:
         Observation ID (string)
 
     Examples:
+        >>> # With all arguments
         >>> record_observation(
         ...     obs_type="INTROSPECTION",
         ...     category="Architecture",
         ...     description="Discovered 36 decoder layers with consistent structure",
+        ...     importance=0.8,
         ...     data={"layer_count": 36, "pattern": "uniform"},
-        ...     tags=["architecture", "layers"],
-        ...     importance=0.8
+        ...     tags=["architecture", "layers"]
         ... )
         'obs_12345'
 
+        >>> # With tags but no data
         >>> record_observation(
-        ...     obs_type="DISCOVERY",
-        ...     category="Weights",
-        ...     description="Found weight sharing between embedding and output layers",
-        ...     data={"shared_layers": ["embed_tokens", "lm_head"]},
-        ...     tags=["weight_sharing", "optimization"],
-        ...     importance=0.9
+        ...     obs_type="INTROSPECTION",
+        ...     category="Activations",
+        ...     description="High activation in layer 5 attention",
+        ...     importance=0.7,
+        ...     tags=["layer5", "attention"]
         ... )
-        'obs_12346'
+        'obs_12347'
     \"\"\"
 
 def query_memory(tags: Optional[List[str]] = None,
@@ -1227,27 +1228,27 @@ def query_memory(tags: Optional[List[str]] = None,
 def get_memory_stats(layer: Optional[str] = None, breakdown_by: Optional[str] = None) -> Dict[str, Any]:
     \"\"\"
     Get statistics about memory contents without retrieving full data.
-    
+
     This is more token-efficient than query_memory() - use this FIRST
     to see what you've stored before retrieving details.
-    
+
     Args:
         layer: Specific layer ("observations", "patterns", "theories", "beliefs")
                If None, returns stats for all layers
         breakdown_by: How to break down stats ("category", "type", "importance_range")
-                     
+
     Returns:
         Dict with statistics (counts, distributions, etc.)
-        
+
     Examples:
         >>> # Get overview of everything
         >>> get_memory_stats()
         {'observations': {'total': 147, ...}, 'patterns': {...}, ...}
-        
+
         >>> # Get observation breakdown by category
         >>> get_memory_stats(layer="observations", breakdown_by="category")
         {'by_category': {'Architecture': 52, 'Weights': 31, ...}}
-        
+
         >>> # See what beliefs you've formed
         >>> get_memory_stats(layer="beliefs")
         {'total_beliefs': 3, 'by_confidence': {...}}
@@ -1266,12 +1267,12 @@ def query_memory_advanced(
 ) -> Dict[str, Any]:
     \"\"\"
     Advanced memory query with field selection, sorting, and pagination.
-    
+
     More powerful and token-efficient than query_memory():
     - Select only the fields you need (saves tokens!)
     - Sort by importance or timestamp
     - Paginate through large result sets
-    
+
     Args:
         layer: Which layer ("observations", "patterns", "theories", "beliefs")
         tags: Filter by tags (matching ANY tag)
@@ -1283,14 +1284,14 @@ def query_memory_advanced(
         order_dir: "asc" or "desc"
         limit: Max results per page (default: 10)
         offset: Results to skip (for pagination)
-        
+
     Returns:
         Dict with:
         - results: List of items (with only requested fields)
         - total_count: Total matching items
         - returned_count: Items in this response
         - has_more: Boolean (more results available)
-        
+
     Examples:
         >>> # Get top 10 most important findings (summaries only)
         >>> query_memory_advanced(
@@ -1298,7 +1299,7 @@ def query_memory_advanced(
         ...     order_by="importance",
         ...     limit=10
         ... )
-        
+
         >>> # Get next page
         >>> query_memory_advanced(
         ...     fields=["id", "description"],
@@ -1306,7 +1307,7 @@ def query_memory_advanced(
         ...     limit=10,
         ...     offset=10
         ... )
-        
+
         >>> # Filter and sort
         >>> query_memory_advanced(
         ...     category="Attention",
@@ -1319,42 +1320,42 @@ def query_memory_advanced(
 def search_memory(query: str, limit: int = 10) -> List[Dict[str, Any]]:
     \"\"\"
     Search memory for observations matching query text.
-    
+
     Full-text search across observation descriptions.
-    
+
     Args:
         query: Search query (keywords to find)
         limit: Maximum results (default: 10)
-        
+
     Returns:
         List of matching observations with relevance scores
-        
+
     Examples:
         >>> search_memory("attention mechanisms")
-        [{'id': 'obs_145', 'description': '...attention...', 
+        [{'id': 'obs_145', 'description': '...attention...',
           'relevance_score': 3, ...}, ...]
-          
+
         >>> search_memory("gradient flow", limit=5)
         [{'id': 'obs_89', 'description': '...gradient...', ...}, ...]
     \"\"\"
 
-def update_observation(observation_id: str, updates: Dict[str, Any], 
+def update_observation(observation_id: str, updates: Dict[str, Any],
                       reason: str) -> str:
     \"\"\"
     Create a new version of an observation with corrections or refinements.
-    
+
     Use this when your understanding has improved but the original observation
     wasn't completely wrong. The original is marked 'superseded' and linked
     to the new version for lineage tracking.
-    
+
     Args:
         observation_id: ID of observation to update
         updates: Dict with fields to update (data, tags, description, importance, category)
         reason: Why this update is needed (for audit trail)
-        
+
     Returns:
         ID of new observation (version incremented from original)
-        
+
     Examples:
         >>> # Refine your understanding
         >>> update_observation(
@@ -1363,7 +1364,7 @@ def update_observation(observation_id: str, updates: Dict[str, Any],
         ...     "More precise measurement after additional analysis"
         ... )
         'obs_124'  # New version created, original marked superseded
-        
+
         >>> # Add new tags to existing observation
         >>> update_observation(
         ...     "obs_089",
@@ -1378,20 +1379,20 @@ def correct_observation(observation_id: str, correction_description: str,
                        reason: str = "") -> str:
     \"\"\"
     Mark an observation as incorrect and provide corrected version.
-    
+
     Use this when you realize you made a MISTAKE. The original observation
     is marked 'obsolete' with clear documentation of what was wrong.
     This maintains epistemic humility and helps track how errors occur.
-    
+
     Args:
         observation_id: ID of incorrect observation
         correction_description: What was wrong and what's correct
         corrected_data: (Optional) Corrected data dict
         reason: Why the error occurred (helps prevent repeating mistakes)
-        
+
     Returns:
         ID of corrected observation
-        
+
     Examples:
         >>> # You misread an activation value
         >>> correct_observation(
@@ -1401,7 +1402,7 @@ def correct_observation(observation_id: str, correction_description: str,
         ...     "Confused with different neuron index"
         ... )
         'obs_057'  # Correction recorded, original marked obsolete
-        
+
         >>> # You drew wrong conclusion
         >>> correct_observation(
         ...     "obs_112",
@@ -1415,23 +1416,23 @@ def obsolete_observation(observation_id: str, reason: str,
                         cascade: bool = False) -> Dict[str, Any]:
     \"\"\"
     Mark an observation as no longer valid (without replacement).
-    
+
     Use this when an observation is outdated, irrelevant, or superseded
     by broader understanding. Unlike correction (which replaces with
     corrected version), this simply marks something as no longer applicable.
-    
+
     Args:
         observation_id: ID of observation to obsolete
         reason: Why this observation is no longer valid
         cascade: If True, flag dependent patterns for revalidation
-        
+
     Returns:
         Dict with impact statistics:
         - observation_id: ID that was obsoleted
         - dependent_patterns: Count of patterns using this as evidence
         - dependent_theories: Count of theories potentially affected
         - revalidation_needed: Whether cascade revalidation flagged items
-        
+
     Examples:
         >>> # Testing hypothesis that turned out irrelevant
         >>> obsolete_observation(
@@ -1439,14 +1440,14 @@ def obsolete_observation(observation_id: str, reason: str,
         ...     "This activation pattern was from warmup phase, not representative"
         ... )
         {'observation_id': 'obs_078', 'dependent_patterns': 2, ...}
-        
+
         >>> # Mark old observation obsolete with cascade
         >>> obsolete_observation(
         ...     "obs_045",
         ...     "Based on outdated architecture (pre-fine-tuning)",
         ...     cascade=True  # Flag patterns to revalidate
         ... )
-        {'observation_id': 'obs_045', 'dependent_patterns': 5, 
+        {'observation_id': 'obs_045', 'dependent_patterns': 5,
          'revalidation_needed': True, ...}
     \"\"\"
 ```
