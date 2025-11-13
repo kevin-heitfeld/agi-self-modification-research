@@ -11,6 +11,8 @@ echo - Latest PyTorch 2.5.1+cu121
 echo - Latest Transformers 4.57.1+
 echo - HQQ quantization library
 echo.
+echo Note: Make sure you have at least 500 MB free on C: drive
+echo.
 
 REM Check if venv exists
 if not exist venv (
@@ -20,15 +22,16 @@ if not exist venv (
     exit /b 1
 )
 
-REM Activate virtual environment
-echo [1/5] Activating virtual environment...
-call venv\Scripts\activate.bat
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to activate virtual environment
+REM Don't rely on activation - use venv Python directly
+echo [1/5] Checking virtual environment...
+if not exist venv\Scripts\python.exe (
+    echo ERROR: Virtual environment Python not found!
+    echo Expected: venv\Scripts\python.exe
     pause
     exit /b 1
 )
-echo Virtual environment activated
+echo Virtual environment found
+echo Using: %CD%\venv\Scripts\python.exe
 echo.
 
 REM Set temp directories and pip cache to D: drive
@@ -44,13 +47,13 @@ echo.
 
 REM Upgrade pip
 echo [3/5] Upgrading pip...
-python -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install --upgrade pip
 echo.
 
 REM Install/upgrade PyTorch 2.5.1+cu121
 echo [4/5] Installing PyTorch 2.5.1+cu121 (this may take several minutes)...
-echo Note: Using D:\temp for downloads to avoid C: drive space issues
-python -m pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+echo Note: Using D:\temp for downloads and NO cache to avoid C: drive issues
+venv\Scripts\python.exe -m pip install --no-cache-dir torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install PyTorch
@@ -68,7 +71,7 @@ echo - Transformers 4.57.1+
 echo - HQQ quantization library
 echo - All other dependencies from requirements.txt
 echo.
-python -m pip install -r requirements.txt --upgrade
+venv\Scripts\python.exe -m pip install --no-cache-dir -r requirements.txt --upgrade
 
 if %errorlevel% neq 0 (
     echo WARNING: Some packages may have failed to install
@@ -84,12 +87,12 @@ if %errorlevel% neq 0 (
 
 REM Verify key packages
 echo Verifying key packages:
-python -c "import torch; print(f'PyTorch: {torch.__version__}')"
-python -c "import transformers; print(f'Transformers: {transformers.__version__}')"
+venv\Scripts\python.exe -c "import torch; print(f'PyTorch: {torch.__version__}')"
+venv\Scripts\python.exe -c "import transformers; print(f'Transformers: {transformers.__version__}')"
 
 echo.
 echo Checking HQQ quantization support:
-python -c "try:
+venv\Scripts\python.exe -c "try:
     from transformers.cache_utils import QuantizedCache
     print('✓ HQQ Quantized Cache: Available (new API - 75%% memory savings)')
 except ImportError:

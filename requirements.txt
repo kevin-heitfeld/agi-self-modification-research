@@ -9,9 +9,11 @@
 
 # PyTorch - Core deep learning framework
 # Version 2.2.0+ required for transformers 4.45+ compatibility
-torch>=2.2.0+cu121
-torchvision>=0.17.0+cu121
-torchaudio>=2.2.0+cu121
+# NOTE: Install PyTorch separately with: update_venv.bat or setup.bat
+# These are commented out because >= doesn't work with CUDA local versions
+# torch>=2.2.0+cu121
+# torchvision>=0.17.0+cu121
+# torchaudio>=2.2.0+cu121
 
 # Transformers - Hugging Face library for LLMs
 # v4.45.0+ required for HQQQuantizedCache (4-bit KV cache quantization, 75% memory savings)
