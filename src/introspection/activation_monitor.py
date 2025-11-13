@@ -52,6 +52,10 @@ class ActivationMonitor:
         self.activations: Dict[str, torch.Tensor] = {}
         self.attention_weights: Dict[str, torch.Tensor] = {}
         
+        # Activation cache metadata for smart retention
+        self.last_capture_text: Optional[str] = None
+        self.activation_use_count: int = 0  # Track how many times activations were queried
+        
         # Registered hooks
         self.hooks = []
         
@@ -161,10 +165,43 @@ class ActivationMonitor:
         self.hooks.clear()
         logger.info("Cleared all hooks")
     
-    def clear_activations(self) -> None:
-        """Clear stored activations"""
+    def _get_cached_result(self, input_text: str) -> Dict[str, Any]:
+        """
+        Return cached activation results without re-processing.
+        Used when same text is processed multiple times.
+        """
+        # Re-tokenize to get tokens (cheap operation)
+        inputs = self.tokenizer(input_text, return_tensors="pt", truncation=True, max_length=100)
+        token_ids = inputs["input_ids"][0].cpu().tolist()
+        token_strings = [self.tokenizer.decode([tid]) for tid in token_ids]
+        
+        logger.debug(f"[ACTIVATION CACHE] Returning cached data for '{input_text[:50]}...'")
+        
+        return {
+            "input_text": input_text,
+            "tokens": token_ids,
+            "token_strings": token_strings,
+            "num_tokens": len(token_ids),
+            "activations": dict(self.activations),
+            "attention_weights": dict(self.attention_weights),
+            "monitored_layers": list(self.activations.keys()),
+            "cached": True  # Flag indicating this is cached data
+        }
+    
+    def clear_activations(self, force: bool = False) -> None:
+        """
+        Clear stored activations.
+        
+        Args:
+            force: If True, always clear. If False, log warning but still clear.
+        """
+        if not force and self.activation_use_count > 0:
+            logger.debug(f"Clearing activations that were used {self.activation_use_count} times")
+        
         self.activations.clear()
         self.attention_weights.clear()
+        self.last_capture_text = None
+        self.activation_use_count = 0
     
     def capture_activations(
         self, 
@@ -198,8 +235,17 @@ class ActivationMonitor:
         if not self.hooks:
             raise RuntimeError("No hooks registered. Call register_hooks() or provide layer_names.")
         
-        # Clear previous activations
-        self.clear_activations()
+        # Smart cache management: Only clear if processing DIFFERENT text
+        # This allows multiple queries (get_attention_patterns, get_activation_statistics)
+        # after a single process_text() call
+        if self.last_capture_text != input_text:
+            if self.last_capture_text is not None:
+                logger.debug(f"[ACTIVATION CACHE] Replacing cached activations (was used {self.activation_use_count} times)")
+            self.clear_activations()
+            self.last_capture_text = input_text
+        else:
+            logger.debug(f"[ACTIVATION CACHE] Reusing existing activations for same text (use count: {self.activation_use_count})")
+            return self._get_cached_result(input_text)
         
         # Tokenize input
         inputs = self.tokenizer(input_text, return_tensors="pt", truncation=True, max_length=max_length)
@@ -320,6 +366,9 @@ class ActivationMonitor:
                     f"{variable_hint}"
                 )
             raise KeyError(error_msg)
+        
+        # Track activation cache usage for smart retention
+        self.activation_use_count += 1
         
         activation = self.activations[layer_name]
         act_flat = activation.flatten().float()
@@ -502,6 +551,9 @@ class ActivationMonitor:
                     f"Available layers with attention: {available[:5]}{'...' if len(available) > 5 else ''}{hint}"
                     f"{comma_separated_hint}"
                 )
+        
+        # Track activation cache usage for smart retention
+        self.activation_use_count += 1
         
         attn = self.attention_weights[layer_name]
         
