@@ -230,21 +230,51 @@ class ManualGenerator:
 
             elif self.system_prompt_cache is not None:
                 # Use system prompt cache
-                # CRITICAL FIX: Do NOT deep copy quantized caches!
-                # HQQ quantized caches contain complex quantization metadata that breaks
-                # when deep copied. The model should handle cache mutation internally.
-                # For standard (non-quantized) caches, deep copy is still safe.
+                # CRITICAL FIX for HQQ: Cannot reuse the same cache object because model
+                # mutates it in-place during generation. We need to reconstruct a fresh cache
+                # with the same content.
+                
                 if self.quantize_kv_cache:
-                    # Use quantized cache directly (do not copy)
-                    current_cache = self.system_prompt_cache
-                    cache_type = "HQQ quantized (shared)"
-                    logger.info(f"Using system prompt cache (length: {self.system_prompt_length}, type: {cache_type}) - direct reference")
+                    # For quantized caches: Create new empty cache and populate it
+                    # by copying layer-by-layer from the stored cache
+                    try:
+                        # Try new API first (transformers 4.57+)
+                        current_cache = self.QuantizedCache(
+                            backend='hqq',
+                            config=self.model.config,
+                            nbits=4,
+                            axis_key=0,
+                            axis_value=0,
+                            q_group_size=64,
+                            residual_length=128
+                        )
+                    except (TypeError, ImportError):
+                        # Fallback to deprecated API (transformers 4.45-4.56)
+                        current_cache = self.QuantizedCache(
+                            config=self.model.config,
+                            nbits=4,
+                            axis_key=0,
+                            axis_value=0,
+                            q_group_size=64,
+                            residual_length=128
+                        )
+                    
+                    # Copy KV states layer by layer from stored cache to new cache
+                    # This preserves quantization while avoiding in-place mutation bugs
+                    for layer_idx in range(len(self.system_prompt_cache)):
+                        key_states = self.system_prompt_cache[layer_idx][0]
+                        value_states = self.system_prompt_cache[layer_idx][1]
+                        # Update adds the states to the cache (quantizing if needed)
+                        current_cache.update(key_states, value_states, layer_idx)
+                    
+                    cache_type = "HQQ quantized (reconstructed)"
+                    logger.debug(f"Reconstructed HQQ cache from system prompt ({self.system_prompt_length} tokens)")
                 else:
-                    # Safe to deep copy standard caches
+                    # Safe to deep copy standard caches (no quantization metadata)
                     import copy
                     current_cache = copy.deepcopy(self.system_prompt_cache)
                     cache_type = "standard (copied)"
-                    logger.info(f"Using system prompt cache (length: {self.system_prompt_length}, type: {cache_type})")
+                    logger.debug(f"Copied standard cache from system prompt ({self.system_prompt_length} tokens)")
                 
                 cache_length = self.system_prompt_length
 

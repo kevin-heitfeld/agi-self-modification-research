@@ -413,16 +413,14 @@ we write down important discoveries and look them up later!"""
         )
         self.logger.info("  ✓ Tool interface ready")
 
-        # Initialize manual generator with KV caching
-        # NOTE: HQQ quantization disabled due to gibberish generation bug
-        # HQQ 4-bit quantization appears too aggressive for KV caches, causing
-        # cumulative precision loss that corrupts attention patterns.
-        # TODO: Investigate INT8 quantization or alternative compression methods
+        # Initialize manual generator with KV caching and quantization
+        # Using HQQ 4-bit quantization with proper cache reconstruction
+        # (see manual_generation.py for fix details - no longer uses buggy deepcopy or direct reuse)
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
-            quantize_kv_cache=False  # DISABLED - HQQ causes gibberish output
+            quantize_kv_cache=True  # Re-enabled with proper cache reconstruction fix
         )
 
         # Defense-in-depth: Modify chat template to NOT inject default system message
