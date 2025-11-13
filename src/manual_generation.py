@@ -13,7 +13,7 @@ Date: November 10, 2025
 
 import torch
 import logging
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import Dict, List, Optional, Tuple, Any, Callable, Union
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class GenerationState:
     """Tracks state during generation"""
     input_ids: torch.Tensor          # [batch, seq_len]
-    past_key_values: Optional[Tuple] # KV cache
+    past_key_values: Optional[Any]   # KV cache (tuple or Cache object)
     attention_mask: torch.Tensor     # [batch, seq_len]
     generated_tokens: List[int]      # Tokens generated so far
     finished: bool                   # Whether generation is complete
@@ -54,40 +54,31 @@ class ManualGenerator:
             model: HuggingFace model (e.g., AutoModelForCausalLM)
             tokenizer: HuggingFace tokenizer
             device: Device to run on ("cuda" or "cpu")
-            quantize_kv_cache: Use INT8 quantization for KV cache (saves 50% memory)
+            quantize_kv_cache: Use HQQ quantization for KV cache (saves 50-75% memory)
         """
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
         self.quantize_kv_cache = quantize_kv_cache
-        
-        # Prepare cache config for quantization (if enabled)
-        # Note: Transformers 4.45+ changed from QuantizedCacheConfig to cache_implementation
+
+        # Try to import HQQ quantized cache for new API (transformers 4.45+)
+        self.HQQQuantizedCache = None
         if quantize_kv_cache:
             try:
-                # Try new API (transformers 4.45+)
                 from transformers.cache_utils import HQQQuantizedCache
-                # Store cache implementation string for GenerationConfig
-                self.cache_implementation = "hybrid"  # Use hybrid cache with quantization
-                logger.info("KV cache quantization enabled (HQQ - 50-75% memory savings)")
+                self.HQQQuantizedCache = HQQQuantizedCache
+                logger.info("✓ KV cache quantization enabled (HQQ 4-bit - 75% memory savings)")
+                logger.info("  Cache will use 4-bit quantization with dynamic range")
             except ImportError:
-                try:
-                    # Fallback to old API (transformers 4.44)
-                    from transformers import QuantizedCacheConfig
-                    self.cache_config = QuantizedCacheConfig(nbits=8)
-                    self.cache_implementation = None
-                    logger.info("KV cache quantization enabled (INT8 - 50% memory savings)")
-                except ImportError:
-                    logger.warning("KV cache quantization not available in this transformers version")
-                    logger.warning("KV cache quantization disabled - using FP16")
-                    self.quantize_kv_cache = False
-                    self.cache_implementation = None
+                logger.warning("⚠ HQQQuantizedCache not available in this transformers version")
+                logger.warning("  Falling back to standard FP16 cache")
+                logger.warning("  Upgrade to transformers 4.45+ for quantization support")
+                self.quantize_kv_cache = False
         else:
-            self.cache_implementation = None
-            logger.info("KV cache quantization disabled (using FP16)")
+            logger.info("KV cache quantization disabled (using standard FP16 cache)")
 
         # Cached system prompt KV states
-        self.system_prompt_cache: Optional[Tuple] = None
+        self.system_prompt_cache: Optional[Any] = None
         self.system_prompt_length: int = 0
 
         logger.info(f"ManualGenerator initialized on {device}")
@@ -108,19 +99,39 @@ class ManualGenerator:
         inputs = self.tokenizer(system_prompt, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
+        # Initialize quantized cache if enabled
+        past_key_values = None
+        if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
+            # Create HQQ quantized cache with 4-bit quantization
+            past_key_values = self.HQQQuantizedCache(
+                config=self.model.config,
+                nbits=4,  # 4-bit quantization (75% memory savings)
+                axis_key=0,  # Quantize along key dimension
+                axis_value=0,  # Quantize along value dimension
+                q_group_size=64,  # Group size for quantization
+                residual_length=128  # Residual for better accuracy
+            )
+            logger.info("  Using HQQ 4-bit quantized cache for system prompt")
+
         # Forward pass to get KV cache
         with torch.no_grad():
             outputs = self.model(
                 **inputs,
                 use_cache=True,
+                past_key_values=past_key_values,
                 return_dict=True
             )
 
-        # Store the KV cache
+        # Store the KV cache (now potentially quantized!)
         self.system_prompt_cache = outputs.past_key_values
         self.system_prompt_length = inputs["input_ids"].shape[1]
 
-        logger.info(f"System prompt cached: {self.system_prompt_length} tokens")
+        # Log memory savings if using quantization
+        if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
+            logger.info(f"✓ System prompt cached: {self.system_prompt_length} tokens (4-bit quantized)")
+            logger.info(f"  Estimated memory savings: ~75% vs FP16 cache")
+        else:
+            logger.info(f"System prompt cached: {self.system_prompt_length} tokens (FP16)")
 
     def generate(
         self,
@@ -130,7 +141,7 @@ class ManualGenerator:
         top_p: float = 1.0,
         do_sample: bool = True,
         use_cache: bool = True,
-        past_key_values: Optional[Tuple] = None,
+        past_key_values: Optional[Any] = None,
         callback: Optional[Callable[[int, torch.Tensor], None]] = None,
         return_cache: bool = False
     ) -> Dict[str, Any]:
@@ -144,7 +155,7 @@ class ManualGenerator:
             top_p: Nucleus sampling threshold (0.0-1.0)
             do_sample: Whether to sample (True) or use greedy decoding (False)
             use_cache: Whether to use/reuse KV cache
-            past_key_values: Existing KV cache to continue from (optional)
+            past_key_values: Existing KV cache to continue from (tuple or Cache object)
             callback: Optional function called per token: callback(token_id, logits)
             return_cache: Whether to return the final KV cache in result
 
@@ -187,7 +198,7 @@ class ManualGenerator:
             if past_key_values is not None:
                 # Use provided cache (multi-turn conversation)
                 current_cache = past_key_values
-                cache_length = past_key_values[0][0].shape[2]  # seq_len from first layer's key
+                cache_length = self._get_cache_length(past_key_values)
                 logger.debug(f"Using provided KV cache (length: {cache_length})")
 
                 # Extend attention mask to cover cached tokens
@@ -197,21 +208,36 @@ class ManualGenerator:
             elif self.system_prompt_cache is not None:
                 # Use system prompt cache
                 # CRITICAL: Deep copy the cache to prevent in-place mutations!
-                # PyTorch model forward pass modifies past_key_values in-place,
-                # so we must deep copy before each use to keep the original pristine
-                # Using copy.deepcopy() maintains Cache object type (required by Transformers)
+                # The model's forward pass may modify cache objects in-place,
+                # so we must deep copy to preserve the original system prompt cache.
+                # For HQQQuantizedCache objects, we need to use copy.deepcopy() which
+                # maintains the Cache object type (required by Transformers 4.45+)
                 import copy
                 current_cache = copy.deepcopy(self.system_prompt_cache)
                 cache_length = self.system_prompt_length
-                logger.info(f"Using system prompt cache (length: {cache_length}) - DEEP COPIED for safety")
+
+                cache_type = "HQQ quantized" if self.quantize_kv_cache else "standard"
+                logger.info(f"Using system prompt cache (length: {cache_length}, type: {cache_type}) - deep copied")
 
                 # Extend attention mask to cover system prompt
                 system_mask = torch.ones((1, cache_length), dtype=torch.long, device=self.device)
                 attention_mask = torch.cat([system_mask, attention_mask], dim=1)
             else:
                 # No cache available, will create new one
-                current_cache = None
-                logger.debug("No cache available, will create new")
+                # If quantization is enabled, initialize a quantized cache
+                if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
+                    current_cache = self.HQQQuantizedCache(
+                        config=self.model.config,
+                        nbits=4,
+                        axis_key=0,
+                        axis_value=0,
+                        q_group_size=64,
+                        residual_length=128
+                    )
+                    logger.debug("No cache available, initializing HQQ quantized cache")
+                else:
+                    current_cache = None
+                    logger.debug("No cache available, will create standard cache")
         else:
             current_cache = None
             logger.debug("Cache disabled")
@@ -223,10 +249,11 @@ class ManualGenerator:
         # CRITICAL: Calculate position_ids for models with rotary embeddings
         # When using cached KV states, position_ids must account for cached sequence length
         if current_cache is not None:
-            # Cached sequence length
+            # Get cached sequence length using helper method
             if past_key_values is not None:
-                cache_length = past_key_values[0][0].shape[2]
+                cache_length = self._get_cache_length(past_key_values)
             else:
+                # System prompt cache
                 cache_length = self.system_prompt_length
 
             logger.debug(f"Using cache, cache_length={cache_length}, input_ids.shape[1]={input_ids.shape[1]}")
@@ -254,7 +281,7 @@ class ManualGenerator:
         # This is the position of the NEXT token to generate
         if current_cache is not None:
             if past_key_values is not None:
-                current_position = past_key_values[0][0].shape[2] + input_ids.shape[1]
+                current_position = self._get_cache_length(past_key_values) + input_ids.shape[1]
             else:
                 current_position = self.system_prompt_length + input_ids.shape[1]
         else:
@@ -343,8 +370,9 @@ class ManualGenerator:
         if return_cache:
             result["past_key_values"] = current_cache
             if current_cache is not None:
-                final_cache_len = current_cache[0][0].shape[2]
-                logger.debug(f"Returning cache with length: {final_cache_len} tokens")
+                final_cache_len = self._get_cache_length(current_cache)
+                cache_type = "quantized" if self.quantize_kv_cache else "standard"
+                logger.debug(f"Returning {cache_type} cache with length: {final_cache_len} tokens")
 
         logger.info(f"Generated {len(generated_tokens)} tokens (stopped: {stopped_reason})")
 
@@ -407,6 +435,30 @@ class ManualGenerator:
         self.system_prompt_cache = None
         self.system_prompt_length = 0
         logger.info("Cache cleared")
+
+    def _get_cache_length(self, cache: Any) -> int:
+        """
+        Get the sequence length from a cache object.
+
+        Handles both legacy tuple-based caches and new Cache objects.
+
+        Args:
+            cache: KV cache (tuple of tuples or Cache object)
+
+        Returns:
+            Sequence length in the cache
+        """
+        if cache is None:
+            return 0
+
+        if isinstance(cache, tuple):
+            # Legacy tuple-based cache: ((key, value), (key, value), ...)
+            # Shape of key/value: [batch, num_heads, seq_len, head_dim]
+            return cache[0][0].shape[2]
+        else:
+            # New Cache object (HQQQuantizedCache, DynamicCache, etc.)
+            # These have a get_seq_length() method
+            return cache.get_seq_length()
 
 
 def test_manual_generator():
