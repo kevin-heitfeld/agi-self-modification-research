@@ -120,7 +120,7 @@ class ManualGenerator:
                 past_key_values = self.QuantizedCache(
                     backend='hqq',
                     config=self.model.config,
-                    nbits=4,  # 4-bit quantization (75% memory savings)
+                    nbits=8,  # 8-bit quantization (50% memory savings) - 4-bit was too aggressive
                     axis_key=0,  # Quantize along key dimension
                     axis_value=0,  # Quantize along value dimension
                     q_group_size=64,  # Group size for quantization
@@ -132,14 +132,14 @@ class ManualGenerator:
                 logger.debug(f"New API failed ({e}), trying deprecated API")
                 past_key_values = self.QuantizedCache(
                     config=self.model.config,
-                    nbits=4,  # 4-bit quantization (75% memory savings)
+                    nbits=8,  # 8-bit quantization (50% memory savings) - 4-bit was too aggressive
                     axis_key=0,  # Quantize along key dimension
                     axis_value=0,  # Quantize along value dimension
                     q_group_size=64,  # Group size for quantization
                     residual_length=128  # Residual for better accuracy
                 )
                 logger.debug("Created HQQ quantized cache for system prompt (deprecated API)")
-            logger.info("  Using HQQ 4-bit quantized cache for system prompt")
+            logger.info("  Using HQQ 8-bit quantized cache for system prompt")
 
         # Forward pass to get KV cache
         with torch.no_grad():
@@ -156,8 +156,8 @@ class ManualGenerator:
 
         # Log memory savings if using quantization
         if self.quantize_kv_cache and self.QuantizedCache is not None:
-            logger.info(f"✓ System prompt cached: {self.system_prompt_length} tokens (4-bit quantized)")
-            logger.info(f"  Estimated memory savings: ~75% vs FP16 cache")
+            logger.info(f"✓ System prompt cached: {self.system_prompt_length} tokens (8-bit quantized)")
+            logger.info(f"  Estimated memory savings: ~50% vs FP16 cache")
         else:
             logger.info(f"System prompt cached: {self.system_prompt_length} tokens (FP16)")
 
@@ -245,13 +245,13 @@ class ManualGenerator:
                     # Regenerate quantized cache from scratch
                     # This is fast (8747 tokens ~0.5s) and avoids all mutation/corruption issues
                     logger.debug(f"Regenerating HQQ quantized cache for system prompt ({self.system_prompt_length} tokens)")
-
+                    
                     # Create empty quantized cache
                     try:
                         current_cache = self.QuantizedCache(
                             backend='hqq',
                             config=self.model.config,
-                            nbits=4,
+                            nbits=8,  # 8-bit, not 4-bit (too aggressive)
                             axis_key=0,
                             axis_value=0,
                             q_group_size=64,
@@ -260,14 +260,12 @@ class ManualGenerator:
                     except (TypeError, ImportError):
                         current_cache = self.QuantizedCache(
                             config=self.model.config,
-                            nbits=4,
+                            nbits=8,  # 8-bit, not 4-bit (too aggressive)
                             axis_key=0,
                             axis_value=0,
                             q_group_size=64,
                             residual_length=128
-                        )
-
-                    # Run forward pass to populate the cache
+                        )                    # Run forward pass to populate the cache
                     with torch.no_grad():
                         _ = self.model(
                             input_ids=self.system_prompt_input_ids,

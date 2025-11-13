@@ -420,7 +420,7 @@ we write down important discoveries and look them up later!"""
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
-            quantize_kv_cache=True  # Re-enabled with proper cache reconstruction fix
+            quantize_kv_cache=True  # Using 8-bit HQQ (50% savings) - 4-bit was too aggressive
         )
 
         # Defense-in-depth: Modify chat template to NOT inject default system message
