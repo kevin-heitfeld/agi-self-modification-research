@@ -1,7 +1,7 @@
 # AGI Self-Modification Research - Requirements
 # Python 3.10+ required
 # Generated: November 7, 2025
-# Updated with actual installed versions from working environment
+# Updated: November 13, 2025 - Added HQQ quantized KV cache support
 
 # ==============================================================================
 # CORE DEEP LEARNING
@@ -14,7 +14,7 @@ torchvision>=0.17.0+cu121
 torchaudio>=2.2.0+cu121
 
 # Transformers - Hugging Face library for LLMs
-# v4.45.0+ required for QuantizedCacheConfig (INT8 KV cache quantization)
+# v4.45.0+ required for HQQQuantizedCache (4-bit KV cache quantization, 75% memory savings)
 transformers>=4.45.0
 
 # Accelerate - Efficient model loading and distributed training
