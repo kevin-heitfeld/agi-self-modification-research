@@ -230,17 +230,23 @@ class ManualGenerator:
 
             elif self.system_prompt_cache is not None:
                 # Use system prompt cache
-                # CRITICAL: Deep copy the cache to prevent in-place mutations!
-                # The model's forward pass may modify cache objects in-place,
-                # so we must deep copy to preserve the original system prompt cache.
-                # For HQQQuantizedCache objects, we need to use copy.deepcopy() which
-                # maintains the Cache object type (required by Transformers 4.45+)
-                import copy
-                current_cache = copy.deepcopy(self.system_prompt_cache)
+                # CRITICAL FIX: Do NOT deep copy quantized caches!
+                # HQQ quantized caches contain complex quantization metadata that breaks
+                # when deep copied. The model should handle cache mutation internally.
+                # For standard (non-quantized) caches, deep copy is still safe.
+                if self.quantize_kv_cache:
+                    # Use quantized cache directly (do not copy)
+                    current_cache = self.system_prompt_cache
+                    cache_type = "HQQ quantized (shared)"
+                    logger.info(f"Using system prompt cache (length: {self.system_prompt_length}, type: {cache_type}) - direct reference")
+                else:
+                    # Safe to deep copy standard caches
+                    import copy
+                    current_cache = copy.deepcopy(self.system_prompt_cache)
+                    cache_type = "standard (copied)"
+                    logger.info(f"Using system prompt cache (length: {self.system_prompt_length}, type: {cache_type})")
+                
                 cache_length = self.system_prompt_length
-
-                cache_type = "HQQ quantized" if self.quantize_kv_cache else "standard"
-                logger.info(f"Using system prompt cache (length: {cache_length}, type: {cache_type}) - deep copied")
 
                 # Extend attention mask to cover system prompt
                 system_mask = torch.ones((1, cache_length), dtype=torch.long, device=self.device)
