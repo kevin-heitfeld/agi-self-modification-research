@@ -107,7 +107,7 @@ class ManualGenerator:
         # Tokenize system prompt
         inputs = self.tokenizer(system_prompt, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        
+
         # Store input IDs for regenerating cache (needed for quantized caches)
         self.system_prompt_input_ids = inputs["input_ids"]
         self.system_prompt_length = inputs["input_ids"].shape[1]
@@ -223,8 +223,11 @@ class ManualGenerator:
 
         # Determine which cache to use and adjust attention mask
         if use_cache:
-            if past_key_values is not None:
-                # Use provided cache (multi-turn conversation)
+            # CRITICAL: For HQQ quantized caches, IGNORE conversation cache!
+            # Conversation caches get mutated and corrupted - always use system prompt cache
+            # which we regenerate fresh each time
+            if past_key_values is not None and not self.quantize_kv_cache:
+                # Use provided cache (multi-turn conversation) - ONLY for standard caches
                 current_cache = past_key_values
                 cache_length = self._get_cache_length(past_key_values)
                 logger.debug(f"Using provided KV cache (length: {cache_length})")
@@ -237,12 +240,12 @@ class ManualGenerator:
                 # Use system prompt cache
                 # CRITICAL: Quantized caches cannot be safely reused due to in-place mutations
                 # Solution: Regenerate the cache for quantized, deepcopy for standard
-                
+
                 if self.quantize_kv_cache:
                     # Regenerate quantized cache from scratch
                     # This is fast (8747 tokens ~0.5s) and avoids all mutation/corruption issues
                     logger.debug(f"Regenerating HQQ quantized cache for system prompt ({self.system_prompt_length} tokens)")
-                    
+
                     # Create empty quantized cache
                     try:
                         current_cache = self.QuantizedCache(
@@ -263,7 +266,7 @@ class ManualGenerator:
                             q_group_size=64,
                             residual_length=128
                         )
-                    
+
                     # Run forward pass to populate the cache
                     with torch.no_grad():
                         _ = self.model(
@@ -274,14 +277,14 @@ class ManualGenerator:
                             return_dict=True
                         )
                     # current_cache is now filled with quantized KV states
-                    
+
                     cache_type = "HQQ quantized (regenerated)"
                 else:
                     # Safe to deep copy standard caches (no quantization metadata to corrupt)
                     import copy
                     current_cache = copy.deepcopy(self.system_prompt_cache)
                     cache_type = "standard (copied)"
-                
+
                 cache_length = self.system_prompt_length
 
                 # Extend attention mask to cover system prompt
@@ -446,11 +449,16 @@ class ManualGenerator:
         }
 
         if return_cache:
-            result["past_key_values"] = current_cache
-            if current_cache is not None:
-                final_cache_len = self._get_cache_length(current_cache)
-                cache_type = "quantized" if self.quantize_kv_cache else "standard"
-                logger.debug(f"Returning {cache_type} cache with length: {final_cache_len} tokens")
+            # CRITICAL: Don't return HQQ caches - they're corrupted by in-place mutations
+            # Return None to force regeneration on next turn
+            if self.quantize_kv_cache:
+                result["past_key_values"] = None
+                logger.debug("Not returning HQQ cache (would be corrupted) - will regenerate from system prompt")
+            else:
+                result["past_key_values"] = current_cache
+                if current_cache is not None:
+                    final_cache_len = self._get_cache_length(current_cache)
+                    logger.debug(f"Returning standard cache with length: {final_cache_len} tokens")
 
         logger.info(f"Generated {len(generated_tokens)} tokens (stopped: {stopped_reason})")
 
