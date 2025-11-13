@@ -88,6 +88,7 @@ class ManualGenerator:
         # Cached system prompt KV states
         self.system_prompt_cache: Optional[Any] = None
         self.system_prompt_length: int = 0
+        self.system_prompt_input_ids: Optional[torch.Tensor] = None  # For regenerating quantized cache
 
         logger.info(f"ManualGenerator initialized on {device}")
 
@@ -106,6 +107,10 @@ class ManualGenerator:
         # Tokenize system prompt
         inputs = self.tokenizer(system_prompt, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        # Store input IDs for regenerating cache (needed for quantized caches)
+        self.system_prompt_input_ids = inputs["input_ids"]
+        self.system_prompt_length = inputs["input_ids"].shape[1]
 
         # Initialize quantized cache if enabled
         past_key_values = None
@@ -230,15 +235,16 @@ class ManualGenerator:
 
             elif self.system_prompt_cache is not None:
                 # Use system prompt cache
-                # CRITICAL FIX for HQQ: Cannot reuse the same cache object because model
-                # mutates it in-place during generation. We need to reconstruct a fresh cache
-                # with the same content.
+                # CRITICAL: Quantized caches cannot be safely reused due to in-place mutations
+                # Solution: Regenerate the cache for quantized, deepcopy for standard
                 
                 if self.quantize_kv_cache:
-                    # For quantized caches: Create new empty cache and populate it
-                    # by copying layer-by-layer from the stored cache
+                    # Regenerate quantized cache from scratch
+                    # This is fast (8747 tokens ~0.5s) and avoids all mutation/corruption issues
+                    logger.debug(f"Regenerating HQQ quantized cache for system prompt ({self.system_prompt_length} tokens)")
+                    
+                    # Create empty quantized cache
                     try:
-                        # Try new API first (transformers 4.57+)
                         current_cache = self.QuantizedCache(
                             backend='hqq',
                             config=self.model.config,
@@ -249,7 +255,6 @@ class ManualGenerator:
                             residual_length=128
                         )
                     except (TypeError, ImportError):
-                        # Fallback to deprecated API (transformers 4.45-4.56)
                         current_cache = self.QuantizedCache(
                             config=self.model.config,
                             nbits=4,
@@ -259,22 +264,23 @@ class ManualGenerator:
                             residual_length=128
                         )
                     
-                    # Copy KV states layer by layer from stored cache to new cache
-                    # This preserves quantization while avoiding in-place mutation bugs
-                    for layer_idx in range(len(self.system_prompt_cache)):
-                        key_states = self.system_prompt_cache[layer_idx][0]
-                        value_states = self.system_prompt_cache[layer_idx][1]
-                        # Update adds the states to the cache (quantizing if needed)
-                        current_cache.update(key_states, value_states, layer_idx)
+                    # Run forward pass to populate the cache
+                    with torch.no_grad():
+                        _ = self.model(
+                            input_ids=self.system_prompt_input_ids,
+                            attention_mask=torch.ones_like(self.system_prompt_input_ids),
+                            use_cache=True,
+                            past_key_values=current_cache,
+                            return_dict=True
+                        )
+                    # current_cache is now filled with quantized KV states
                     
-                    cache_type = "HQQ quantized (reconstructed)"
-                    logger.debug(f"Reconstructed HQQ cache from system prompt ({self.system_prompt_length} tokens)")
+                    cache_type = "HQQ quantized (regenerated)"
                 else:
-                    # Safe to deep copy standard caches (no quantization metadata)
+                    # Safe to deep copy standard caches (no quantization metadata to corrupt)
                     import copy
                     current_cache = copy.deepcopy(self.system_prompt_cache)
                     cache_type = "standard (copied)"
-                    logger.debug(f"Copied standard cache from system prompt ({self.system_prompt_length} tokens)")
                 
                 cache_length = self.system_prompt_length
 
