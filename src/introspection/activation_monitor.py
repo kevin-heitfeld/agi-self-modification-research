@@ -54,6 +54,7 @@ class ActivationMonitor:
         
         # Activation cache metadata for smart retention
         self.last_capture_text: Optional[str] = None
+        self.last_capture_layers: Optional[List[str]] = None  # Track which layers were captured
         self.activation_use_count: int = 0  # Track how many times activations were queried
         
         # Registered hooks
@@ -201,6 +202,7 @@ class ActivationMonitor:
         self.activations.clear()
         self.attention_weights.clear()
         self.last_capture_text = None
+        self.last_capture_layers = None
         self.activation_use_count = 0
     
     def capture_activations(
@@ -235,16 +237,39 @@ class ActivationMonitor:
         if not self.hooks:
             raise RuntimeError("No hooks registered. Call register_hooks() or provide layer_names.")
         
-        # Smart cache management: Only clear if processing DIFFERENT text
-        # This allows multiple queries (get_attention_patterns, get_activation_statistics)
-        # after a single process_text() call
-        if self.last_capture_text != input_text:
+        # Get current registered layer names for cache key
+        current_layers = sorted([name for name, _ in self.hooks])
+        
+        # Smart cache management: Check if we can reuse cached activations
+        # Cache is valid if:
+        # 1. Same text AND
+        # 2. (Same layers OR requested layers are subset of cached layers)
+        same_text = self.last_capture_text == input_text
+        same_layers = self.last_capture_layers == current_layers
+        subset_of_cached = (
+            same_text and 
+            self.last_capture_layers is not None and
+            set(current_layers).issubset(set(self.last_capture_layers))
+        )
+        
+        cache_valid = same_text and (same_layers or subset_of_cached)
+        
+        if not cache_valid:
             if self.last_capture_text is not None:
-                logger.debug(f"[ACTIVATION CACHE] Replacing cached activations (was used {self.activation_use_count} times)")
+                if self.last_capture_text != input_text:
+                    logger.debug(f"[ACTIVATION CACHE] Replacing cached activations - different text (was used {self.activation_use_count} times)")
+                else:
+                    logger.debug(f"[ACTIVATION CACHE] Replacing cached activations - new layers not in cache (requested: {current_layers}, cached: {self.last_capture_layers})")
             self.clear_activations()
             self.last_capture_text = input_text
+            self.last_capture_layers = current_layers
         else:
-            logger.debug(f"[ACTIVATION CACHE] Reusing existing activations for same text (use count: {self.activation_use_count})")
+            if subset_of_cached and not same_layers:
+                logger.debug(f"[ACTIVATION CACHE] Reusing cached activations - requested layers are subset of cached (use count: {self.activation_use_count})")
+            else:
+                logger.debug(f"[ACTIVATION CACHE] Reusing existing activations for same text and layers (use count: {self.activation_use_count})")
+            return self._get_cached_result(input_text)
+            logger.debug(f"[ACTIVATION CACHE] Reusing existing activations for same text and layers (use count: {self.activation_use_count})")
             return self._get_cached_result(input_text)
         
         # Tokenize input
