@@ -59,6 +59,7 @@ class ActivationMonitor:
         
         # Registered hooks
         self.hooks = []
+        self.registered_layer_names: List[str] = []  # Track which layers have hooks registered
         
         # Layer registry
         self.layers = self._build_layer_registry()
@@ -157,6 +158,7 @@ class ActivationMonitor:
             handle = module.register_forward_hook(make_hook(layer_name))
             self.hooks.append(handle)
         
+        self.registered_layer_names = layer_names.copy()  # Store for cache key
         logger.info(f"Registered hooks on {len(layer_names)} layers")
     
     def clear_hooks(self) -> None:
@@ -164,6 +166,7 @@ class ActivationMonitor:
         for hook in self.hooks:
             hook.remove()
         self.hooks.clear()
+        self.registered_layer_names.clear()
         logger.info("Cleared all hooks")
     
     def _get_cached_result(self, input_text: str) -> Dict[str, Any]:
@@ -238,7 +241,7 @@ class ActivationMonitor:
             raise RuntimeError("No hooks registered. Call register_hooks() or provide layer_names.")
         
         # Get current registered layer names for cache key
-        current_layers = sorted([name for name, _ in self.hooks])
+        current_layers = sorted(self.registered_layer_names)
         
         # Smart cache management: Check if we can reuse cached activations
         # Cache is valid if:
