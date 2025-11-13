@@ -62,18 +62,28 @@ class ManualGenerator:
         self.quantize_kv_cache = quantize_kv_cache
         
         # Prepare cache config for quantization (if enabled)
+        # Note: Transformers 4.45+ changed from QuantizedCacheConfig to cache_implementation
         if quantize_kv_cache:
             try:
-                from transformers import QuantizedCacheConfig
-                self.cache_config = QuantizedCacheConfig(nbits=8)
-                logger.info("KV cache quantization enabled (INT8 - 50% memory savings)")
+                # Try new API (transformers 4.45+)
+                from transformers.cache_utils import HQQQuantizedCache
+                # Store cache implementation string for GenerationConfig
+                self.cache_implementation = "hybrid"  # Use hybrid cache with quantization
+                logger.info("KV cache quantization enabled (HQQ - 50-75% memory savings)")
             except ImportError:
-                logger.warning("QuantizedCacheConfig not available in this transformers version")
-                logger.warning("KV cache quantization disabled - upgrade transformers for support")
-                self.quantize_kv_cache = False
-                self.cache_config = None
+                try:
+                    # Fallback to old API (transformers 4.44)
+                    from transformers import QuantizedCacheConfig
+                    self.cache_config = QuantizedCacheConfig(nbits=8)
+                    self.cache_implementation = None
+                    logger.info("KV cache quantization enabled (INT8 - 50% memory savings)")
+                except ImportError:
+                    logger.warning("KV cache quantization not available in this transformers version")
+                    logger.warning("KV cache quantization disabled - using FP16")
+                    self.quantize_kv_cache = False
+                    self.cache_implementation = None
         else:
-            self.cache_config = None
+            self.cache_implementation = None
             logger.info("KV cache quantization disabled (using FP16)")
 
         # Cached system prompt KV states

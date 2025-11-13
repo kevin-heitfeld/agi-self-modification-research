@@ -8,13 +8,14 @@
 # ==============================================================================
 
 # PyTorch - Core deep learning framework
-# Version 2.1.2 for CUDA 12.1 support (adjust based on your CUDA version)
-torch==2.1.2+cu121
-torchvision==0.16.2+cu121
-torchaudio==2.1.2+cu121
+# Version 2.2.0+ required for transformers 4.45+ compatibility
+torch>=2.2.0+cu121
+torchvision>=0.17.0+cu121
+torchaudio>=2.2.0+cu121
 
 # Transformers - Hugging Face library for LLMs
-transformers==4.44.0
+# v4.45.0+ required for QuantizedCacheConfig (INT8 KV cache quantization)
+transformers>=4.45.0
 
 # Accelerate - Efficient model loading and distributed training
 accelerate==0.25.0
