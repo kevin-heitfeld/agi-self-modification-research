@@ -17,6 +17,11 @@ torchaudio>=2.2.0+cu121
 # v4.45.0+ required for HQQQuantizedCache (4-bit KV cache quantization, 75% memory savings)
 transformers>=4.45.0
 
+# HQQ - Half-Quadratic Quantization library
+# Required for HQQ quantized KV cache backend (transformers 4.57+)
+# Provides 4-bit quantization with 75% memory savings
+hqq
+
 # Accelerate - Efficient model loading and distributed training
 accelerate==0.25.0
 

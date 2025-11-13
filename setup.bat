@@ -102,27 +102,36 @@ if %errorlevel% neq 0 (
 echo Virtual environment activated
 echo.
 
-REM Upgrade pip
-echo [5/8] Upgrading pip...
-python -m pip install --upgrade pip
-echo.
-
-REM Set temp directories to D: drive to avoid C: drive space issues
-echo Setting temporary directories to D:\temp to avoid disk space issues...
+REM Set temp directories and pip cache to D: drive to avoid C: drive space issues
+echo Setting temporary directories and pip cache to D:\temp to avoid disk space issues...
 if not exist D:\temp mkdir D:\temp
 set TMPDIR=D:\temp
 set TEMP=D:\temp
 set TMP=D:\temp
+set PIP_CACHE_DIR=D:\temp\pip-cache
+echo Temp directories: D:\temp
+echo Pip cache: D:\temp\pip-cache
+echo.
+
+REM Upgrade pip
+echo [5/8] Upgrading pip...
+python -m pip install --upgrade pip
 echo.
 
 REM Install PyTorch with appropriate CUDA version
 echo [6/8] Installing PyTorch (this may take several minutes^)...
 if "%CUDA_VERSION%"=="cpu" (
     echo Installing CPU-only version (not recommended for this project^)...
-    pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cpu
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+) else if "%CUDA_VERSION%"=="cu121" (
+    echo Installing PyTorch 2.5.1 with CUDA 12.1...
+    pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+) else if "%CUDA_VERSION%"=="cu124" (
+    echo Installing PyTorch with CUDA 12.4...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ) else (
     echo Installing PyTorch with CUDA %CUDA_VERSION%...
-    pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/%CUDA_VERSION%
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/%CUDA_VERSION%
 )
 
 if %errorlevel% neq 0 (

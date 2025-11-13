@@ -61,19 +61,27 @@ class ManualGenerator:
         self.device = device
         self.quantize_kv_cache = quantize_kv_cache
 
-        # Try to import HQQ quantized cache for new API (transformers 4.45+)
-        self.HQQQuantizedCache = None
+        # Try to import quantized cache for new API (transformers 4.45+)
+        self.QuantizedCache = None
         if quantize_kv_cache:
             try:
-                from transformers.cache_utils import HQQQuantizedCache
-                self.HQQQuantizedCache = HQQQuantizedCache
+                # Try new API first (transformers 4.57+)
+                from transformers.cache_utils import QuantizedCache
+                self.QuantizedCache = QuantizedCache
                 logger.info("✓ KV cache quantization enabled (HQQ 4-bit - 75% memory savings)")
                 logger.info("  Cache will use 4-bit quantization with dynamic range")
             except ImportError:
-                logger.warning("⚠ HQQQuantizedCache not available in this transformers version")
-                logger.warning("  Falling back to standard FP16 cache")
-                logger.warning("  Upgrade to transformers 4.45+ for quantization support")
-                self.quantize_kv_cache = False
+                try:
+                    # Fallback to deprecated API (transformers 4.45-4.56)
+                    from transformers.cache_utils import HQQQuantizedCache
+                    self.QuantizedCache = HQQQuantizedCache
+                    logger.info("✓ KV cache quantization enabled (HQQ 4-bit - 75% memory savings)")
+                    logger.info("  Using deprecated HQQQuantizedCache (consider upgrading transformers)")
+                except ImportError:
+                    logger.warning("⚠ Quantized cache not available in this transformers version")
+                    logger.warning("  Falling back to standard FP16 cache")
+                    logger.warning("  Upgrade to transformers 4.45+ for quantization support")
+                    self.quantize_kv_cache = False
         else:
             logger.info("KV cache quantization disabled (using standard FP16 cache)")
 
@@ -101,16 +109,31 @@ class ManualGenerator:
 
         # Initialize quantized cache if enabled
         past_key_values = None
-        if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
-            # Create HQQ quantized cache with 4-bit quantization
-            past_key_values = self.HQQQuantizedCache(
-                config=self.model.config,
-                nbits=4,  # 4-bit quantization (75% memory savings)
-                axis_key=0,  # Quantize along key dimension
-                axis_value=0,  # Quantize along value dimension
-                q_group_size=64,  # Group size for quantization
-                residual_length=128  # Residual for better accuracy
-            )
+        if self.quantize_kv_cache and self.QuantizedCache is not None:
+            try:
+                # Try new API first (transformers 4.57+)
+                past_key_values = self.QuantizedCache(
+                    backend='hqq',
+                    config=self.model.config,
+                    nbits=4,  # 4-bit quantization (75% memory savings)
+                    axis_key=0,  # Quantize along key dimension
+                    axis_value=0,  # Quantize along value dimension
+                    q_group_size=64,  # Group size for quantization
+                    residual_length=128  # Residual for better accuracy
+                )
+                logger.debug("Created HQQ quantized cache for system prompt (new API)")
+            except (TypeError, ImportError) as e:
+                # Fallback to deprecated API (transformers 4.45-4.56)
+                logger.debug(f"New API failed ({e}), trying deprecated API")
+                past_key_values = self.QuantizedCache(
+                    config=self.model.config,
+                    nbits=4,  # 4-bit quantization (75% memory savings)
+                    axis_key=0,  # Quantize along key dimension
+                    axis_value=0,  # Quantize along value dimension
+                    q_group_size=64,  # Group size for quantization
+                    residual_length=128  # Residual for better accuracy
+                )
+                logger.debug("Created HQQ quantized cache for system prompt (deprecated API)")
             logger.info("  Using HQQ 4-bit quantized cache for system prompt")
 
         # Forward pass to get KV cache
@@ -127,7 +150,7 @@ class ManualGenerator:
         self.system_prompt_length = inputs["input_ids"].shape[1]
 
         # Log memory savings if using quantization
-        if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
+        if self.quantize_kv_cache and self.QuantizedCache is not None:
             logger.info(f"✓ System prompt cached: {self.system_prompt_length} tokens (4-bit quantized)")
             logger.info(f"  Estimated memory savings: ~75% vs FP16 cache")
         else:
@@ -225,15 +248,28 @@ class ManualGenerator:
             else:
                 # No cache available, will create new one
                 # If quantization is enabled, initialize a quantized cache
-                if self.quantize_kv_cache and self.HQQQuantizedCache is not None:
-                    current_cache = self.HQQQuantizedCache(
-                        config=self.model.config,
-                        nbits=4,
-                        axis_key=0,
-                        axis_value=0,
-                        q_group_size=64,
-                        residual_length=128
-                    )
+                if self.quantize_kv_cache and self.QuantizedCache is not None:
+                    try:
+                        # Try new API first (transformers 4.57+)
+                        current_cache = self.QuantizedCache(
+                            backend='hqq',
+                            config=self.model.config,
+                            nbits=4,
+                            axis_key=0,
+                            axis_value=0,
+                            q_group_size=64,
+                            residual_length=128
+                        )
+                    except (TypeError, ImportError):
+                        # Fallback to deprecated API (transformers 4.45-4.56)
+                        current_cache = self.QuantizedCache(
+                            config=self.model.config,
+                            nbits=4,
+                            axis_key=0,
+                            axis_value=0,
+                            q_group_size=64,
+                            residual_length=128
+                        )
                     logger.debug("No cache available, initializing HQQ quantized cache")
                 else:
                     current_cache = None

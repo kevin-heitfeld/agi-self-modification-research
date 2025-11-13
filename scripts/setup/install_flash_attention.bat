@@ -25,6 +25,15 @@ if not defined VIRTUAL_ENV (
     exit /b 1
 )
 
+REM Set temp directories and pip cache to D: drive
+echo Setting temporary directories to D:\temp to avoid disk space issues...
+if not exist D:\temp mkdir D:\temp
+set TMPDIR=D:\temp
+set TEMP=D:\temp
+set TMP=D:\temp
+set PIP_CACHE_DIR=D:\temp\pip-cache
+echo.
+
 echo [1/3] Installing build dependencies...
 pip install ninja packaging wheel
 

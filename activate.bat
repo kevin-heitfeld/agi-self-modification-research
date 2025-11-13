@@ -11,6 +11,13 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+REM Set temp directories and pip cache to D: drive to avoid C: drive space issues
+if not exist D:\temp mkdir D:\temp
+set TMPDIR=D:\temp
+set TEMP=D:\temp
+set TMP=D:\temp
+set PIP_CACHE_DIR=D:\temp\pip-cache
+
 echo.
 echo ========================================
 echo AGI Self-Modification Research
