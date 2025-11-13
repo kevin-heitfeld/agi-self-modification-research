@@ -79,47 +79,48 @@ class ModelManager:
         # Detect GPU tier based on memory and compute capability
         if "A100" in self.gpu_name or "A10" in self.gpu_name:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
-            # Conservative: 5000 * 5 = 25K cache (safer than 8000 * 5 = 40K)
+            # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 1000,  # More conservative than 1200
-                "max_conversation_tokens": 5000,  # Safer than 8000 (prevents excessive cache)
+                "max_new_tokens": 1200,  # Restored from 1000 (now safe with HQQ quantization)
+                "max_conversation_tokens": 8000,  # Restored from 5000 (HQQ reduces cache memory 75%)
                 "keep_recent_turns": 5,  # Balanced retention
                 "gpu_profile": "high_end_ampere"
             }
-            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) - using generous limits")
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) - using generous limits with HQQ quantization")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
-            # Conservative: cache is 5x conversation tokens (4000 * 5 = 20K cache, safe margin)
-            # Previous 6000 tokens caused OOM (30K cache reached 22,985 tokens)
+            # With HQQ 4-bit quantization: 75% memory savings on KV cache
+            # Previous OOM at 6000 tokens (30K cache) now safe with quantization
             limits = {
-                "max_new_tokens": 850,  # Modest increase from 750
-                "max_conversation_tokens": 4000,  # Safer than 6000 (prevents 30K cache OOM)
+                "max_new_tokens": 1000,  # Restored from 850 (HQQ quantization enables higher limits)
+                "max_conversation_tokens": 6000,  # Restored from 4000 (safe with 75% cache reduction)
                 "keep_recent_turns": 4,  # Balanced context retention
                 "gpu_profile": "l4_ada"
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with Flash Attention")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with HQQ quantization + Flash Attention")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
-            # Conservative: 2500 * 5 = 12.5K cache (safer than 3500 * 5 = 17.5K)
+            # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 600,  # Modest increase from 500
-                "max_conversation_tokens": 2500,  # Safer than 3500
+                "max_new_tokens": 700,  # Restored from 600 (safe with HQQ quantization)
+                "max_conversation_tokens": 3500,  # Restored from 2500 (HQQ reduces cache memory 75%)
                 "keep_recent_turns": 3,  # Balanced retention
                 "gpu_profile": "t4_turing"
             }
-            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) - using balanced limits")
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) - using balanced limits with HQQ quantization")
             
         elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
             # V100 (16-32 GB) - Volta
+            # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 600,
-                "max_conversation_tokens": 2500,
+                "max_new_tokens": 700,  # Restored (safe with HQQ quantization)
+                "max_conversation_tokens": 3500,  # Restored (HQQ reduces cache memory 75%)
                 "keep_recent_turns": 3,
                 "gpu_profile": "v100_volta"
             }
-            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) - using moderate limits")
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) - using moderate limits with HQQ quantization")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
