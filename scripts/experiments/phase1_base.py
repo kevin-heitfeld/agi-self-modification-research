@@ -413,14 +413,16 @@ we write down important discoveries and look them up later!"""
         )
         self.logger.info("  ✓ Tool interface ready")
 
-        # Initialize manual generator with KV caching and quantization
-        # KV cache quantization: Stores cache in INT8 instead of FP16
-        # Memory savings: 50% reduction in KV cache (directly addresses generation spike)
+        # Initialize manual generator with KV caching
+        # NOTE: HQQ quantization disabled due to gibberish generation bug
+        # HQQ 4-bit quantization appears too aggressive for KV caches, causing
+        # cumulative precision loss that corrupts attention patterns.
+        # TODO: Investigate INT8 quantization or alternative compression methods
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
-            quantize_kv_cache=True  # Enable INT8 KV cache quantization
+            quantize_kv_cache=False  # DISABLED - HQQ causes gibberish output
         )
 
         # Defense-in-depth: Modify chat template to NOT inject default system message
