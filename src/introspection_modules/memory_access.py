@@ -21,8 +21,9 @@ from typing import Dict, List, Any, Optional
 
 def record_observation(
     memory_system: Any,
-    observation: str,
-    importance: int = 5,
+    description: str,
+    category: str = "general",
+    importance: float = 0.5,
     tags: Optional[List[str]] = None,
     data: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -31,8 +32,9 @@ def record_observation(
     
     Args:
         memory_system: MemorySystem instance
-        observation: Description of what was observed
-        importance: Importance score (1-10, default 5)
+        description: Description of what was observed
+        category: Category for the observation (default: "general")
+        importance: Importance score (0.0-1.0, default 0.5)
         tags: Optional list of tags for categorization
         data: Optional dictionary of associated data
         
@@ -43,16 +45,21 @@ def record_observation(
         >>> obs_id = record_observation(
         ...     memory,
         ...     "Layer 15 shows high attention entropy on self-referential text",
-        ...     importance=8,
+        ...     category="attention",
+        ...     importance=0.8,
         ...     tags=["attention", "layer-15", "self-reference"]
         ... )
         >>> print(f"Recorded observation: {obs_id}")
     """
+    from ..memory.observation_layer import ObservationType
+    
     return memory_system.record_observation(
-        observation=observation,
-        importance=importance,
+        obs_type=ObservationType.INTROSPECTION,
+        category=category,
+        description=description,
+        data=data or {},
         tags=tags or [],
-        data=data or {}
+        importance=importance
     )
 
 

@@ -130,8 +130,8 @@ def create_introspection_module(
     if memory_system:
         memory_module = ModuleType('introspection.memory')
         memory_module.__doc__ = 'Memory system access'
-        memory_module.record_observation = lambda observation, importance=5, tags=None, data=None: memory_access.record_observation(
-            memory_system, observation, importance, tags, data
+        memory_module.record_observation = lambda description, category="general", importance=0.5, tags=None, data=None: memory_access.record_observation(
+            memory_system, description, category, importance, tags, data
         )
         memory_module.query_observations = lambda query: memory_access.query_observations(memory_system, query)
         memory_module.query_patterns = lambda query: memory_access.query_patterns(memory_system, query)

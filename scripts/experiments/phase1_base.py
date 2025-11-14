@@ -237,6 +237,12 @@ When you say "I'm done with this experiment", the system will:
 
         # Create and cache system prompt
         system_prompt_text = self.create_system_prompt()
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info("SYSTEM PROMPT")
+        self.logger.info("=" * 80)
+        self.logger.info(system_prompt_text)
+        self.logger.info("=" * 80 + "\n")
+        
         formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
         self.generator.cache_system_prompt(formatted_system)
         self.system_prompt_tokens = self.generator.system_prompt_length

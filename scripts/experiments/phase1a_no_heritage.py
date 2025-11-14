@@ -75,8 +75,9 @@ print(f"\\nFirst layer: {layer_info['explanation']}")
 
 # Save your findings
 introspection.memory.record_observation(
-    "Found model has {total_layers} total layers",
-    importance=7,
+    "Found model with 3B parameters and 36 transformer layers",
+    category="architecture",
+    importance=0.7,
     tags=["architecture", "initial-discovery"]
 )
 ```
