@@ -47,42 +47,15 @@ class Phase1aSession(Phase1BaseSession):
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
-**Your task:** Examine your own architecture using Python code.
+**Your task:** Write Python code to examine your own architecture.
 
-**Suggested approach:**
-1. Import the introspection module
-2. Get an architecture summary
-3. Explore specific layers
-4. Save interesting discoveries to memory
+**Hints:**
+- The `introspection` module is available - import it to start
+- Use `introspection.architecture` to explore your structure
+- Use `introspection.memory.record_observation()` to save important findings
+- Remember: your working memory will be reset after this experiment - only saved observations persist!
 
-**Example to get started:**
-```python
-import introspection
-
-# Get overview
-summary = introspection.architecture.get_architecture_summary()
-print(f"Model type: {summary['model_type']}")
-print(f"Total parameters: {summary['total_parameters']:,}")
-print(f"Total layers: {summary['total_layers']}")
-
-# List just the transformer layers
-layers = introspection.architecture.list_layers('model.layers.')
-print(f"Number of transformer layers: {len(layers)}")
-
-# Examine a specific layer
-layer_info = introspection.architecture.describe_layer('model.layers.0')
-print(f"\\nFirst layer: {layer_info['explanation']}")
-
-# Save your findings
-introspection.memory.record_observation(
-    "Found model with 3B parameters and 36 transformer layers",
-    category="architecture",
-    importance=0.7,
-    tags=["architecture", "initial-discovery"]
-)
-```
-
-Begin your investigation!""")
+**Begin your investigation!**""")
 
         self.cleanup_gpu_memory()
         self.reset_conversation()
