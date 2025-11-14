@@ -5,6 +5,7 @@ Provides simplified function-based access to memory system
 for use in code execution sandbox.
 
 Functions:
+    record_observation(memory_system, observation, ...) - Record new observation
     query_observations(memory_system, query) - Query observation layer
     query_patterns(memory_system, query) - Query pattern layer
     query_theories(memory_system, query) - Query theory layer
@@ -15,7 +16,44 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+
+
+def record_observation(
+    memory_system: Any,
+    observation: str,
+    importance: int = 5,
+    tags: Optional[List[str]] = None,
+    data: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Record a new observation in the memory system.
+    
+    Args:
+        memory_system: MemorySystem instance
+        observation: Description of what was observed
+        importance: Importance score (1-10, default 5)
+        tags: Optional list of tags for categorization
+        data: Optional dictionary of associated data
+        
+    Returns:
+        Observation ID (string)
+    
+    Example:
+        >>> obs_id = record_observation(
+        ...     memory,
+        ...     "Layer 15 shows high attention entropy on self-referential text",
+        ...     importance=8,
+        ...     tags=["attention", "layer-15", "self-reference"]
+        ... )
+        >>> print(f"Recorded observation: {obs_id}")
+    """
+    return memory_system.record_observation(
+        observation=observation,
+        importance=importance,
+        tags=tags or [],
+        data=data or {}
+    )
 
 
 def query_observations(memory_system: Any, query: str) -> List[Dict[str, Any]]:

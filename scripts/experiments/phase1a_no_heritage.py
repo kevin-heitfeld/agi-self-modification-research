@@ -63,11 +63,22 @@ import introspection
 summary = introspection.architecture.get_architecture_summary()
 print(f"Model type: {summary['model_type']}")
 print(f"Total parameters: {summary['total_parameters']:,}")
-print(f"Number of layers: {summary['num_layers']}")
+print(f"Total layers: {summary['total_layers']}")
+
+# List just the transformer layers
+layers = introspection.architecture.list_layers('model.layers.')
+print(f"Number of transformer layers: {len(layers)}")
 
 # Examine a specific layer
 layer_info = introspection.architecture.describe_layer('model.layers.0')
 print(f"\\nFirst layer: {layer_info['explanation']}")
+
+# Save your findings
+introspection.memory.record_observation(
+    "Found model has {total_layers} total layers",
+    importance=7,
+    tags=["architecture", "initial-discovery"]
+)
 ```
 
 Begin your investigation!""")
