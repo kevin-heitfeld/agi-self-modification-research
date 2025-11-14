@@ -273,10 +273,10 @@ activations = introspection.activations.capture_activations(
 
 # The result is a dict: layer_name -> statistics
 for layer_name, stats in activations.items():
-    print(f"\nLayer: {layer_name}")
-    print(f"  Shape: {stats['shape']}")  # [batch, seq_len, hidden_size]
-    print(f"  Mean: {stats['mean']:.4f}")
-    print(f"  Std: {stats['std']:.4f}")
+    print(f"\\nLayer: {{layer_name}}")
+    print(f"  Shape: {{stats['shape']}}")  # [batch, seq_len, hidden_size]
+    print(f"  Mean: {{stats['mean']:.4f}}")
+    print(f"  Std: {{stats['std']:.4f}}")
 ```
 
 **Get started by importing introspection and exploring!**
