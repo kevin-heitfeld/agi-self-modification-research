@@ -37,8 +37,15 @@ class Phase1aSession(Phase1BaseSession):
         """Run baseline experiments without heritage using code execution"""
         self.logger.info("\n[PHASE 1a] Running baseline experiments (no heritage, code execution)")
 
+        # Get model name from environment variable or use default
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Initialize WITHOUT heritage
-        self.initialize_systems(include_heritage=False)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=False
+        )
 
         # Experiment 1: Architecture Examination
         self.logger.info("\n" + "=" * 80)

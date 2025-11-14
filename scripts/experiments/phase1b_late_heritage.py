@@ -33,8 +33,15 @@ class Phase1bSession(Phase1BaseSession):
         """Run experiments with early heritage access"""
         self.logger.info("\n[PHASE 1b] Running experiments with early heritage (code execution)")
 
+        # Get model name from environment variable or use default
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Initialize WITH heritage
-        self.initialize_systems(include_heritage=True)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=True
+        )
 
         # Experiment 1: Architecture Examination WITH HERITAGE CONTEXT
         self.logger.info("\n" + "=" * 80)

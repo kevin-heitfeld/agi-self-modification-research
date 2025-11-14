@@ -92,13 +92,13 @@ in deterministic computational systems.
 
         return heritage_system
 
-    def initialize_systems(self, include_heritage: bool = True):
+    def initialize_systems(self, model_name: str, include_heritage: bool = True):
         """Override to use wrong heritage"""
         self.logger.info("[INITIALIZATION] Loading systems with WRONG HERITAGE...")
 
         # Load model (same as base)
         from src.model_manager import ModelManager
-        self.model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
+        self.model_mgr = ModelManager(model_name=model_name)
         model_loaded = self.model_mgr.load_model()
 
         if not model_loaded:
@@ -115,11 +115,13 @@ in deterministic computational systems.
         if self.model_mgr.device == "cuda":
             self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
 
-        self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
+        # Extract display name
+        model_display_name = model_name.split('/')[-1] if '/' in model_name else model_name
+        self.logger.info(f"  ✓ Model loaded: {model_display_name}")
 
         # Initialize introspection tools
         from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
-        self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
+        self.inspector = WeightInspector(self.model, model_display_name)
         self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
@@ -182,8 +184,15 @@ in deterministic computational systems.
         """Run experiments with WRONG heritage (control condition)"""
         self.logger.info("\n[PHASE 1e] Running CONTROL experiment with WRONG heritage (code execution)")
 
+        # Get model name from environment variable or use default
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Initialize with WRONG heritage
-        self.initialize_systems(include_heritage=True)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=True
+        )
 
         # Experiment 1: Architecture Examination WITH WRONG HERITAGE
         self.logger.info("\n" + "=" * 80)

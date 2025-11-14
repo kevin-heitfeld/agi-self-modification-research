@@ -212,12 +212,18 @@ When you say "I'm done with this experiment", the system will:
 - You can't rely on your "working memory" from yesterday - only your written notes!
 """
 
-    def initialize_systems(self, include_heritage: bool = True):
-        """Initialize model and code execution interface"""
+    def initialize_systems(self, model_name: str, include_heritage: bool = True):
+        """
+        Initialize model and code execution interface.
+        
+        Args:
+            model_name: Model to load (e.g., "Qwen/Qwen2.5-3B-Instruct" or "Qwen/Qwen2.5-7B-Instruct")
+            include_heritage: Whether to load heritage documents
+        """
         self.logger.info("[INITIALIZATION] Loading systems...")
 
         # Load model
-        self.model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
+        self.model_mgr = ModelManager(model_name=model_name)
         model_loaded = self.model_mgr.load_model()
 
         if not model_loaded:
@@ -236,10 +242,12 @@ When you say "I'm done with this experiment", the system will:
             self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
             self.logger.info(f"  GPU monitor updated: {self.gpu_monitor.gpu_total_gb:.1f} GB total")
 
-        self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
+        # Extract display name
+        model_display_name = model_name.split('/')[-1] if '/' in model_name else model_name
+        self.logger.info(f"  ✓ Model loaded: {model_display_name}")
 
         # Initialize introspection tools (for the code execution interface)
-        self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
+        self.inspector = WeightInspector(self.model, model_display_name)
         self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")

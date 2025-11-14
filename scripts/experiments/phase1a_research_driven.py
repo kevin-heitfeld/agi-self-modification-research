@@ -156,8 +156,15 @@ Continue your investigation by writing more code, or explain your findings so fa
         """Run research-driven experiments"""
         self.logger.info("\n[PHASE 1a] Research-Driven Investigation (No Heritage)")
 
+        # Get model name from environment variable or use default
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Initialize WITHOUT heritage
-        self.initialize_systems(include_heritage=False)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=False
+        )
 
         # ========== EXPERIMENT 1: Architecture Paper ==========
         self.logger.info("\n" + "=" * 80)

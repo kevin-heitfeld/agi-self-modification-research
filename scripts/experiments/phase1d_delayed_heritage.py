@@ -34,8 +34,15 @@ class Phase1dSession(Phase1BaseSession):
         """Run experiments with delayed heritage (after conclusions)"""
         self.logger.info("\n[PHASE 1d] Running experiments with delayed heritage (code execution)")
 
+        # Get model name from environment variable or use default
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Initialize WITHOUT heritage for all initial experiments
-        self.initialize_systems(include_heritage=False)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=False
+        )
 
         # Experiment 1: Architecture Examination (NO HERITAGE)
         self.logger.info("\n" + "=" * 80)
@@ -117,9 +124,16 @@ Form your hypotheses and conclusions!""")
         self.logger.info("*** INTRODUCING HERITAGE - BELIEF REVISION ***")
         self.logger.info("=" * 80)
 
+        # Get model name from environment (same as first initialization)
+        import os
+        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        
         # Reinitialize WITH heritage
         self.cleanup_gpu_memory()
-        self.initialize_systems(include_heritage=True)
+        self.initialize_systems(
+            model_name=model_name,
+            include_heritage=True
+        )
 
         # Update code execution interface
         import sys
