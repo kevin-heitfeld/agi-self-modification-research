@@ -386,6 +386,11 @@ Your investigation should be systematic and evidence-based:
 
             # Show results to model
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
+            
+            # Check for explicit experiment completion signal
+            if "EXPERIMENT_COMPLETE" in result:
+                self.logger.info("[SYSTEM] ✅ Experiment marked complete via EXPERIMENT_COMPLETE signal")
+                break
 
             # Add results as user message
             result_message = f"**Code Execution Results:**\n\n{result}"

@@ -216,7 +216,7 @@ You can write and execute Python code to introspect yourself!
   - `find_similar_weights(layer_name, top_k=5)` - Find similar weights
 
 - `introspection.activations` - Activation monitoring
-  - `capture_activations(text, layer_names)` - Capture activations for text (fast, no attention weights)
+  - `capture_activations(text, layer_names)` - Capture activations for TEXT INPUT (pass a string, not tokens!)
   - `capture_attention_weights(text, layer_names)` - Capture WITH attention weights (slower, disables Flash Attention)
   - `get_activation_statistics(layer_name)` - Get activation stats
   - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
@@ -245,6 +245,12 @@ You can write and execute Python code to introspect yourself!
 - If you NEED attention weights: use `capture_attention_weights()` (temporarily disables Flash Attention)
 - For most investigations, activation patterns alone are sufficient
 
+**About activation capture:**
+- `capture_activations()` expects TEXT as input (a string), NOT tokens
+- The function handles tokenization internally
+- Example: `capture_activations("Hello world", ["model.layers.0"])`
+- Do NOT import torch or transformers - everything is pre-configured
+
 **You can write thinking/reasoning text before and after code blocks:**
 
 I want to understand my architecture first...
@@ -255,9 +261,15 @@ summary = introspection.architecture.get_architecture_summary()
 print(summary)
 ```
 
-Now let me examine the first layer in detail...
+Now let me examine activations for a sample text...
 
 ```python
+result = introspection.activations.capture_activations(
+    "The quick brown fox jumps over the lazy dog",
+    ["model.layers.0"]
+)
+print(result['tokens'])  # See how text was tokenized
+```
 layer = introspection.architecture.describe_layer('model.layers.0')
 print(layer)  # Explore what information is available
 ```

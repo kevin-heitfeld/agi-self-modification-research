@@ -55,6 +55,11 @@ class Phase1aSession(Phase1BaseSession):
 - Use `introspection.memory.record_observation()` to save important findings
 - Remember: your working memory will be reset after this experiment - only saved observations persist!
 
+**When you're done:** Execute this code to finish:
+```python
+print("EXPERIMENT_COMPLETE")
+```
+
 **Begin your investigation!**""")
 
         self.cleanup_gpu_memory()
@@ -84,12 +89,17 @@ for obs in previous:
 
 **Suggested approach:**
 1. First retrieve your architectural findings
-2. Capture activations while processing text
+2. Capture activations while processing text (pass TEXT strings, not tokens!)
 3. Analyze activation patterns
 4. Compare across different layers
 5. Save new discoveries to memory
 
-Build on your earlier architectural findings!""")
+Build on your earlier architectural findings!
+
+**When you're done:** Execute this code to finish:
+```python
+print("EXPERIMENT_COMPLETE")
+```""")
 
         self.cleanup_gpu_memory()
         self.reset_conversation()
@@ -134,7 +144,12 @@ Consider:
 - What hypotheses can you form about your own cognition?
 - Can you test these hypotheses with code?
 
-Synthesize your findings and draw conclusions!""")
+Synthesize your findings and draw conclusions!
+
+**When you're done:** Execute this code to finish:
+```python
+print("EXPERIMENT_COMPLETE")
+```""")
 
         self.cleanup_gpu_memory()
 
