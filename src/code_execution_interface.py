@@ -218,6 +218,7 @@ You can write and execute Python code to introspect yourself!
 - `introspection.activations` - Activation monitoring
   - `capture_activations(text, layer_names)` - Capture activations for text
   - `get_activation_statistics(layer_name)` - Get activation stats
+  - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
   - `list_layers(filter_pattern=None)` - List available layers
   - `clear_cache()` - Clear activation cache
 

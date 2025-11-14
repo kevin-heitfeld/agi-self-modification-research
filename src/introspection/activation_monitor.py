@@ -93,6 +93,51 @@ class ActivationMonitor:
         
         return sorted(names)
     
+    def get_input_shape(self, sample_text: str = "test") -> Dict[str, Any]:
+        """
+        Get information about input shape when text is tokenized.
+        
+        This is useful for understanding how inputs are processed and
+        what dimensions activations will have.
+        
+        Args:
+            sample_text: Sample text to tokenize (default: "test")
+            
+        Returns:
+            Dictionary containing:
+                - sample_text: The input text used
+                - num_tokens: Number of tokens after tokenization
+                - token_ids: The actual token IDs
+                - token_strings: Human-readable token strings
+                - input_shape: Shape of input tensors [batch_size, sequence_length]
+                - hidden_size: Size of hidden states (from model config)
+                - note: Explanation of dimensions
+        
+        Example:
+            >>> shape_info = monitor.get_input_shape("Hello world")
+            >>> print(f"Tokens: {shape_info['num_tokens']}")
+        """
+        # Tokenize the sample
+        inputs = self.tokenizer(sample_text, return_tensors="pt", truncation=True, max_length=512)
+        token_ids = inputs["input_ids"][0].tolist()
+        token_strings = [self.tokenizer.decode([tid]) for tid in token_ids]
+        
+        # Get hidden size from model config
+        hidden_size = None
+        if hasattr(self.model, 'config'):
+            if hasattr(self.model.config, 'hidden_size'):
+                hidden_size = self.model.config.hidden_size
+        
+        return {
+            "sample_text": sample_text,
+            "num_tokens": len(token_ids),
+            "token_ids": token_ids,
+            "token_strings": token_strings,
+            "input_shape": list(inputs["input_ids"].shape),  # [batch_size, seq_len]
+            "hidden_size": hidden_size,
+            "note": f"When text is processed, activations will have shape [batch=1, seq_len={len(token_ids)}, hidden={hidden_size}]"
+        }
+    
     def register_hooks(self, layer_names: List[str]) -> None:
         """
         Register forward hooks on specified layers to capture activations.
