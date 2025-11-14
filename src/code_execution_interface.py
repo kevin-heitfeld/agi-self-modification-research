@@ -253,12 +253,6 @@ layer = introspection.architecture.describe_layer('model.layers.0')
 print(layer['explanation'])
 ```
 
-This is more efficient than JSON tool calling because:
-- You can chain multiple operations in one code block
-- Intermediate results stay in the sandbox
-- Only final printed output consumes context
-- You have full Python expressiveness
-
 **Get started by importing introspection and exploring!**
 """
 
