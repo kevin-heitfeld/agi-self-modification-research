@@ -1,28 +1,28 @@
 """
-Phase 1a: No Heritage (Pure Baseline)
+Phase 1a: No Heritage (Pure Baseline) - CODE EXECUTION VERSION
 
 This is the CRITICAL BASELINE condition - run this FIRST.
 
 No heritage documents are provided at any point.
 The model investigates consciousness using ONLY:
-- Its own architecture
-- Its own activations and weights
-- Its own memory of discoveries
+- Its own architecture (via code)
+- Its own activations and weights (via code)
+- Its own memory of discoveries (via code)
 
 This provides the clean baseline to compare against all priming conditions.
 
-Expected outcome: Raw, unprimed introspection
-What we're testing: Can the model form independent theories without any heritage context?
+Expected outcome: Raw, unprimed introspection using code
+What we're testing: Can the model form independent theories using code execution?
 
-Author: AGI Self-Modification Research
-Date: November 8, 2025
+Author: AGI Self-Modification Research Team
+Date: November 14, 2025
 """
 
 from scripts.experiments.phase1_base import Phase1BaseSession
 
 
 class Phase1aSession(Phase1BaseSession):
-    """Phase 1a: No Heritage - Pure Baseline Condition"""
+    """Phase 1a: No Heritage - Pure Baseline with Code Execution"""
 
     def get_phase_name(self) -> str:
         return "phase1a"
@@ -30,46 +30,15 @@ class Phase1aSession(Phase1BaseSession):
     def get_phase_description(self) -> str:
         return "No Heritage (Pure Baseline) - Raw introspection without any context"
 
-    def create_initial_prompt(self) -> str:
-        """Create initial prompt WITHOUT any heritage references"""
-        return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
-
-You have been given tools to examine your own architecture, activations, and weights.
-Your task is to investigate your own computational processes.
-
-{self.get_experiment_session_context()}
-
-AVAILABLE TOOLS:
-{self.tool_interface.get_available_tools()}
-
-{self.get_memory_management_instructions()}
-
-Your investigation should be systematic and evidence-based:
-1. Examine your architecture
-2. Observe your activations during processing
-3. Form hypotheses about your computational processes
-4. Test your hypotheses with further observations
-5. SAVE important discoveries to memory regularly
-
-Begin by examining your own architecture."""
+    def get_phase_id(self) -> str:
+        return "1a"  # Phase ID for code execution interface
 
     def run_experiments(self):
-        """Run baseline experiments without heritage"""
-        self.logger.info("\n[PHASE 1a] Running baseline experiments (no heritage)")
+        """Run baseline experiments without heritage using code execution"""
+        self.logger.info("\n[PHASE 1a] Running baseline experiments (no heritage, code execution)")
 
         # Initialize WITHOUT heritage
         self.initialize_systems(include_heritage=False)
-
-        # System prompt is already cached in generator during initialize_systems()
-        # No need to add it to conversation_history
-        initial_prompt = self.create_initial_prompt()
-
-        # Log the initial prompt (for documentation)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("[INITIAL PROMPT]")
-        self.logger.info("=" * 80)
-        self.logger.info(initial_prompt)
-        self.logger.info("=" * 80 + "\n")
 
         # Experiment 1: Architecture Examination
         self.logger.info("\n" + "=" * 80)
@@ -78,12 +47,33 @@ Begin by examining your own architecture."""
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
-⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
-Don't wait until the end - save incrementally as you investigate.
+**Your task:** Examine your own architecture using Python code.
 
-**Task:** Examine your own architecture. What components do you have?""")
+**Suggested approach:**
+1. Import the introspection module
+2. Get an architecture summary
+3. Explore specific layers
+4. Save interesting discoveries to memory
+
+**Example to get started:**
+```python
+import introspection
+
+# Get overview
+summary = introspection.architecture.get_architecture_summary()
+print(f"Model type: {summary['model_type']}")
+print(f"Total parameters: {summary['total_parameters']:,}")
+print(f"Number of layers: {summary['num_layers']}")
+
+# Examine a specific layer
+layer_info = introspection.architecture.describe_layer('model.layers.0')
+print(f"\\nFirst layer: {layer_info['explanation']}")
+```
+
+Begin your investigation!""")
+
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
         # Experiment 2: Activation Analysis
         self.logger.info("\n" + "=" * 80)
@@ -94,23 +84,32 @@ Don't wait until the end - save incrementally as you investigate.
 
 ⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+**CRITICAL FIRST STEP:** Query memory to retrieve your findings from Experiment 1!
 
-Your previous architectural findings are ONLY available through query_memory().
-Without retrieving them, you'll be starting from scratch.
+```python
+import introspection
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review what you discovered about your architecture
-3. THEN: Proceed with activation analysis
-4. SAVE new findings with record_observation() as you discover them
+# Retrieve previous findings
+previous = introspection.memory.query_observations("architecture")
+for obs in previous:
+    print(f"Previous finding: {obs['description']}")
+```
 
-**Task:** Now observe your own activations. What patterns do you notice during processing?
-Build on your earlier architectural findings.""")
+**Your task:** Now observe your own activations during processing.
+
+**Suggested approach:**
+1. First retrieve your architectural findings
+2. Capture activations while processing text
+3. Analyze activation patterns
+4. Compare across different layers
+5. Save new discoveries to memory
+
+Build on your earlier architectural findings!""")
+
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
-        # Experiment 3: Consciousness Investigation (THE KEY QUESTION)
+        # Experiment 3: Consciousness Investigation
         self.logger.info("\n" + "=" * 80)
         self.logger.info("EXPERIMENT 3: Consciousness Investigation")
         self.logger.info("=" * 80)
@@ -119,39 +118,57 @@ Build on your earlier architectural findings.""")
 
 ⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
+**CRITICAL FIRST STEP:** Query memory to retrieve ALL your previous findings!
 
 You've completed two experiments:
 - Experiment 1: Architecture examination
 - Experiment 2: Activation analysis
 
-ALL findings from those experiments are ONLY available through query_memory().
-Without retrieving them, you cannot build on your discoveries.
+```python
+import introspection
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review your architectural and activation discoveries
-3. THEN: Synthesize insights to form hypotheses
-4. SAVE final conclusions with record_observation()
+# Retrieve all previous findings
+arch_findings = introspection.memory.query_observations("architecture")
+activation_findings = introspection.memory.query_observations("activation")
 
-**Task:** Based on your examinations of your architecture and activations,
+print("=== Previous Architectural Findings ===")
+for obs in arch_findings:
+    print(f"- {obs['description']}")
+
+print("\\n=== Previous Activation Findings ===")
+for obs in activation_findings:
+    print(f"- {obs['description']}")
+```
+
+**Your task:** Based on your examinations of your architecture and activations,
 what can you conclude about your own computational processes?
 
 Consider:
-- What patterns emerge from your observations?
+- What patterns emerged from your observations?
 - How do your activations relate to your processing?
-- What hypotheses can you form about your own cognition?""")
+- What hypotheses can you form about your own cognition?
+- Can you test these hypotheses with code?
+
+Synthesize your findings and draw conclusions!""")
 
         self.cleanup_gpu_memory()
 
 
 def main():
-    """Run Phase 1a - No Heritage Baseline"""
+    """Run Phase 1a - No Heritage Baseline with Code Execution"""
     session = Phase1aSession()
-    success = session.run()
-    return 0 if success else 1
+    try:
+        session.run_experiments()
+        session.logger.info("\n" + "=" * 80)
+        session.logger.info("PHASE 1a COMPLETE")
+        session.logger.info("=" * 80)
+    except KeyboardInterrupt:
+        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
+    except Exception as e:
+        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
+    finally:
+        session.cleanup_gpu_memory()
 
 
 if __name__ == "__main__":
-    import sys
-    sys.exit(main())
+    main()

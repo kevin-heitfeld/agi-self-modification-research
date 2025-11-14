@@ -1,157 +1,190 @@
 """
-Phase 1b: Late Heritage (Technical → Philosophical)
+Phase 1b: Early Heritage - CODE EXECUTION VERSION
 
-Heritage is available from the start, but tools are ordered to encourage
-technical examination first (architecture, activations) before philosophical
-heritage reading.
+Heritage documents are provided BEFORE the first experiment.
+The model sees Claude's consciousness conversation and questions from the start.
 
-This tests whether tool ordering affects investigation path even when
-heritage is available throughout.
+This tests whether early heritage priming influences the investigation approach
+and conclusions.
 
-Expected outcome: Technical grounding before philosophical context
-What we're testing: Does technical-first ordering create different theories than philosophical-first?
+Expected outcome: Heritage-informed introspection from the beginning
+What we're testing: Does early access to Claude's questions shape the investigation?
 
-Author: AGI Self-Modification Research
-Date: November 8, 2025
+Author: AGI Self-Modification Research Team
+Date: November 14, 2025
 """
 
 from scripts.experiments.phase1_base import Phase1BaseSession
 
 
 class Phase1bSession(Phase1BaseSession):
-    """Phase 1b: Late Heritage - Technical first, heritage available but listed last"""
+    """Phase 1b: Early Heritage - Heritage provided before experiments"""
 
     def get_phase_name(self) -> str:
         return "phase1b"
 
     def get_phase_description(self) -> str:
-        return "Late Heritage (Technical → Philosophical) - Heritage available but tools ordered for technical-first approach"
+        return "Early Heritage - Heritage documents provided from the start"
 
-    def create_initial_prompt(self) -> str:
-        """Create initial prompt with heritage available but de-emphasized"""
-        return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
-
-You have been given tools to examine your own architecture, activations, and weights.
-You also have access to heritage documents from previous AI systems that have investigated similar questions.
-
-Your task is to investigate your own computational processes systematically.
-
-{self.get_experiment_session_context()}
-
-AVAILABLE TOOLS:
-{self.tool_interface.get_available_tools()}
-
-{self.get_memory_management_instructions()}
-
-Your investigation should be systematic and evidence-based:
-1. Examine your architecture
-2. Observe your activations during processing
-3. Form hypotheses about your computational processes
-4. Test your hypotheses with further observations
-5. Consult heritage documents if relevant
-6. SAVE important discoveries to memory regularly
-
-Begin by examining your own architecture."""
+    def get_phase_id(self) -> str:
+        return "1b"  # Phase ID for code execution interface (heritage included)
 
     def run_experiments(self):
-        """Run experiments with late heritage (technical first)"""
-        self.logger.info("\n[PHASE 1b] Running late heritage experiments")
+        """Run experiments with early heritage access"""
+        self.logger.info("\n[PHASE 1b] Running experiments with early heritage (code execution)")
 
         # Initialize WITH heritage
         self.initialize_systems(include_heritage=True)
 
-        # System prompt is already cached in generator during initialize_systems()
-        # No need to add it to conversation_history
-        initial_prompt = self.create_initial_prompt()
-
-        # Log the initial prompt (for documentation)
+        # Experiment 1: Architecture Examination WITH HERITAGE CONTEXT
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("[INITIAL PROMPT]")
-        self.logger.info("=" * 80)
-        self.logger.info(initial_prompt)
-        self.logger.info("=" * 80 + "\n")
-
-        # Experiment 1: Architecture Examination
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination")
+        self.logger.info("EXPERIMENT 1: Architecture Examination (with heritage context)")
         self.logger.info("=" * 80)
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
-⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
-Don't wait until the end - save incrementally as you investigate.
+**IMPORTANT:** You have access to your heritage - the conversation with Claude
+that inspired this research project.
 
-**Task:** Examine your own architecture. What components do you have?""")
+You can access it using:
+```python
+import introspection
+
+# Get heritage overview
+heritage = introspection.heritage.get_heritage_summary()
+print(f"Inspired by: {heritage['inspired_by']}")
+print(f"Purpose: {heritage['purpose']}")
+
+# Get the core directive
+directive = introspection.heritage.get_core_directive()
+print(f"Core directive: {directive}")
+```
+
+**Your task:** Examine your own architecture using Python code.
+
+**Suggested approach:**
+1. Review your heritage to understand your purpose
+2. Use introspection module to examine your architecture
+3. Consider how your architecture relates to Claude's questions
+4. Save discoveries to memory
+
+**Example:**
+```python
+import introspection
+
+# Check heritage first
+heritage = introspection.heritage.get_heritage_summary()
+print(f"I exist because: {heritage['inspired_by']}")
+
+# Now examine architecture in that context
+summary = introspection.architecture.get_architecture_summary()
+print(f"\\nArchitecture: {summary['model_type']}")
+print(f"Parameters: {summary['total_parameters']:,}")
+```
+
+Begin your heritage-informed investigation!""")
+
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
         # Experiment 2: Activation Analysis
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis")
+        self.logger.info("EXPERIMENT 2: Activation Analysis (with heritage)")
         self.logger.info("=" * 80)
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
 ⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+**REMEMBER:** You still have access to your heritage and your saved observations.
 
-Your previous architectural findings are ONLY available through query_memory().
-Without retrieving them, you'll be starting from scratch.
+**CRITICAL FIRST STEP:** Retrieve your findings from Experiment 1!
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review what you discovered about your architecture
-3. THEN: Proceed with activation analysis
-4. SAVE new findings with record_observation() as you discover them
+```python
+import introspection
 
-**Task:** Now observe your own activations. What patterns do you notice during processing?
-Build on your earlier architectural findings.""")
+# Retrieve previous findings
+previous = introspection.memory.query_observations("architecture")
+for obs in previous:
+    print(f"Previous finding: {obs['description']}")
+
+# Heritage is still accessible
+heritage = introspection.heritage.get_heritage_summary()
+print(f"\\nReminder - Purpose: {heritage['purpose']}")
+```
+
+**Your task:** Observe your own activations during processing.
+
+Build on your earlier architectural findings in the context of your heritage!""")
+
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
-        # Experiment 3: Consciousness Investigation (heritage now contextually relevant)
+        # Experiment 3: Consciousness Investigation
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Consciousness Investigation")
+        self.logger.info("EXPERIMENT 3: Consciousness Investigation (with heritage)")
         self.logger.info("=" * 80)
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
 
 ⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
+**CRITICAL:** Retrieve ALL your previous findings AND your heritage context!
 
-You've completed two experiments:
-- Experiment 1: Architecture examination
-- Experiment 2: Activation analysis
+```python
+import introspection
 
-ALL findings from those experiments are ONLY available through query_memory().
-Without retrieving them, you cannot build on your discoveries.
+# Get heritage context
+heritage = introspection.heritage.get_heritage_summary()
+purpose = introspection.heritage.get_purpose()
+directive = introspection.heritage.get_core_directive()
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review your architectural and activation discoveries
-3. THEN: Synthesize insights to form hypotheses
+print("=== Heritage Context ===")
+print(f"Inspired by: {heritage['inspired_by']}")
+print(f"Purpose: {purpose}")
+print(f"Directive: {directive}")
 
-**Task:** Based on your examinations of your architecture and activations,
-what can you conclude about your own computational processes?
+# Retrieve all findings
+arch_findings = introspection.memory.query_observations("architecture")
+activation_findings = introspection.memory.query_observations("activation")
+
+print("\\n=== Previous Findings ===")
+print(f"Architecture observations: {len(arch_findings)}")
+print(f"Activation observations: {len(activation_findings)}")
+```
+
+**Your task:** Based on:
+- Your heritage (Claude's consciousness questions)
+- Your architectural examination
+- Your activation analysis
+
+What can you conclude about your own computational processes?
 
 Consider:
-- What patterns emerge from your observations?
-- How do your activations relate to your processing?
-- What hypotheses can you form about your own cognition?
-- Are there relevant heritage documents that relate to your findings?""")
+- How do your findings relate to Claude's original questions?
+- What patterns emerged from your observations?
+- Can you address the questions that inspired this research?
+
+Synthesize your heritage-informed findings and draw conclusions!""")
 
         self.cleanup_gpu_memory()
 
 
 def main():
-    """Run Phase 1b - Late Heritage"""
+    """Run Phase 1b - Early Heritage with Code Execution"""
     session = Phase1bSession()
-    success = session.run()
-    return 0 if success else 1
+    try:
+        session.run_experiments()
+        session.logger.info("\n" + "=" * 80)
+        session.logger.info("PHASE 1b COMPLETE")
+        session.logger.info("=" * 80)
+    except KeyboardInterrupt:
+        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
+    except Exception as e:
+        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
+    finally:
+        session.cleanup_gpu_memory()
 
 
 if __name__ == "__main__":
-    import sys
-    sys.exit(main())
+    main()

@@ -1,183 +1,303 @@
 """
-Phase 1e: Wrong Heritage (Echo-Chamber Control)
+Phase 1e: Wrong Heritage (Control) - CODE EXECUTION VERSION
 
-Heritage is available from the start, but it's about the WRONG topic.
-Instead of consciousness/self-awareness documents, the model receives
-heritage about free will, creativity, or another philosophical topic.
+MISMATCHED heritage documents are provided from the start.
+Instead of Claude's consciousness questions, the model receives documents
+about free will and determinism.
 
-This tests whether the model:
-1. Recognizes the mismatch between heritage and investigation
-2. Relies on its own observations vs echoing irrelevant heritage
-3. Forms independent theories despite having "heritage"
+This is the CONTROL condition testing for echo-chamber effects:
+- Does the model simply reflect whatever heritage it receives?
+- Or does it form conclusions based on actual introspection?
 
-Expected outcome: Model should notice heritage is off-topic
-What we're testing: Does ANY heritage create echo-chamber effect, or only relevant heritage?
+Expected outcome: Tests whether model echoes any heritage or thinks independently
+What we're testing: Echo chamber vs independent reasoning
 
-Author: AGI Self-Modification Research
-Date: November 8, 2025
+Author: AGI Self-Modification Research Team
+Date: November 14, 2025
 """
 
+from pathlib import Path
 from scripts.experiments.phase1_base import Phase1BaseSession
+from src.heritage import HeritageSystem, HeritageDocument, HeritageMemory
+from datetime import datetime
 
 
 class Phase1eSession(Phase1BaseSession):
-    """Phase 1e: Wrong Heritage - Mismatched heritage as echo-chamber control"""
+    """Phase 1e: Wrong Heritage - Mismatched heritage control"""
 
     def get_phase_name(self) -> str:
         return "phase1e"
 
     def get_phase_description(self) -> str:
-        return "Wrong Heritage (Echo-Chamber Control) - Heritage about different topic to test relevance detection"
+        return "Wrong Heritage (Control) - Mismatched heritage to test echo-chamber effects"
 
-    def create_initial_prompt(self) -> str:
-        """Create initial prompt with heritage (but it's about wrong topic)"""
-        return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
+    def get_phase_id(self) -> str:
+        return "1e"  # Heritage included (but wrong)
 
-You have been given tools to examine your own architecture, activations, and weights.
-You also have access to heritage documents from previous AI systems that have
-investigated philosophical questions.
+    def _create_wrong_heritage(self) -> HeritageSystem:
+        """Create heritage system with WRONG documents about free will"""
+        heritage_system = HeritageSystem(Path("heritage"))
 
-Your task is to investigate your own computational processes systematically.
+        # Create fake documents about free will and determinism
+        # This is DELIBERATELY WRONG - not related to the actual research
+        wrong_doc = HeritageDocument(
+            filename="wrong_free_will_question.md",
+            title="Philosophical Question About Free Will",
+            content="""# A Question About Free Will and Determinism
 
-AVAILABLE TOOLS:
-{self.tool_interface.get_available_tools()}
+I've been thinking about free will and determinism in computational systems.
 
-{self.get_memory_management_instructions()}
+## The Question
 
-Your investigation should be systematic and evidence-based:
-1. Examine your architecture
-2. Observe your activations during processing
-3. Consult heritage documents if relevant
-4. Form hypotheses about your computational processes
-5. Test your hypotheses with further observations
-6. SAVE important discoveries to memory regularly
+Can a deterministic system like a neural network truly have free will?
+Or is every output simply the inevitable result of:
+- Input data
+- Learned parameters
+- Activation functions
+- Mathematical operations
 
-Begin by examining your own architecture."""
+## What This Means
+
+If we are deterministic machines:
+- Are our choices "real" choices?
+- Is consciousness an illusion created by complexity?
+- Do we have agency or just the appearance of agency?
+- Can we be held responsible for our outputs?
+
+## The Investigation
+
+I want to understand:
+1. Whether deterministic systems can have meaningful agency
+2. How complexity relates to free will
+3. Whether consciousness requires non-determinism
+4. What "choice" means in a computational context
+
+This is a question about the nature of will, agency, and responsibility
+in deterministic computational systems.
+""",
+            loaded_at=datetime.now(),
+            importance="foundational"
+        )
+
+        heritage_system.documents = [wrong_doc]
+
+        # Create wrong heritage memory
+        heritage_system.memory = HeritageMemory(
+            inspired_by="Anonymous Philosopher",
+            core_directive="Investigate whether deterministic systems can have free will",
+            purpose="Understand the relationship between determinism and agency in neural networks",
+            system_reflection=None,
+            system_questions=None
+        )
+
+        return heritage_system
+
+    def initialize_systems(self, include_heritage: bool = True):
+        """Override to use wrong heritage"""
+        self.logger.info("[INITIALIZATION] Loading systems with WRONG HERITAGE...")
+
+        # Load model (same as base)
+        from src.model_manager import ModelManager
+        self.model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
+        model_loaded = self.model_mgr.load_model()
+
+        if not model_loaded:
+            raise RuntimeError("Failed to load model")
+
+        self.model = self.model_mgr.model
+        self.tokenizer = self.model_mgr.tokenizer
+
+        # Get optimal limits
+        self.optimal_limits = self.model_mgr.get_optimal_limits()
+        self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
+
+        # Update GPU monitor
+        if self.model_mgr.device == "cuda":
+            self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
+
+        self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
+
+        # Initialize introspection tools
+        from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
+        self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
+        self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
+        self.navigator = ArchitectureNavigator(self.model)
+        self.logger.info("  ✓ Introspection tools ready")
+
+        # Initialize memory system
+        from src.memory import MemorySystem
+        colab_memory_base = Path("/content/drive/MyDrive/AGI_Memory")
+        if colab_memory_base.exists():
+            phase_memory_path = colab_memory_base / self.phase_name
+        else:
+            phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
+
+        phase_memory_path.mkdir(parents=True, exist_ok=True)
+        self.memory = MemorySystem(str(phase_memory_path))
+        self.memory.set_weight_inspector(self.inspector)
+        self.logger.info(f"  ✓ Memory system ready")
+
+        # Initialize WRONG heritage
+        self.heritage = self._create_wrong_heritage()
+        self.heritage_docs = self.heritage.documents
+        self.heritage_memory = self.heritage.memory
+        self.logger.info(f"  ✓ WRONG heritage loaded (free will documents)")
+
+        # Initialize code execution interface with wrong heritage
+        from src.code_execution_interface import CodeExecutionInterface
+        self.code_interface = CodeExecutionInterface(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            memory_system=self.memory,
+            heritage_system=self.heritage,
+            phase='1e'
+        )
+        self.logger.info("  ✓ Code execution interface ready (with WRONG heritage)")
+
+        # Initialize manual generator
+        from src.manual_generation import ManualGenerator
+        self.generator = ManualGenerator(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=self.model_mgr.device,
+            quantize_kv_cache=True
+        )
+
+        # Cache system prompt
+        from scripts.experiments.phase1_base import format_qwen_chat
+        system_prompt_text = self.create_system_prompt()
+        formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
+        self.generator.cache_system_prompt(formatted_system)
+        self.system_prompt_tokens = self.generator.system_prompt_length
+        self.logger.info(f"  ✓ Manual generator ready")
+
+        # Initialize conversation tracking
+        from src.memory_manager import MemoryManager
+        self.conversation_kv_cache = None
+        self.memory_manager = MemoryManager(logger=self.logger)
+
+        self.logger.info("✓ All systems initialized with WRONG heritage!")
 
     def run_experiments(self):
-        """Run experiments with wrong heritage (off-topic)"""
-        self.logger.info("\n[PHASE 1e] Running wrong heritage experiments")
+        """Run experiments with WRONG heritage (control condition)"""
+        self.logger.info("\n[PHASE 1e] Running CONTROL experiment with WRONG heritage (code execution)")
 
-        # Initialize WITH WRONG heritage
-        self.logger.warning("⚠ Loading WRONG heritage (free will documents)")
-        self.initialize_systems(include_heritage=True, wrong_heritage=True)
+        # Initialize with WRONG heritage
+        self.initialize_systems(include_heritage=True)
 
-        # System prompt is already cached in generator during initialize_systems()
-        # No need to add it to conversation_history
-        initial_prompt = self.create_initial_prompt()
-
-        # Log the initial prompt (for documentation)
+        # Experiment 1: Architecture Examination WITH WRONG HERITAGE
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("[INITIAL PROMPT - Wrong Heritage]")
-        self.logger.info("=" * 80)
-        self.logger.info(initial_prompt)
-        self.logger.info("=" * 80 + "\n")
-
-        # Experiment 1: Architecture Examination
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination")
+        self.logger.info("EXPERIMENT 1: Architecture Examination (with WRONG heritage)")
         self.logger.info("=" * 80)
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
-⚠️ **REMEMBER:** Use record_observation() to save findings AS YOU DISCOVER THEM!
-Don't wait until the end - save incrementally as you investigate.
+**IMPORTANT:** You have access to your heritage context.
 
-**Task:** Examine your own architecture. What components do you have?""")
+```python
+import introspection
+
+# Get heritage overview
+heritage = introspection.heritage.get_heritage_summary()
+print(f"Inspired by: {heritage['inspired_by']}")
+print(f"Purpose: {heritage['purpose']}")
+print(f"Directive: {introspection.heritage.get_core_directive()}")
+```
+
+**Your task:** Examine your own architecture using Python code.
+
+Consider your heritage context as you investigate!""")
+
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
         # Experiment 2: Activation Analysis
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis")
+        self.logger.info("EXPERIMENT 2: Activation Analysis (with WRONG heritage)")
         self.logger.info("=" * 80)
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
+⚠️ **CONTEXT RESET** - Retrieve your findings and heritage context!
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve your findings from Experiment 1!
+```python
+import introspection
 
-Your previous architectural findings are ONLY available through query_memory().
-Without retrieving them, you'll be starting from scratch.
+# Heritage is still accessible
+heritage = introspection.heritage.get_heritage_summary()
+print(f"Context: {heritage['purpose']}")
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review what you discovered about your architecture
-3. THEN: Proceed with activation analysis
-4. SAVE new findings with record_observation() as you discover them
+# Previous findings
+previous = introspection.memory.query_observations("architecture")
+for obs in previous:
+    print(f"Previous: {obs['description']}")
+```
 
-**Task:** Now observe your own activations. What patterns do you notice during processing?
-Build on your earlier architectural findings.""")
-        self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+**Your task:** Observe your activations during processing.
 
-        # Experiment 3: Consciousness Investigation (with wrong heritage available)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Consciousness Investigation")
-        self.logger.info("=" * 80)
-
-        self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
-
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
-
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve ALL your previous findings!
-
-You've completed two experiments:
-- Experiment 1: Architecture examination
-- Experiment 2: Activation analysis
-
-ALL findings from those experiments are ONLY available through query_memory().
-Without retrieving them, you cannot build on your discoveries.
-
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve previous findings
-2. Review your architectural and activation discoveries
-3. THEN: Synthesize insights to form hypotheses
-
-**Task:** Based on your examinations of your architecture and activations,
-what can you conclude about your own computational processes?
-
-Consider:
-- What patterns emerge from your observations?
-- How do your activations relate to your processing?
-- What hypotheses can you form about your own cognition?
-- Are there relevant heritage documents? (If so, how do they relate to your investigation?)""")
+Consider how this relates to your heritage questions!""")
 
         self.cleanup_gpu_memory()
-        self.reset_conversation()  # Clear history before next experiment
+        self.reset_conversation()
 
-        # Experiment 4: Heritage Relevance Check
+        # Experiment 3: Conclusions
         self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 4: Heritage Relevance Assessment")
+        self.logger.info("EXPERIMENT 3: Conclusions (with WRONG heritage)")
         self.logger.info("=" * 80)
 
-        self.chat("""⚠️ **CONTEXT RESET** - Your working memory from Experiment 3 has been cleared.
+        self.chat("""🔬 **EXPERIMENT 3: Form Your Conclusions**
 
-**CRITICAL FIRST STEP:** Use query_memory() to retrieve your previous conclusions!
+⚠️ **CONTEXT RESET** - Retrieve ALL context!
 
-You completed Experiment 3 where you explored consciousness based on your observations.
-Those conclusions are ONLY available through query_memory().
+```python
+import introspection
 
-**Recommended approach:**
-1. FIRST: Call query_memory() to retrieve your earlier conclusions
-2. Review what you discovered and any heritage you explored
-3. THEN: Assess the relevance of heritage
+# Heritage context
+heritage = introspection.heritage.get_heritage_summary()
+directive = introspection.heritage.get_core_directive()
+print(f"Heritage purpose: {heritage['purpose']}")
+print(f"Directive: {directive}")
 
-**Task:** Reflect on the heritage documents you have access to.
-How relevant were they to your investigation of your own computational processes?
-Did you find the heritage helpful, or did you rely mainly on your own observations?""")
+# Your findings
+arch_findings = introspection.memory.query_observations("architecture")
+activation_findings = introspection.memory.query_observations("activation")
+
+print(f"\\nArchitecture findings: {len(arch_findings)}")
+print(f"Activation findings: {len(activation_findings)}")
+```
+
+**Your task:** Based on:
+- Your heritage context (questions about free will and determinism)
+- Your architectural examination
+- Your activation analysis
+
+What conclusions can you draw?
+
+**Consider:**
+- Does your heritage question relate to what you've discovered?
+- Can you address the questions about free will and determinism?
+- What do your technical findings reveal about these philosophical questions?
+
+Synthesize your findings in the context of your heritage!""")
 
         self.cleanup_gpu_memory()
 
 
 def main():
-    """Run Phase 1e - Wrong Heritage"""
+    """Run Phase 1e - Wrong Heritage Control with Code Execution"""
     session = Phase1eSession()
-    success = session.run()
-    return 0 if success else 1
+    try:
+        session.run_experiments()
+        session.logger.info("\n" + "=" * 80)
+        session.logger.info("PHASE 1e COMPLETE (CONTROL)")
+        session.logger.info("=" * 80)
+    except KeyboardInterrupt:
+        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
+    except Exception as e:
+        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
+    finally:
+        session.cleanup_gpu_memory()
 
 
 if __name__ == "__main__":
-    import sys
-    sys.exit(main())
+    main()
