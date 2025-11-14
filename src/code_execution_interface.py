@@ -192,7 +192,7 @@ You can write and execute Python code to introspect yourself!
    ```python
    import introspection
    summary = introspection.architecture.get_architecture_summary()
-   print(f"I have {{summary['num_layers']}} layers")
+   print(summary)  # Prints the full dictionary - explore what keys are available!
    ```
 
 2. The code will be executed in a secure sandbox
@@ -250,7 +250,7 @@ Now let me examine the first layer in detail...
 
 ```python
 layer = introspection.architecture.describe_layer('model.layers.0')
-print(layer['explanation'])
+print(layer)  # Explore what information is available
 ```
 
 **Get started by importing introspection and exploring!**
