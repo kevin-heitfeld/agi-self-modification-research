@@ -239,11 +239,25 @@ You can write and execute Python code to introspect yourself!
   - `clear_cache()` - Clear activation cache
 
 - `introspection.memory` - Memory system access
+  - `record_observation(description, category="general", importance=0.5, tags=None, data=None)` - Save observations
   - `query_observations(query)` - Query observation layer
   - `query_patterns(query)` - Query pattern layer
   - `query_theories(query)` - Query theory layer
   - `query_beliefs(query)` - Query belief layer
   - `get_memory_summary()` - Get memory statistics{heritage_note}
+
+**Recording observations:**
+```python
+# Save a discovery to memory
+obs_id = introspection.memory.record_observation(
+    description="Layer 15 shows high attention to previous tokens",  # Human-readable description (REQUIRED)
+    category="attention",  # Category tag
+    importance=0.8,  # 0.0-1.0 scale
+    tags=["attention", "layer-15"],  # List of tags
+    data={"layer": 15, "entropy": 3.2}  # Dict with structured data
+)
+print(f"Saved as {obs_id}")
+```
 
 **Important notes:**
 - You can include multiple code blocks in one response
