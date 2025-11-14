@@ -51,8 +51,57 @@ def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool
     return formatted
 
 
+class ColoredFormatter(logging.Formatter):
+    """Formatter that adds color to console output (Colab-friendly)"""
+    
+    # ANSI color codes
+    COLORS = {
+        'timestamp': '\033[36m',     # Cyan for timestamps
+        'logger': '\033[90m',        # Gray for logger name
+        'INFO': '\033[32m',          # Green for INFO level
+        'WARNING': '\033[33m',       # Yellow for WARNING
+        'ERROR': '\033[31m',         # Red for ERROR
+        'CRITICAL': '\033[35m',      # Magenta for CRITICAL
+        'RESET': '\033[0m',          # Reset color
+        'BOLD': '\033[1m',           # Bold text
+        'ITERATION': '\033[1;35m',   # Bold Magenta for iterations
+        'MODEL': '\033[1;34m',       # Bold Blue for model output
+        'CODE': '\033[1;33m',        # Bold Yellow for code results
+        'SYSTEM': '\033[1;32m',      # Bold Green for system messages
+    }
+    
+    def format(self, record):
+        # Format the timestamp in cyan
+        timestamp = self.formatTime(record, '%Y-%m-%d %H:%M:%S,%f')[:-3]
+        colored_timestamp = f"{self.COLORS['timestamp']}{timestamp}{self.COLORS['RESET']}"
+        
+        # Format the logger name in gray
+        logger_name = f"{self.COLORS['logger']}{record.name}{self.COLORS['RESET']}"
+        
+        # Format the level name with appropriate color
+        level_color = self.COLORS.get(record.levelname, '')
+        colored_level = f"{level_color}{record.levelname}{self.COLORS['RESET']}"
+        
+        # Get the message
+        message = record.getMessage()
+        
+        # Add color to special tags in the message
+        if message.startswith('[ITERATION'):
+            # Add separator line before iterations for visual clarity
+            separator = f"\n{self.COLORS['ITERATION']}{'─' * 80}{self.COLORS['RESET']}"
+            message = f"{separator}\n{self.COLORS['ITERATION']}{message}{self.COLORS['RESET']}"
+        elif message.startswith('[MODEL]'):
+            message = message.replace('[MODEL]', f"{self.COLORS['MODEL']}[MODEL]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[CODE RESULTS]'):
+            message = message.replace('[CODE RESULTS]', f"{self.COLORS['CODE']}[CODE RESULTS]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[SYSTEM]'):
+            message = message.replace('[SYSTEM]', f"{self.COLORS['SYSTEM']}[SYSTEM]{self.COLORS['RESET']}", 1)
+        
+        return f"{colored_timestamp} - {logger_name} - {colored_level} - {message}"
+
+
 def setup_logging(phase_name: str):
-    """Setup logging for a specific phase"""
+    """Setup logging for a specific phase with colored console output"""
     log_dir = Path("data/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -61,14 +110,16 @@ def setup_logging(phase_name: str):
     logger.propagate = False
 
     if not logger.handlers:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
+        # Plain formatter for file (no colors)
+        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        
         file_handler = logging.FileHandler(f'data/logs/{phase_name}.log')
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
+        # Colored formatter for console (Colab-friendly)
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
+        console_handler.setFormatter(ColoredFormatter())
         logger.addHandler(console_handler)
 
     return logger
@@ -242,7 +293,7 @@ When you say "I'm done with this experiment", the system will:
         self.logger.info("=" * 80)
         self.logger.info(system_prompt_text)
         self.logger.info("=" * 80 + "\n")
-        
+
         formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
         self.generator.cache_system_prompt(formatted_system)
         self.system_prompt_tokens = self.generator.system_prompt_length
@@ -300,7 +351,7 @@ Your investigation should be systematic and evidence-based:
 
         while iteration < max_iterations:
             iteration += 1
-            self.logger.info(f"\n[ITERATION {iteration}]")
+            self.logger.info(f"[ITERATION {iteration}]")
 
             # Generate response
             response = self.generate_response()
