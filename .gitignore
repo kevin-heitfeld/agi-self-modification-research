@@ -47,6 +47,7 @@ data/experiments/
 data/logs/
 !data/.gitkeep
 !data/logs/.gitkeep
+data/test_memory/
 
 # Heritage system outputs (keep template structure, not generated content)
 heritage/system_reflections/*.json
