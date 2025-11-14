@@ -254,9 +254,9 @@ obs_id = introspection.memory.record_observation(
     category="attention",  # Category tag
     importance=0.8,  # 0.0-1.0 scale
     tags=["attention", "layer-15"],  # List of tags
-    data={"layer": 15, "entropy": 3.2}  # Dict with structured data
+    data={{"layer": 15, "entropy": 3.2}}  # Dict with structured data
 )
-print(f"Saved as {obs_id}")
+print(f"Saved as {{obs_id}}")
 ```
 
 **Important notes:**
