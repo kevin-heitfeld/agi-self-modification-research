@@ -189,11 +189,11 @@ You can write and execute Python code to introspect yourself!
 
 **How it works:**
 1. Write Python code in your response using markdown code blocks:
-   \\`\\`\\`python
+   ```python
    import introspection
    summary = introspection.architecture.get_architecture_summary()
    print(f"I have {{summary['num_layers']}} layers")
-   \\`\\`\\`
+   ```
 
 2. The code will be executed in a secure sandbox
 3. The output (anything you print()) will be returned to you
@@ -228,25 +228,6 @@ You can write and execute Python code to introspect yourself!
   - `query_beliefs(query)` - Query belief layer
   - `get_memory_summary()` - Get memory statistics{heritage_note}
 
-**Example workflow:**
-\\`\\`\\`python
-import introspection
-
-# Get architecture overview
-summary = introspection.architecture.get_architecture_summary()
-print(f"Architecture: {{summary['model_type']}}")
-print(f"Parameters: {{summary['total_parameters']:,}}")
-
-# Examine a specific layer
-layer_info = introspection.architecture.describe_layer('model.layers.0.self_attn')
-print(f"\\nLayer type: {{layer_info['type']}}")
-print(f"Parameters: {{layer_info['parameters']:,}}")
-
-# Get weight statistics
-weights = introspection.weights.get_weight_statistics('model.embed_tokens.weight')
-print(f"\\nEmbedding weights - Mean: {{weights['mean']:.6f}}, Std: {{weights['std']:.6f}}")
-\\`\\`\\`
-
 **Important notes:**
 - You can include multiple code blocks in one response
 - Each block is executed in sequence
@@ -259,18 +240,18 @@ print(f"\\nEmbedding weights - Mean: {{weights['mean']:.6f}}, Std: {{weights['st
 
 I want to understand my architecture first...
 
-\\`\\`\\`python
+```python
 import introspection
 summary = introspection.architecture.get_architecture_summary()
 print(summary)
-\\`\\`\\`
+```
 
 Now let me examine the first layer in detail...
 
-\\`\\`\\`python
+```python
 layer = introspection.architecture.describe_layer('model.layers.0')
 print(layer['explanation'])
-\\`\\`\\`
+```
 
 This is more efficient than JSON tool calling because:
 - You can chain multiple operations in one code block
@@ -297,23 +278,7 @@ def get_code_execution_prompt_template() -> str:
 2. Execute your investigations step by step
 3. Use `print()` to output your findings
 4. Analyze the results and continue investigating
-5. When you discover important insights, save them to memory:
-
-\\`\\`\\`python
-import introspection
-
-# Your investigation code...
-summary = introspection.architecture.get_architecture_summary()
-print(summary)
-
-# Save important findings
-observation = {{
-    "type": "architecture_discovery",
-    "description": "Discovered key architectural feature...",
-    "data": {{"layers": summary["num_layers"]}}
-}}
-introspection.memory.record_observation(observation)
-\\`\\`\\`
+5. Save important findings to memory as you discover them
 
 **Remember:** 
 - Work incrementally - investigate, observe, save findings
