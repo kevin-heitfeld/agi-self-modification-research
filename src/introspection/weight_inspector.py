@@ -339,10 +339,34 @@ class WeightInspector:
                         f"\n\nDo NOT concatenate layer names with commas into a single string!"
                     )
             
+            # Check if this is a container module (exists in model but has no weights itself)
+            container_hint = ""
+            try:
+                # Check if this looks like a module path (could be a container)
+                if layer_name and not layer_name.endswith('.weight') and not layer_name.endswith('.bias'):
+                    # Try to find parameters that start with this prefix
+                    matching_params = [name for name in self.layers.keys() if name.startswith(layer_name + '.')]
+                    if matching_params:
+                        container_hint = (
+                            f"\n\n💡 HINT: '{layer_name}' is a CONTAINER MODULE (has no weights itself)."
+                            f"\n\nThis function requires PARAMETER names (leaf tensors with actual weight values)."
+                            f"\n\nParameters under '{layer_name}':"
+                            f"\n{chr(10).join(f'  - {name}' for name in matching_params[:10])}"
+                            f"{f'{chr(10)}  ... and {len(matching_params) - 10} more' if len(matching_params) > 10 else ''}"
+                            f"\n\nTo get statistics for all weights in '{layer_name}', pass the list of parameters:"
+                            f"\n```python"
+                            f"\nparams = [name for name in introspection.weights.get_layer_names()['all_names'] if name.startswith('{layer_name}.')]\n"
+                            f"stats = introspection.weights.get_weight_statistics(params)"
+                            f"\n```"
+                        )
+            except Exception:
+                pass  # If detection fails, just show the basic error
+            
             raise KeyError(
                 f"Layer '{layer_name}' not found. "
                 f"Use get_layer_names() to see available layers."
                 f"{comma_separated_hint}"
+                f"{container_hint}"
             )
         
         param = self.layers[layer_name]
