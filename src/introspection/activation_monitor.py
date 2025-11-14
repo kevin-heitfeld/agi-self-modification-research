@@ -283,13 +283,22 @@ class ActivationMonitor:
         token_ids = inputs["input_ids"][0].cpu().tolist()
         token_strings = [self.tokenizer.decode([tid]) for tid in token_ids]
         
+        # Determine if we can capture attention weights
+        # Flash Attention 2 doesn't support output_attentions=True
+        can_capture_attention = True
+        if hasattr(self.model, 'config') and hasattr(self.model.config, '_attn_implementation'):
+            attn_impl = self.model.config._attn_implementation
+            if attn_impl in ['flash_attention_2', 'sdpa']:
+                can_capture_attention = False
+                logger.debug(f"Attention implementation '{attn_impl}' does not support attention weight capture")
+        
         # Run forward pass (this triggers the hooks)
         # Use model() directly, NOT generate(), to get full sequence activations
         with torch.no_grad():
             outputs = self.model(
                 **inputs,
                 output_hidden_states=True,
-                output_attentions=True,
+                output_attentions=can_capture_attention,
                 return_dict=True
             )
         
@@ -299,7 +308,7 @@ class ActivationMonitor:
             "token_strings": token_strings,
             "num_tokens": len(token_ids),
             "activations": dict(self.activations),
-            "attention_weights": dict(self.attention_weights),
+            "attention_weights": dict(self.attention_weights) if can_capture_attention else {},
             "monitored_layers": list(self.activations.keys())
         }
         
