@@ -153,6 +153,86 @@ class CodeExecutor:
             self.logger.error(f"Code execution exception: {error_msg}")
             return False, stdout_capture.getvalue(), error_msg
     
+    def execute_with_namespace(
+        self, 
+        code: str, 
+        namespace: Dict[str, Any]
+    ) -> Tuple[bool, str, Optional[str]]:
+        """
+        Execute Python code with a persistent namespace.
+        
+        This allows variables to persist across multiple code blocks
+        within the same conversation turn/response.
+        
+        Args:
+            code: Python code string to execute
+            namespace: Dictionary to use as locals (modified in-place)
+            
+        Returns:
+            Tuple of (success, output, error):
+            - success: True if execution completed without error
+            - output: Captured stdout (may be partial if error occurred)
+            - error: Error message if success=False, None otherwise
+        """
+        # Layer 1: Syntax validation
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            error_msg = f"Syntax Error on line {e.lineno}: {e.msg}"
+            self.logger.warning(f"Code syntax error: {error_msg}")
+            return False, "", error_msg
+        
+        # Layer 2: Security validation via AST inspection
+        is_safe, reason = self._is_safe_code(tree)
+        if not is_safe:
+            error_msg = f"Security Error: {reason}"
+            self.logger.warning(f"Code rejected: {reason}")
+            return False, "", error_msg
+        
+        # Layer 3: Prepare restricted execution environment
+        safe_globals = self._create_safe_globals()
+        
+        # Use provided namespace as locals (modified in-place)
+        # This allows variables to persist across executions
+        
+        # Layer 4: Execute with output capture and timeout
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        
+        try:
+            with self._timeout(self.timeout):
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    exec(code, safe_globals, namespace)
+            
+            # Get output, enforce size limit
+            output = stdout_capture.getvalue()
+            if len(output) > self.max_output_length:
+                output = output[:self.max_output_length]
+                output += f"\n\n... Output truncated at {self.max_output_length} characters ..."
+            
+            errors = stderr_capture.getvalue()
+            
+            # Note: We do NOT clear namespace here - it persists!
+            # Only clean up temporary captures
+            gc.collect()
+            
+            if errors:
+                self.logger.warning(f"Code execution stderr: {errors}")
+                return False, output, errors
+            
+            self.logger.info(f"Code execution successful ({len(output)} chars output, {len(namespace)} vars in namespace)")
+            return True, output, None
+            
+        except TimeoutError:
+            error_msg = f"Timeout Error: Code exceeded {self.timeout} seconds"
+            self.logger.error(error_msg)
+            return False, "", error_msg
+            
+        except Exception as e:
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            self.logger.error(f"Code execution exception: {error_msg}")
+            return False, stdout_capture.getvalue(), error_msg
+    
     def _is_safe_code(self, tree: ast.AST) -> Tuple[bool, str]:
         """
         Validate code safety by inspecting Abstract Syntax Tree.

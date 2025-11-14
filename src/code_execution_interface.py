@@ -56,6 +56,11 @@ class CodeExecutionInterface:
         """
         self.phase = phase
         
+        # Persistent namespace for variables within a single response
+        # This allows code blocks in the same response to share variables
+        # Reset at the start of each new model response
+        self.response_namespace: Dict[str, Any] = {}
+        
         # Create phase-specific introspection module
         logger.info(f"Creating introspection module for Phase {phase}...")
         self.introspection = create_introspection_module(
@@ -117,6 +122,9 @@ class CodeExecutionInterface:
         """
         Extract and execute code from model response.
         
+        Variables persist across code blocks within the same response,
+        but are reset at the start of each new response.
+        
         Args:
             response: Model's text response
             
@@ -126,6 +134,10 @@ class CodeExecutionInterface:
             - result_message: Formatted output or explanation
             - error_message: Error details if execution failed
         """
+        # Reset namespace for this new response
+        # Variables from previous responses are cleared
+        self.response_namespace.clear()
+        
         # Extract code blocks
         code_blocks = self.extract_code_blocks(response)
         
@@ -133,7 +145,7 @@ class CodeExecutionInterface:
             # No code blocks found
             return False, "No code blocks found in response", None
         
-        # Execute all code blocks in sequence
+        # Execute all code blocks in sequence with shared namespace
         all_outputs = []
         all_errors = []
         
@@ -141,8 +153,11 @@ class CodeExecutionInterface:
             logger.info(f"\n[CODE BLOCK {idx}/{len(code_blocks)}]")
             logger.info(f"Code:\n{code}\n")
             
-            # Execute in sandbox
-            success, output, error = self.executor.execute(code)
+            # Execute in sandbox with persistent namespace
+            success, output, error = self.executor.execute_with_namespace(
+                code, 
+                self.response_namespace
+            )
             
             if success:
                 logger.info(f"[OUTPUT]\n{output}")
@@ -233,6 +248,10 @@ You can write and execute Python code to introspect yourself!
 **Important notes:**
 - You can include multiple code blocks in one response
 - Each block is executed in sequence
+- **Variables persist across code blocks within the same response**
+  - Example: Define `x = 5` in block 1, use `x` in block 2 ✅
+  - Variables are cleared at the start of your next response
+  - For persistence across turns, save to memory
 - Previous blocks' outputs are visible to you (but not to later blocks)
 - Use `print()` to output results you want to see
 - The sandbox is secure - you can only access introspection functions
