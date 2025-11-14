@@ -365,6 +365,114 @@ class ActivationMonitor:
         
         return result
     
+    def capture_attention_weights(
+        self,
+        input_text: str,
+        layer_names: Optional[List[str]] = None,
+        max_length: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Capture attention weights by temporarily disabling Flash Attention.
+        
+        **WARNING**: This is SLOWER than normal capture_activations() because it 
+        temporarily switches from Flash Attention 2 (optimized, fused) to eager 
+        attention (standard, materializes full attention matrices).
+        
+        Flash Attention 2 cannot output attention weights because it uses kernel 
+        fusion - it computes and applies attention in fused chunks without ever 
+        materializing the full attention matrix. This is what makes it fast and 
+        memory-efficient.
+        
+        This function:
+        1. Saves current attention implementation
+        2. Temporarily switches to 'eager' mode (standard attention)
+        3. Captures activations WITH attention weights
+        4. Restores original implementation
+        
+        Use this sparingly for investigating specific attention patterns.
+        For routine activation capture, use capture_activations() instead.
+        
+        Args:
+            input_text: Text to process
+            layer_names: Layers to monitor (if None, uses currently registered)
+            max_length: Maximum tokens for very long inputs
+            
+        Returns:
+            Same as capture_activations(), but attention_weights dict is populated
+            
+        Example:
+            >>> # Normal capture - fast, no attention weights
+            >>> result = monitor.capture_activations("test")
+            >>> result['attention_weights']  # Empty dict
+            {}
+            
+            >>> # Attention capture - slower, includes attention weights
+            >>> result = monitor.capture_attention_weights("test")
+            >>> result['attention_weights']  # Populated!
+            {'model.layers.0.self_attn': tensor([[[...]]])}
+        """
+        # Register hooks if specified
+        if layer_names is not None:
+            self.register_hooks(layer_names)
+        
+        if not self.hooks:
+            raise RuntimeError("No hooks registered. Call register_hooks() or provide layer_names.")
+        
+        # Save original attention implementation
+        original_attn_impl = None
+        if hasattr(self.model, 'config') and hasattr(self.model.config, '_attn_implementation'):
+            original_attn_impl = self.model.config._attn_implementation
+            logger.info(f"Temporarily switching from '{original_attn_impl}' to 'eager' attention to capture attention weights")
+            self.model.config._attn_implementation = 'eager'
+        
+        try:
+            # Clear previous captures
+            self.clear_activations()
+            self.last_capture_text = input_text
+            self.last_capture_layers = sorted(self.registered_layer_names)
+            
+            # Tokenize input
+            inputs = self.tokenizer(input_text, return_tensors="pt", truncation=True, max_length=max_length)
+            if torch.cuda.is_available():
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
+            
+            token_ids = inputs["input_ids"][0].cpu().tolist()
+            token_strings = [self.tokenizer.decode([tid]) for tid in token_ids]
+            
+            # Run forward pass with attention output enabled
+            with torch.no_grad():
+                outputs = self.model(
+                    **inputs,
+                    output_hidden_states=True,
+                    output_attentions=True,  # Now this works!
+                    return_dict=True
+                )
+            
+            result = {
+                "input_text": input_text,
+                "tokens": token_ids,
+                "token_strings": token_strings,
+                "num_tokens": len(token_ids),
+                "activations": dict(self.activations),
+                "attention_weights": dict(self.attention_weights),
+                "monitored_layers": list(self.activations.keys()),
+                "note": "Captured using eager attention (slower but provides attention weights)"
+            }
+            
+            # Clear outputs to free memory
+            del outputs
+            del inputs
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            return result
+            
+        finally:
+            # ALWAYS restore original implementation, even if error occurs
+            if original_attn_impl is not None:
+                self.model.config._attn_implementation = original_attn_impl
+                logger.info(f"Restored attention implementation to '{original_attn_impl}'")
+    
     def get_activation_statistics(self, layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
         Compute statistics for captured activations of one or more layers.

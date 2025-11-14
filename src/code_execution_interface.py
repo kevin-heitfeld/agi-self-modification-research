@@ -216,7 +216,8 @@ You can write and execute Python code to introspect yourself!
   - `find_similar_weights(layer_name, top_k=5)` - Find similar weights
 
 - `introspection.activations` - Activation monitoring
-  - `capture_activations(text, layer_names)` - Capture activations for text
+  - `capture_activations(text, layer_names)` - Capture activations for text (fast, no attention weights)
+  - `capture_attention_weights(text, layer_names)` - Capture WITH attention weights (slower, disables Flash Attention)
   - `get_activation_statistics(layer_name)` - Get activation stats
   - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
   - `list_layers(filter_pattern=None)` - List available layers
@@ -236,6 +237,13 @@ You can write and execute Python code to introspect yourself!
 - Use `print()` to output results you want to see
 - The sandbox is secure - you can only access introspection functions
 - All standard Python operations work (loops, functions, math, etc.)
+
+**About attention weights:**
+- By default, `capture_activations()` returns EMPTY attention_weights dict
+- This is because Flash Attention 2 uses kernel fusion (never materializes attention matrices)
+- Flash Attention 2 is ~3-5x faster and uses less memory than standard attention
+- If you NEED attention weights: use `capture_attention_weights()` (temporarily disables Flash Attention)
+- For most investigations, activation patterns alone are sufficient
 
 **You can write thinking/reasoning text before and after code blocks:**
 
