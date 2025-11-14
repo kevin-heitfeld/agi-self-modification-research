@@ -119,8 +119,14 @@ def create_introspection_module(
         activations_module.capture_activations = lambda text, layer_names: activations.capture_activations(
             model, tokenizer, text, layer_names
         )
+        activations_module.capture_attention_weights = lambda text, layer_names: activations.capture_attention_weights(
+            model, tokenizer, text, layer_names
+        )
         activations_module.get_activation_statistics = lambda layer_name: activations.get_activation_statistics(
             model, tokenizer, layer_name
+        )
+        activations_module.get_input_shape = lambda sample_text="test": activations.get_input_shape(
+            model, tokenizer, sample_text
         )
         activations_module.list_layers = lambda filter_pattern=None: activations.list_layers(model, filter_pattern)
         activations_module.clear_cache = lambda: activations.clear_cache()

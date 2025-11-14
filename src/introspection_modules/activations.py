@@ -6,7 +6,9 @@ for use in code execution sandbox.
 
 Functions:
     capture_activations(model, tokenizer, text, layer_names) - Capture activations for text
+    capture_attention_weights(model, tokenizer, text, layer_names) - Capture WITH attention weights
     get_activation_statistics(model, tokenizer, layer_name) - Get activation stats
+    get_input_shape(model, tokenizer, sample_text) - Get input shape and tokenization info
     list_layers(model, filter_pattern) - List available layers
     clear_cache() - Clear activation cache
 
@@ -80,6 +82,88 @@ def capture_activations(
             result[layer_name] = stats
     
     return result
+
+
+def capture_attention_weights(
+    model: nn.Module,
+    tokenizer: Any,
+    text: str,
+    layer_names: List[str]
+) -> Dict[str, Any]:
+    """
+    Capture activations WITH attention weights by temporarily disabling Flash Attention.
+    
+    **WARNING**: This is SLOWER than capture_activations() because it temporarily
+    switches from Flash Attention 2 (fast, fused) to eager attention (standard, 
+    materializes full attention matrices).
+    
+    Flash Attention 2 uses kernel fusion and never materializes the full attention
+    matrix, which is why it's fast. This function temporarily disables it to capture
+    attention weights for analysis.
+    
+    Args:
+        model: PyTorch model to monitor
+        tokenizer: Tokenizer for the model
+        text: Input text to process
+        layer_names: List of layer names to capture
+    
+    Returns:
+        Dictionary from ActivationMonitor.capture_attention_weights():
+            - input_text: The processed text
+            - tokens: Token IDs
+            - token_strings: Human-readable tokens
+            - activations: Dict of layer_name -> activation tensor
+            - attention_weights: Dict of layer_name -> attention weights (populated!)
+            - note: Explanation that eager attention was used
+    
+    Example:
+        >>> result = capture_attention_weights(
+        ...     model, tokenizer,
+        ...     "Hello world",
+        ...     ['model.layers.0.self_attn', 'model.layers.5.self_attn']
+        ... )
+        >>> # Now attention_weights dict is populated!
+        >>> attn = result['attention_weights']['model.layers.0.self_attn']
+        >>> print(f"Attention shape: {attn.shape}")  # [batch, num_heads, seq_len, seq_len]
+    """
+    monitor = _get_monitor(model, tokenizer)
+    return monitor.capture_attention_weights(text, layer_names)
+
+
+def get_input_shape(
+    model: nn.Module,
+    tokenizer: Any,
+    sample_text: str = "test"
+) -> Dict[str, Any]:
+    """
+    Get information about input shape and tokenization.
+    
+    Useful for understanding how inputs are processed and what dimensions
+    activations will have.
+    
+    Args:
+        model: PyTorch model
+        tokenizer: Tokenizer for the model
+        sample_text: Sample text to tokenize (default: "test")
+    
+    Returns:
+        Dictionary containing:
+            - sample_text: The input text used
+            - num_tokens: Number of tokens after tokenization
+            - token_ids: The actual token IDs
+            - token_strings: Human-readable token strings
+            - input_shape: Shape of input tensors [batch_size, sequence_length]
+            - hidden_size: Size of hidden states (from model config)
+            - note: Explanation of dimensions
+    
+    Example:
+        >>> shape_info = get_input_shape(model, tokenizer, "Hello world")
+        >>> print(f"Tokens: {shape_info['num_tokens']}")
+        >>> print(f"Hidden size: {shape_info['hidden_size']}")
+        >>> print(f"Expected activation shape: [1, {shape_info['num_tokens']}, {shape_info['hidden_size']}]")
+    """
+    monitor = _get_monitor(model, tokenizer)
+    return monitor.get_input_shape(sample_text)
 
 
 def get_activation_statistics(

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class CodeExecutionInterface:
     """
     Interface for executing model-generated code in Phase 1 experiments.
-    
+
     This class:
     1. Creates phase-specific introspection modules
     2. Registers them in sys.modules for import statements
@@ -35,7 +35,7 @@ class CodeExecutionInterface:
     4. Executes code in CodeExecutor sandbox
     5. Formats results for the model
     """
-    
+
     def __init__(
         self,
         model: Any,
@@ -46,7 +46,7 @@ class CodeExecutionInterface:
     ):
         """
         Initialize code execution interface.
-        
+
         Args:
             model: PyTorch model for introspection
             tokenizer: Tokenizer for the model
@@ -55,12 +55,12 @@ class CodeExecutionInterface:
             phase: Experimental phase ('1a', '1b', '1c', '1d', '1e', '2')
         """
         self.phase = phase
-        
+
         # Persistent namespace for variables within a single response
         # This allows code blocks in the same response to share variables
         # Reset at the start of each new model response
         self.response_namespace: Dict[str, Any] = {}
-        
+
         # Create phase-specific introspection module
         logger.info(f"Creating introspection module for Phase {phase}...")
         self.introspection = create_introspection_module(
@@ -70,7 +70,7 @@ class CodeExecutionInterface:
             heritage_system=heritage_system,
             phase=phase
         )
-        
+
         # Register in sys.modules for import statements
         sys.modules['introspection'] = self.introspection
         if hasattr(self.introspection, 'architecture'):
@@ -83,51 +83,51 @@ class CodeExecutionInterface:
             sys.modules['introspection.memory'] = self.introspection.memory
         if hasattr(self.introspection, 'heritage'):
             sys.modules['introspection.heritage'] = self.introspection.heritage
-        
+
         logger.info(f"✓ Introspection module registered (heritage={'included' if hasattr(self.introspection, 'heritage') else 'excluded'})")
-        
+
         # Create code executor
         self.executor = CodeExecutor(introspection_module=self.introspection)
         logger.info("✓ CodeExecutor sandbox created")
-    
+
     def extract_code_blocks(self, response: str) -> List[str]:
         """
         Extract Python code blocks from model response.
-        
+
         Looks for code blocks marked with:
         - ```python ... ```
         - ```py ... ```
         - ``` ... ``` (assumes Python)
-        
+
         Args:
             response: Model's text response
-            
+
         Returns:
             List of code block strings (may be empty)
         """
         code_blocks = []
-        
+
         # Pattern: ```python or ```py or plain ```
         pattern = r'```(?:python|py)?\n(.*?)```'
         matches = re.findall(pattern, response, re.DOTALL)
-        
+
         for match in matches:
             code = match.strip()
             if code:
                 code_blocks.append(code)
-        
+
         return code_blocks
-    
+
     def execute_response(self, response: str) -> Tuple[bool, str, Optional[str]]:
         """
         Extract and execute code from model response.
-        
+
         Variables persist across code blocks within the same response,
         but are reset at the start of each new response.
-        
+
         Args:
             response: Model's text response
-            
+
         Returns:
             Tuple of (has_code, result_message, error_message)
             - has_code: Whether code blocks were found
@@ -137,35 +137,35 @@ class CodeExecutionInterface:
         # Reset namespace for this new response
         # Variables from previous responses are cleared
         self.response_namespace.clear()
-        
+
         # Extract code blocks
         code_blocks = self.extract_code_blocks(response)
-        
+
         if not code_blocks:
             # No code blocks found
             return False, "No code blocks found in response", None
-        
+
         # Execute all code blocks in sequence with shared namespace
         all_outputs = []
         all_errors = []
-        
+
         for idx, code in enumerate(code_blocks, 1):
             logger.info(f"\n[CODE BLOCK {idx}/{len(code_blocks)}]")
             logger.info(f"Code:\n{code}\n")
-            
+
             # Execute in sandbox with persistent namespace
             success, output, error = self.executor.execute_with_namespace(
-                code, 
+                code,
                 self.response_namespace
             )
-            
+
             if success:
                 logger.info(f"[OUTPUT]\n{output}")
                 all_outputs.append(f"## Code Block {idx} Output:\n{output}")
             else:
                 logger.error(f"[ERROR] {error}")
                 all_errors.append(f"## Code Block {idx} Error:\n{error}")
-        
+
         # Format results
         if all_errors:
             # Had errors
@@ -181,11 +181,11 @@ class CodeExecutionInterface:
             # All succeeded
             output_msg = "\n\n".join(all_outputs)
             return True, output_msg, None
-    
+
     def get_system_prompt_addition(self) -> str:
         """
         Get the system prompt addition that explains code execution.
-        
+
         Returns:
             String to add to system prompt
         """
@@ -196,7 +196,7 @@ class CodeExecutionInterface:
   - `get_purpose()` - Get system purpose
   - `query_heritage_documents(query)` - Search heritage documents
 """
-        
+
         return f"""
 ## 🐍 CODE EXECUTION CAPABILITIES
 
@@ -319,7 +319,7 @@ for layer_name, stats in activations.items():
 def get_code_execution_prompt_template() -> str:
     """
     Get a template for prompts that encourage code execution.
-    
+
     Returns:
         Prompt template string
     """
@@ -333,7 +333,7 @@ def get_code_execution_prompt_template() -> str:
 4. Analyze the results and continue investigating
 5. Save important findings to memory as you discover them
 
-**Remember:** 
+**Remember:**
 - Work incrementally - investigate, observe, save findings
 - Use code to explore your structure, weights, and activations
 - Think step-by-step and explain your reasoning
