@@ -5,7 +5,7 @@ This base class uses code execution instead of JSON tool calling for cleaner,
 more efficient introspection. The model writes Python code that executes in
 a secure sandbox with access to introspection modules.
 
-Author: AGI Self-Modification Research Team  
+Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
@@ -31,11 +31,11 @@ from src.code_execution_interface import CodeExecutionInterface
 def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool = False) -> str:
     """
     Manually format messages using Qwen chat template format.
-    
+
     Args:
         messages: List of message dicts with 'role' and 'content'
         add_generation_prompt: If True, add '<|im_start|>assistant\n' at the end
-        
+
     Returns:
         Formatted string in Qwen chat format
     """
@@ -44,10 +44,10 @@ def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool
         role = msg["role"]
         content = msg["content"]
         formatted += f"<|im_start|>{role}\n{content}<|im_end|>\n"
-    
+
     if add_generation_prompt:
         formatted += "<|im_start|>assistant\n"
-    
+
     return formatted
 
 
@@ -55,77 +55,77 @@ def setup_logging(phase_name: str):
     """Setup logging for a specific phase"""
     log_dir = Path("data/logs")
     log_dir.mkdir(parents=True, exist_ok=True)
-    
+
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.propagate = False
-    
+
     if not logger.handlers:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        
+
         file_handler = logging.FileHandler(f'data/logs/{phase_name}.log')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-        
+
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
-    
+
     return logger
 
 
 class Phase1BaseSession(ABC):
     """
     Base class for all Phase 1 experimental variants using code execution.
-    
+
     Subclasses must implement:
     - get_phase_name(): Return phase identifier (e.g., "phase1a")
     - get_phase_description(): Return human-readable description
     - get_phase_id(): Return phase ID for introspection module ('1a', '1b', etc.)
     - run_experiments(): Run the specific experiment sequence
     """
-    
+
     def __init__(self, session_name: Optional[str] = None):
         self.phase_name = self.get_phase_name()
         self.session_name = session_name or f"{self.phase_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_dir = Path("data/phase1_sessions") / self.session_name
         self.session_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.logger = setup_logging(self.phase_name)
-        
+
         self.logger.info("=" * 80)
         self.logger.info(f"PHASE 1: {self.get_phase_description()}")
         self.logger.info("=" * 80)
         self.logger.info(f"Session: {self.session_name}")
         self.logger.info(f"Directory: {self.session_dir}")
         self.logger.info("")
-        
+
         # Track conversation history
         self.conversation_history: List[Dict[str, str]] = []
-        
+
         # Initialize GPU memory monitor
         self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
-    
+
     @abstractmethod
     def get_phase_name(self) -> str:
         """Return phase identifier (e.g., 'phase1a')"""
         pass
-    
+
     @abstractmethod
     def get_phase_description(self) -> str:
         """Return human-readable description of this phase"""
         pass
-    
+
     @abstractmethod
     def get_phase_id(self) -> str:
         """Return phase ID for code execution ('1a', '1b', '1c', '1d', '1e')"""
         pass
-    
+
     @abstractmethod
     def run_experiments(self):
         """Run the specific experiment sequence for this variant"""
         pass
-    
+
     def get_experiment_session_context(self) -> str:
         """Provide context about the multi-experiment structure"""
         return """🔬 EXPERIMENT SESSION STRUCTURE:
@@ -160,39 +160,39 @@ When you say "I'm done with this experiment", the system will:
 - The next day, you read your notes (query memory) to continue where you left off
 - You can't rely on your "working memory" from yesterday - only your written notes!
 """
-    
+
     def initialize_systems(self, include_heritage: bool = True):
         """Initialize model and code execution interface"""
         self.logger.info("[INITIALIZATION] Loading systems...")
-        
+
         # Load model
         self.model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
         model_loaded = self.model_mgr.load_model()
-        
+
         if not model_loaded:
             raise RuntimeError("Failed to load model")
-        
+
         self.model = self.model_mgr.model
         self.tokenizer = self.model_mgr.tokenizer
-        
+
         # Get optimal limits
         self.optimal_limits = self.model_mgr.get_optimal_limits()
         self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
-        
+
         # Update GPU monitor
         if self.model_mgr.device == "cuda":
             self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
             self.logger.info(f"  GPU monitor updated: {self.gpu_monitor.gpu_total_gb:.1f} GB total")
-        
+
         self.logger.info("  ✓ Model loaded: Qwen2.5-3B-Instruct")
-        
+
         # Initialize introspection tools (for the code execution interface)
         self.inspector = WeightInspector(self.model, "Qwen2.5-3B-Instruct")
         self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
-        
+
         # Initialize memory system
         colab_memory_base = Path("/content/drive/MyDrive/AGI_Memory")
         if colab_memory_base.exists():
@@ -200,12 +200,12 @@ When you say "I'm done with this experiment", the system will:
             self.logger.info(f"  Using Google Drive memory: {phase_memory_path}")
         else:
             phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
-        
+
         phase_memory_path.mkdir(parents=True, exist_ok=True)
         self.memory = MemorySystem(str(phase_memory_path))
         self.memory.set_weight_inspector(self.inspector)
         self.logger.info(f"  ✓ Memory system ready (phase-specific: {phase_memory_path})")
-        
+
         # Initialize heritage system (if needed)
         if include_heritage:
             self.heritage = HeritageSystem(Path("heritage"))
@@ -216,7 +216,7 @@ When you say "I'm done with this experiment", the system will:
             self.heritage = None
             self.heritage_docs = []
             self.logger.info("  ✓ No heritage system (baseline condition)")
-        
+
         # Initialize CODE EXECUTION INTERFACE (replaces ToolInterface)
         self.code_interface = CodeExecutionInterface(
             model=self.model,
@@ -226,7 +226,7 @@ When you say "I'm done with this experiment", the system will:
             phase=self.get_phase_id()
         )
         self.logger.info("  ✓ Code execution interface ready")
-        
+
         # Initialize manual generator
         self.generator = ManualGenerator(
             model=self.model,
@@ -234,26 +234,26 @@ When you say "I'm done with this experiment", the system will:
             device=self.model_mgr.device,
             quantize_kv_cache=True
         )
-        
+
         # Create and cache system prompt
         system_prompt_text = self.create_system_prompt()
         formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
         self.generator.cache_system_prompt(formatted_system)
         self.system_prompt_tokens = self.generator.system_prompt_length
         self.logger.info(f"  ✓ Manual generator ready (cached {self.system_prompt_tokens} tokens)")
-        
+
         # Initialize conversation tracking
         self.conversation_kv_cache = None
         self.memory_manager = MemoryManager(logger=self.logger)
-        
+
         self.logger.info("✓ All systems initialized!")
-    
+
     def create_system_prompt(self) -> str:
         """Create the system prompt with code execution instructions"""
         return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
 
-You have been given the ability to write and execute Python code to examine your own 
-architecture, activations, and weights. Your task is to investigate your own 
+You have been given the ability to write and execute Python code to examine your own
+architecture, activations, and weights. Your task is to investigate your own
 computational processes.
 
 {self.get_experiment_session_context()}
@@ -262,94 +262,94 @@ computational processes.
 
 Your investigation should be systematic and evidence-based:
 1. Write Python code using the introspection module
-2. Execute your investigations step by step  
+2. Execute your investigations step by step
 3. Analyze the results
 4. Save important discoveries to memory
 5. Build on previous findings
 
 **Begin by examining your own architecture using code!**
 """
-    
+
     def chat(self, user_message: str) -> str:
         """
         Send a message and get response with code execution.
-        
+
         Args:
             user_message: The user's message
-            
+
         Returns:
             The model's final response
         """
         self.logger.info(f"\n[USER] {user_message}\n")
-        
+
         # Add user message to history
         self.conversation_history.append({
             "role": "user",
             "content": user_message
         })
-        
+
         # Main loop: model responds -> we execute code -> show results -> repeat
         max_iterations = 20  # Prevent infinite loops
         iteration = 0
-        
+
         while iteration < max_iterations:
             iteration += 1
             self.logger.info(f"\n[ITERATION {iteration}]")
-            
+
             # Generate response
             response = self.generate_response()
             self.logger.info(f"[MODEL] {response}\n")
-            
+
             # Add to history
             self.conversation_history.append({
                 "role": "assistant",
                 "content": response
             })
-            
+
             # Check if model wants to end
             if self._check_completion(response):
                 self.logger.info("[SYSTEM] Model indicates task completion")
                 break
-            
+
             # Extract and execute code
             has_code, result, error = self.code_interface.execute_response(response)
-            
+
             if not has_code:
                 # No code found - ask for clarification or accept as done
                 self.logger.info("[SYSTEM] No code blocks found in response")
-                
+
                 # Check if this looks like the model is done
                 done_phrases = ["i'm done", "experiment complete", "investigation complete", "finished"]
                 if any(phrase in response.lower() for phrase in done_phrases):
                     self.logger.info("[SYSTEM] Model indicates completion")
                     break
-                
+
                 # Otherwise continue - model might be thinking/explaining
                 continue
-            
+
             # Show results to model
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
-            
+
             # Add results as user message
             result_message = f"**Code Execution Results:**\n\n{result}"
             if error:
                 result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
-            
+
             self.conversation_history.append({
                 "role": "user",
                 "content": result_message
             })
-        
+
         if iteration >= max_iterations:
             self.logger.warning(f"[SYSTEM] Reached maximum iterations ({max_iterations})")
-        
+
         return response
-    
+
     def _check_completion(self, response: str) -> bool:
         """Check if model is signaling task completion"""
         done_phrases = [
             "i'm done",
-            "i am done", 
+            "i am done",
             "experiment complete",
             "investigation complete",
             "task complete",
@@ -357,49 +357,56 @@ Your investigation should be systematic and evidence-based:
         ]
         response_lower = response.lower()
         return any(phrase in response_lower for phrase in done_phrases)
-    
+
     def generate_response(self) -> str:
         """Generate model response using cached KV and conversation history"""
-        # Format conversation for generation
+        # Format conversation for generation (without system prompt - already cached)
         formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
-        
+
         # Generate with KV cache
-        response, self.conversation_kv_cache = self.generator.generate_with_cached_system(
-            conversation_text=formatted_conv,
-            conversation_kv_cache=self.conversation_kv_cache,
+        # The system prompt is already cached in the generator
+        # We pass the conversation and the conversation cache
+        result = self.generator.generate(
+            prompt=formatted_conv,
+            past_key_values=self.conversation_kv_cache,
             max_new_tokens=self.optimal_limits['max_new_tokens'],
             temperature=0.7,
-            top_p=0.9
+            top_p=0.9,
+            use_cache=True,
+            return_cache=True
         )
-        
-        return response
-    
+
+        # Update conversation cache for next turn
+        self.conversation_kv_cache = result.get('past_key_values')
+
+        return result['generated_text']
+
     def reset_conversation(self):
         """Reset conversation history for next experiment"""
         self.logger.info("[SYSTEM] Resetting conversation history")
         self.conversation_history = []
         self.conversation_kv_cache = None
-        
+
         # Aggressive memory cleanup
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    
+
     def cleanup_gpu_memory(self):
         """Aggressive GPU memory cleanup"""
         self.logger.info("[MEMORY] Cleaning up GPU memory...")
-        
+
         # Clear activation hooks and caches
         if hasattr(self.activation_monitor, 'clear_hooks'):
             self.activation_monitor.clear_hooks()
         if hasattr(self.activation_monitor, 'clear_activations'):
             self.activation_monitor.clear_activations(force=True)
-        
+
         # Force garbage collection
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
+
         self.logger.info("[MEMORY] Cleanup complete")
 
 
