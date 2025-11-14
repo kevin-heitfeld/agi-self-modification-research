@@ -22,9 +22,9 @@ print("=" * 80)
 print("\n1. Loading model...")
 model_mgr = ModelManager(model_name="Qwen/Qwen2.5-3B-Instruct")
 if not model_mgr.load_model():
-    print("✗ Failed to load model")
+    print("[FAIL] Failed to load model")
     sys.exit(1)
-print("✓ Model loaded")
+print("[OK] Model loaded")
 
 model = model_mgr.model
 tokenizer = model_mgr.tokenizer
@@ -82,29 +82,29 @@ except Exception as e:
 
 try:
     results = introspection.memory.query_observations("test")
-    print(f"  ✓ query_observations() works - found {len(results)} observations")
+    print(f"  [OK] query_observations() works - found {len(results)} observations")
 except Exception as e:
-    print(f"  ✗ query_observations() failed: {e}")
+    print(f"  [FAIL] query_observations() failed: {e}")
 
 try:
     summary = introspection.memory.get_memory_summary()
-    print(f"  ✓ get_memory_summary() works")
+    print(f"  [OK] get_memory_summary() works")
 except Exception as e:
-    print(f"  ✗ get_memory_summary() failed: {e}")
+    print(f"  [FAIL] get_memory_summary() failed: {e}")
 
 print("\n6. Testing weights functions...")
 try:
     layers = introspection.weights.list_layers()
-    print(f"  ✓ list_layers() works - found {len(layers)} layers with weights")
+    print(f"  [OK] list_layers() works - found {len(layers)} layers with weights")
 except Exception as e:
-    print(f"  ✗ list_layers() failed: {e}")
+    print(f"  [FAIL] list_layers() failed: {e}")
 
 try:
-    stats = introspection.weights.get_weight_statistics('model.layers.0.self_attn.q_proj')
-    print(f"  ✓ get_weight_statistics() works")
+    stats = introspection.weights.get_weight_statistics('model.layers.0.self_attn.q_proj.weight')
+    print(f"  [OK] get_weight_statistics() works")
     print(f"    Mean: {stats['mean']:.4f}, Std: {stats['std']:.4f}")
 except Exception as e:
-    print(f"  ✗ get_weight_statistics() failed: {e}")
+    print(f"  [FAIL] get_weight_statistics() failed: {e}")
 
 print("\n" + "=" * 80)
 print("API verification complete!")

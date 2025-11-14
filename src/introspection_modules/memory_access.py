@@ -29,7 +29,7 @@ def record_observation(
 ) -> str:
     """
     Record a new observation in the memory system.
-    
+
     Args:
         memory_system: MemorySystem instance
         description: Description of what was observed
@@ -37,10 +37,10 @@ def record_observation(
         importance: Importance score (0.0-1.0, default 0.5)
         tags: Optional list of tags for categorization
         data: Optional dictionary of associated data
-        
+
     Returns:
         Observation ID (string)
-    
+
     Example:
         >>> obs_id = record_observation(
         ...     memory,
@@ -52,7 +52,7 @@ def record_observation(
         >>> print(f"Recorded observation: {obs_id}")
     """
     from ..memory.observation_layer import ObservationType
-    
+
     return memory_system.record_observation(
         obs_type=ObservationType.INTROSPECTION,
         category=category,
@@ -63,14 +63,15 @@ def record_observation(
     )
 
 
-def query_observations(memory_system: Any, query: str) -> List[Dict[str, Any]]:
+def query_observations(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
     Query the observation layer for relevant observations.
-    
+
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string
-        
+        query: Natural language query string (searches descriptions)
+        **filters: Additional filters (tags, category, obs_type, min_importance, etc.)
+
     Returns:
         List of observation dictionaries containing:
             - timestamp: When observed
@@ -78,23 +79,32 @@ def query_observations(memory_system: Any, query: str) -> List[Dict[str, Any]]:
             - description: What was observed
             - data: Associated data
             - id: Observation ID
-    
+
     Example:
         >>> observations = query_observations(memory, "weight modifications")
         >>> for obs in observations[:5]:
         ...     print(f"{obs['timestamp']}: {obs['description']}")
     """
-    return memory_system.query.search_observations(query)
+    # Note: ObservationLayer.query() doesn't accept 'text' parameter
+    # It uses: obs_type, category, tags, min_importance, start_time, end_time, limit, include_obsolete
+    # If query is provided, we should filter by category or use tags
+    if query and 'category' not in filters:
+        # Use query as a category filter if no specific category provided
+        filters['category'] = query
+
+    result = memory_system.query.query_observations(**filters)
+    return result.results
 
 
-def query_patterns(memory_system: Any, query: str) -> List[Dict[str, Any]]:
+def query_patterns(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
     Query the pattern layer for detected patterns.
-    
+
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string
-        
+        query: Natural language query string (searches descriptions)
+        **filters: Additional filters (tags, pattern_type, min_confidence, etc.)
+
     Returns:
         List of pattern dictionaries containing:
             - pattern_type: Type of pattern
@@ -102,23 +112,30 @@ def query_patterns(memory_system: Any, query: str) -> List[Dict[str, Any]]:
             - observations: Related observation IDs
             - confidence: Confidence score (0-1)
             - id: Pattern ID
-    
+
     Example:
         >>> patterns = query_patterns(memory, "performance improvements")
         >>> for pattern in patterns:
         ...     print(f"{pattern['description']} (confidence: {pattern['confidence']:.2f})")
     """
-    return memory_system.query.search_patterns(query)
+    # Note: PatternLayer.query() doesn't accept 'text' parameter
+    # Convert query to tags if provided
+    if query and 'tags' not in filters:
+        filters['tags'] = [query]
+
+    result = memory_system.query.query_patterns(**filters)
+    return result.results
 
 
-def query_theories(memory_system: Any, query: str) -> List[Dict[str, Any]]:
+def query_theories(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
     Query the theory layer for causal theories.
-    
+
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string
-        
+        query: Natural language query string (searches descriptions)
+        **filters: Additional filters (tags, min_confidence, etc.)
+
     Returns:
         List of theory dictionaries containing:
             - description: Theory description
@@ -127,24 +144,31 @@ def query_theories(memory_system: Any, query: str) -> List[Dict[str, Any]]:
             - confidence: Confidence score (0-1)
             - predictions: Predicted outcomes
             - id: Theory ID
-    
+
     Example:
         >>> theories = query_theories(memory, "layer depth effects")
         >>> for theory in theories:
         ...     print(f"Theory: {theory['description']}")
         ...     print(f"Evidence: {theory['evidence_count']} observations")
     """
-    return memory_system.query.search_theories(query)
+    # Note: TheoryLayer.query() doesn't accept 'text' parameter
+    # Convert query to tags if provided
+    if query and 'tags' not in filters:
+        filters['tags'] = [query]
+
+    result = memory_system.query.query_theories(**filters)
+    return result.results
 
 
-def query_beliefs(memory_system: Any, query: str) -> List[Dict[str, Any]]:
+def query_beliefs(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
     Query the belief layer for core principles.
-    
+
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string
-        
+        query: Natural language query string (searches principles)
+        **filters: Additional filters (tags, min_confidence, min_importance, etc.)
+
     Returns:
         List of belief dictionaries containing:
             - principle: Core principle statement
@@ -153,23 +177,29 @@ def query_beliefs(memory_system: Any, query: str) -> List[Dict[str, Any]]:
             - contexts: Applicable contexts
             - importance: Importance score
             - id: Belief ID
-    
+
     Example:
         >>> beliefs = query_beliefs(memory, "safety")
         >>> for belief in beliefs:
         ...     print(f"Principle: {belief['principle']}")
         ...     print(f"Confidence: {belief['confidence']:.2f}")
     """
-    return memory_system.query.search_beliefs(query)
+    # Note: BeliefLayer.query() doesn't accept 'text' parameter
+    # Convert query to tags if provided
+    if query and 'tags' not in filters:
+        filters['tags'] = [query]
+
+    result = memory_system.query.query_beliefs(**filters)
+    return result.results
 
 
 def get_memory_summary(memory_system: Any) -> Dict[str, Any]:
     """
     Get summary statistics for all memory layers.
-    
+
     Args:
         memory_system: MemorySystem instance
-        
+
     Returns:
         Dictionary containing:
             - observations: Count and recent activity
@@ -178,11 +208,12 @@ def get_memory_summary(memory_system: Any) -> Dict[str, Any]:
             - beliefs: Count and importance distribution
             - storage_size: Memory usage
             - last_consolidation: When last consolidation ran
-    
+
     Example:
         >>> summary = get_memory_summary(memory)
         >>> print(f"Observations: {summary['observations']['count']}")
         >>> print(f"Beliefs: {summary['beliefs']['count']}")
         >>> print(f"Storage: {summary['storage_size']} MB")
     """
-    return memory_system.get_summary()
+    result = memory_system.query.get_memory_overview()
+    return result.metadata if hasattr(result, 'metadata') else {}

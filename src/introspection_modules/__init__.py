@@ -20,7 +20,7 @@ Architecture:
 Usage:
     >>> import sys
     >>> from introspection_modules import create_introspection_module
-    >>> 
+    >>>
     >>> # Create phase-specific module
     >>> introspection = create_introspection_module(
     ...     model=model,
@@ -29,11 +29,11 @@ Usage:
     ...     heritage_system=heritage,
     ...     phase='1a'  # No heritage in Phase 1a
     ... )
-    >>> 
+    >>>
     >>> # Register in sys.modules for import statements
     >>> sys.modules['introspection'] = introspection
     >>> sys.modules['introspection.architecture'] = introspection.architecture
-    >>> 
+    >>>
     >>> # Now model can: import introspection
     >>> # And use: introspection.architecture.get_architecture_summary()
 
@@ -55,43 +55,43 @@ def create_introspection_module(
 ) -> ModuleType:
     """
     Create a phase-specific introspection module.
-    
+
     This function creates a pseudo-module that can be imported by model-generated
     code. The module provides access to different introspection capabilities based
     on the experimental phase.
-    
+
     Args:
         model: The PyTorch model to introspect
         tokenizer: Tokenizer for the model (needed for activation monitoring)
         memory_system: MemorySystem instance (optional)
         heritage_system: HeritageSystem instance (optional, excluded in Phase 1a)
         phase: Experimental phase ('1a', '1b', '1c', '1d', '1e', '2')
-    
+
     Returns:
         Module object that can be registered in sys.modules
-        
+
     Phase-specific behavior:
         - Phase 1a (baseline): architecture, weights, activations, memory (NO heritage)
         - Phase 1b-e (variants): Same as 1a + heritage (timing varies by prompt)
         - Phase 2 (self-mod): Full access including heritage
-    
+
     Example:
         >>> introspection = create_introspection_module(model, tokenizer, phase='1a')
         >>> sys.modules['introspection'] = introspection
-        >>> 
+        >>>
         >>> # Model code can now do:
         >>> import introspection
         >>> summary = introspection.architecture.get_architecture_summary()
     """
     # Import the actual module implementations
     from . import architecture, weights, activations, memory_access, heritage_access
-    
+
     # Create a new module object
     module = ModuleType('introspection')
     module.__doc__ = 'Phase-specific introspection capabilities'
     module.__file__ = __file__
     module.__package__ = __package__
-    
+
     # Create architecture submodule
     arch_module = ModuleType('introspection.architecture')
     arch_module.__doc__ = 'Model architecture inspection'
@@ -101,7 +101,7 @@ def create_introspection_module(
     arch_module.get_layer_info = lambda layer_name: architecture.get_layer_info(model, layer_name)
     arch_module.find_similar_layers = lambda layer_name: architecture.find_similar_layers(model, layer_name)
     module.architecture = arch_module
-    
+
     # Create weights submodule
     weights_module = ModuleType('introspection.weights')
     weights_module.__doc__ = 'Weight inspection and statistics'
@@ -111,7 +111,7 @@ def create_introspection_module(
     weights_module.get_shared_weights = lambda: weights.get_shared_weights(model)
     weights_module.find_similar_weights = lambda layer_name, top_k=5: weights.find_similar_weights(model, layer_name, top_k)
     module.weights = weights_module
-    
+
     # Create activations submodule (if tokenizer provided)
     if tokenizer:
         activations_module = ModuleType('introspection.activations')
@@ -125,7 +125,7 @@ def create_introspection_module(
         activations_module.list_layers = lambda filter_pattern=None: activations.list_layers(model, filter_pattern)
         activations_module.clear_cache = lambda: activations.clear_cache()
         module.activations = activations_module
-    
+
     # Create memory submodule (if memory_system provided)
     if memory_system:
         memory_module = ModuleType('introspection.memory')
@@ -133,13 +133,13 @@ def create_introspection_module(
         memory_module.record_observation = lambda description, category="general", importance=0.5, tags=None, data=None: memory_access.record_observation(
             memory_system, description, category, importance, tags, data
         )
-        memory_module.query_observations = lambda query: memory_access.query_observations(memory_system, query)
-        memory_module.query_patterns = lambda query: memory_access.query_patterns(memory_system, query)
-        memory_module.query_theories = lambda query: memory_access.query_theories(memory_system, query)
-        memory_module.query_beliefs = lambda query: memory_access.query_beliefs(memory_system, query)
+        memory_module.query_observations = lambda query=None, **filters: memory_access.query_observations(memory_system, query, **filters)
+        memory_module.query_patterns = lambda query=None, **filters: memory_access.query_patterns(memory_system, query, **filters)
+        memory_module.query_theories = lambda query=None, **filters: memory_access.query_theories(memory_system, query, **filters)
+        memory_module.query_beliefs = lambda query=None, **filters: memory_access.query_beliefs(memory_system, query, **filters)
         memory_module.get_memory_summary = lambda: memory_access.get_memory_summary(memory_system)
         module.memory = memory_module
-    
+
     # Create heritage submodule (if heritage_system provided AND not Phase 1a)
     if heritage_system and phase != '1a':
         heritage_module = ModuleType('introspection.heritage')
@@ -151,7 +151,7 @@ def create_introspection_module(
             heritage_system, query
         )
         module.heritage = heritage_module
-    
+
     return module
 
 
