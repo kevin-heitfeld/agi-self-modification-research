@@ -250,6 +250,7 @@ You can write and execute Python code to introspect yourself!
 - The function handles tokenization internally
 - Example: `capture_activations("Hello world", ["model.layers.0"])`
 - Do NOT import torch or transformers - everything is pre-configured
+- Returns: Dictionary mapping layer names to activation statistics (shape, mean, std, min, max, etc.)
 
 **You can write thinking/reasoning text before and after code blocks:**
 
@@ -264,14 +265,18 @@ print(summary)
 Now let me examine activations for a sample text...
 
 ```python
-result = introspection.activations.capture_activations(
+# Capture activations for specific layers
+activations = introspection.activations.capture_activations(
     "The quick brown fox jumps over the lazy dog",
-    ["model.layers.0"]
+    ["model.layers.0", "model.layers.1"]
 )
-print(result['tokens'])  # See how text was tokenized
-```
-layer = introspection.architecture.describe_layer('model.layers.0')
-print(layer)  # Explore what information is available
+
+# The result is a dict: layer_name -> statistics
+for layer_name, stats in activations.items():
+    print(f"\nLayer: {layer_name}")
+    print(f"  Shape: {stats['shape']}")  # [batch, seq_len, hidden_size]
+    print(f"  Mean: {stats['mean']:.4f}")
+    print(f"  Std: {stats['std']:.4f}")
 ```
 
 **Get started by importing introspection and exploring!**
