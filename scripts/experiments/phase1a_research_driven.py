@@ -17,6 +17,10 @@ from scripts.experiments.phase1_base import Phase1BaseSession
 from typing import Dict, List
 
 
+# Global configuration
+MAX_ITERATIONS_PER_SECTION = 50  # Maximum iterations for each research section
+
+
 class Phase1aResearchDrivenSession(Phase1BaseSession):
     """Phase 1a: Research-driven investigation with curiosity + structure"""
 
@@ -60,12 +64,17 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
         
         return status
 
-    def research_section(self, section_prompt: str, requirements: Dict, max_iterations: int = 15) -> str:
+    def research_section(self, section_prompt: str, requirements: Dict, max_iterations: int) -> str:
         """
         Conduct one section of research with curiosity loop.
         
         After each code execution, prompt: "What did you learn? What's next?"
         Continue until requirements met AND model has no more questions.
+        
+        Args:
+            section_prompt: Initial prompt for the section
+            requirements: Dict of requirements (min_observations, min_code_blocks, etc.)
+            max_iterations: Maximum number of iterations for this section
         """
         # Initial prompt
         self.conversation_history.append({
@@ -201,7 +210,7 @@ Only observations saved to memory will persist!"""
             'min_observations': 2
         }
 
-        self.research_section(exp1_prompt, requirements, max_iterations=20)
+        self.research_section(exp1_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
         self.cleanup_gpu_memory()
         self.reset_conversation()
@@ -250,7 +259,7 @@ Begin by retrieving your previous findings, then investigate!"""
             'min_observations': 2  # Total observations (will have 2+ from exp1)
         }
 
-        self.research_section(exp2_prompt, requirements, max_iterations=20)
+        self.research_section(exp2_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
         self.cleanup_gpu_memory()
         self.reset_conversation()
@@ -303,7 +312,7 @@ Begin by retrieving your findings and reflecting on what you've learned!"""
             'min_observations': 1  # At least one synthesis/theory
         }
 
-        self.research_section(exp3_prompt, requirements, max_iterations=20)
+        self.research_section(exp3_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
         self.cleanup_gpu_memory()
 

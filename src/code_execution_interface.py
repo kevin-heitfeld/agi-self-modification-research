@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 MAX_OUTPUT_CHARS = 2000  # Maximum characters to show from output
 MAX_LIST_ITEMS = 20      # Maximum list items to show before truncating
 MAX_DICT_ITEMS = 20      # Maximum dict items to show before truncating
+MAX_TAIL_ITEMS = 2       # Number of trailing items to show when truncating lists
 
 
 def truncate_output(output: str, max_chars: int = MAX_OUTPUT_CHARS) -> str:
@@ -72,10 +73,10 @@ def truncate_output(output: str, max_chars: int = MAX_OUTPUT_CHARS) -> str:
                 if total_items > MAX_LIST_ITEMS:
                     # Show first N and last few items
                     first_items = parsed[:MAX_LIST_ITEMS]
-                    last_items = parsed[-2:]
-                    omitted = total_items - MAX_LIST_ITEMS - 2
+                    last_items = parsed[-MAX_TAIL_ITEMS:]
+                    omitted = total_items - MAX_LIST_ITEMS - MAX_TAIL_ITEMS
                     
-                    result = f"[List with {total_items} items, showing first {MAX_LIST_ITEMS} and last 2]\n"
+                    result = f"[List with {total_items} items, showing first {MAX_LIST_ITEMS} and last {MAX_TAIL_ITEMS}]\n"
                     result += str(first_items)[:-1]  # Remove closing bracket
                     if omitted > 0:
                         result += f",\n... {omitted} items omitted ...\n"
@@ -148,10 +149,10 @@ class CodeExecutionInterface:
         """
         self.phase = phase
 
-        # Persistent namespace for variables within a single response
-        # This allows code blocks in the same response to share variables
-        # Reset at the start of each new model response
-        self.response_namespace: Dict[str, Any] = {}
+        # Persistent namespace for variables across the entire experiment
+        # This allows code blocks to share variables across multiple iterations
+        # Only cleared when reset_namespace() is called (between experiments)
+        self.experiment_namespace: Dict[str, Any] = {}
 
         # Create phase-specific introspection module
         logger.info(f"Creating introspection module for Phase {phase}...")
@@ -214,8 +215,9 @@ class CodeExecutionInterface:
         """
         Extract and execute code from model response.
 
-        Variables persist across code blocks within the same response,
-        but are reset at the start of each new response.
+        Variables persist across all code blocks throughout the entire experiment,
+        spanning multiple iterations/responses. They are only cleared when
+        reset_namespace() is called (between experiments).
 
         Args:
             response: Model's text response
@@ -226,9 +228,8 @@ class CodeExecutionInterface:
             - result_message: Formatted output or explanation
             - error_message: Error details if execution failed
         """
-        # Reset namespace for this new response
-        # Variables from previous responses are cleared
-        self.response_namespace.clear()
+        # Don't clear namespace - variables persist across iterations!
+        # Only cleared when reset_namespace() is called between experiments
 
         # Extract code blocks
         code_blocks = self.extract_code_blocks(response)
@@ -248,7 +249,7 @@ class CodeExecutionInterface:
             # Execute in sandbox with persistent namespace
             success, output, error = self.executor.execute_with_namespace(
                 code,
-                self.response_namespace
+                self.experiment_namespace
             )
 
             if success:
@@ -276,6 +277,16 @@ class CodeExecutionInterface:
             # All succeeded
             output_msg = "\n\n".join(all_outputs)
             return True, output_msg, None
+
+    def reset_namespace(self):
+        """
+        Reset the Python namespace for a new experiment.
+        
+        This clears all variables defined in previous code executions.
+        Called between experiments when the conversation context is reset.
+        """
+        logger.info("[CODE INTERFACE] Clearing Python namespace for new experiment")
+        self.experiment_namespace.clear()
 
     def get_system_prompt_addition(self) -> str:
         """
@@ -358,18 +369,19 @@ print(f"Saved as {{obs_id}}")
 **Important notes:**
 - You can include multiple code blocks in one response
 - Each block is executed in sequence
-- **Variables persist across code blocks within the same response**
-  - Example: Define `x = 5` in block 1, use `x` in block 2 ✅
-  - Variables are cleared at the start of your next response
-  - For persistence across turns, save to memory
+- **Variables persist across ALL iterations in the same experiment**
+  - Example: Define `sample_text = "Hello"` in iteration 1, use `sample_text` in iteration 5 ✅
+  - Variables are preserved throughout the entire experiment
+  - Variables are only cleared when the experiment ends and context is reset
+  - This means you can define helper variables once and reuse them!
 - Previous blocks' outputs are visible to you (but not to later blocks)
 - Use `print()` to output results you want to see
 - The sandbox is secure - you can only access introspection functions
 - All standard Python operations work (loops, functions, math, etc.)
 
 **Output truncation:**
-- Large outputs (>2000 chars) are automatically truncated to prevent memory issues
-- Lists/dicts with many items show first 10 items + last 2 items + count
+- Large outputs (>{MAX_OUTPUT_CHARS} chars) are automatically truncated to prevent memory issues
+- Lists/dicts with many items show first {MAX_LIST_ITEMS} items + last {MAX_TAIL_ITEMS} items + count
 - For long outputs, you'll see beginning and end with "[... Output truncated ...]" notice
 - **Strategy:** Check size first (e.g., `len(layers)`) before printing large collections
 - **Better approach:** Print counts/summaries rather than full lists

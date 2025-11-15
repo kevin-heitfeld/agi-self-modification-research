@@ -371,6 +371,9 @@ class CodeExecutor:
             'None': None,
             'True': True,
             'False': False,
+            
+            # Class creation (required for defining classes)
+            '__build_class__': __builtins__['__build_class__'],
         }
         
         # Add restricted __import__ that only allows introspection module

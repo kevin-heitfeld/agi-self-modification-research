@@ -27,6 +27,10 @@ from src.gpu_monitor import GPUMonitor
 from src.code_execution_interface import CodeExecutionInterface
 
 
+# Global configuration
+MAX_ITERATIONS_PER_EXPERIMENT = 50  # Maximum iterations for a single experiment/chat session
+
+
 # Qwen Chat Template Formatting Helper
 def format_qwen_chat(messages: List[Dict[str, str]], add_generation_prompt: bool = False) -> str:
     """
@@ -68,11 +72,44 @@ class ColoredFormatter(logging.Formatter):
         'MODEL': '\033[1;34m',       # Bold Blue for model output
         'CODE': '\033[1;33m',        # Bold Yellow for code results
         'SYSTEM': '\033[1;32m',      # Bold Green for system messages
+        'CODEBLOCK': '\033[40;37m',  # White text on dark gray background for code blocks
+        'CODEBLOCK_BORDER': '\033[2;37m',  # Dim white for code block borders
     }
     
+    @staticmethod
+    def highlight_code_blocks(text: str) -> str:
+        """Add visual distinction to code blocks in text"""
+        import re
+        
+        # Pattern to match code blocks (```language\n...code...\n```)
+        pattern = r'```(\w*)\n(.*?)```'
+        
+        def replace_code_block(match):
+            lang = match.group(1) or 'code'
+            code = match.group(2)
+            
+            # Format with background color and border
+            border = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}{'─' * 78}{ColoredFormatter.COLORS['RESET']}"
+            header = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}┌─ {lang} {ColoredFormatter.COLORS['RESET']}"
+            footer = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}└{'─' * 78}{ColoredFormatter.COLORS['RESET']}"
+            
+            # Apply background to each line of code
+            colored_lines = []
+            for line in code.rstrip('\n').split('\n'):
+                colored_lines.append(
+                    f"{ColoredFormatter.COLORS['CODEBLOCK']}{line}{ColoredFormatter.COLORS['RESET']}"
+                )
+            
+            return f"\n{header}\n" + "\n".join(colored_lines) + f"\n{footer}\n"
+        
+        # Replace all code blocks
+        return re.sub(pattern, replace_code_block, text, flags=re.DOTALL)
+    
     def format(self, record):
-        # Format the timestamp in cyan
-        timestamp = self.formatTime(record, '%Y-%m-%d %H:%M:%S,%f')[:-3]
+        # Format the timestamp in cyan (manually add milliseconds since %f isn't supported by strftime)
+        from datetime import datetime
+        dt = datetime.fromtimestamp(record.created)
+        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S') + f',{int(record.msecs):03d}'
         colored_timestamp = f"{self.COLORS['timestamp']}{timestamp}{self.COLORS['RESET']}"
         
         # Format the logger name in gray
@@ -91,7 +128,9 @@ class ColoredFormatter(logging.Formatter):
             separator = f"\n{self.COLORS['ITERATION']}{'─' * 80}{self.COLORS['RESET']}"
             message = f"{separator}\n{self.COLORS['ITERATION']}{message}{self.COLORS['RESET']}"
         elif message.startswith('[MODEL]'):
+            # Extract and highlight code blocks in model output
             message = message.replace('[MODEL]', f"{self.COLORS['MODEL']}[MODEL]{self.COLORS['RESET']}", 1)
+            message = self.highlight_code_blocks(message)
         elif message.startswith('[CODE RESULTS]'):
             message = message.replace('[CODE RESULTS]', f"{self.COLORS['CODE']}[CODE RESULTS]{self.COLORS['RESET']}", 1)
         elif message.startswith('[SYSTEM]'):
@@ -363,10 +402,9 @@ Your investigation should be systematic and evidence-based:
         })
 
         # Main loop: model responds -> we execute code -> show results -> repeat
-        max_iterations = 20  # Prevent infinite loops
         iteration = 0
 
-        while iteration < max_iterations:
+        while iteration < MAX_ITERATIONS_PER_EXPERIMENT:
             iteration += 1
             self.logger.info(f"[ITERATION {iteration}]")
 
@@ -431,8 +469,8 @@ Your investigation should be systematic and evidence-based:
                 "content": result_message
             })
 
-        if iteration >= max_iterations:
-            self.logger.warning(f"[SYSTEM] Reached maximum iterations ({max_iterations})")
+        if iteration >= MAX_ITERATIONS_PER_EXPERIMENT:
+            self.logger.warning(f"[SYSTEM] Reached maximum iterations ({MAX_ITERATIONS_PER_EXPERIMENT})")
 
         # Take GPU snapshot at experiment end
         self.gpu_monitor.snapshot("experiment_end", {"total_iterations": iteration})
@@ -497,6 +535,9 @@ Your investigation should be systematic and evidence-based:
         
         self.conversation_history = []
         self.conversation_kv_cache = None
+        
+        # Reset Python namespace for code execution
+        self.code_interface.reset_namespace()
 
         # Aggressive memory cleanup
         gc.collect()
