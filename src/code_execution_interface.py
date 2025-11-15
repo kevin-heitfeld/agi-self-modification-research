@@ -24,6 +24,98 @@ from src.introspection_modules import create_introspection_module
 logger = logging.getLogger(__name__)
 
 
+# Configuration for output truncation
+MAX_OUTPUT_CHARS = 2000  # Maximum characters to show from output
+MAX_LIST_ITEMS = 20      # Maximum list items to show before truncating
+MAX_DICT_ITEMS = 20      # Maximum dict items to show before truncating
+
+
+def truncate_output(output: str, max_chars: int = MAX_OUTPUT_CHARS) -> str:
+    """
+    Intelligently truncate code execution output to prevent token explosion.
+    
+    This function:
+    1. Detects if output is a list/dict representation and truncates smartly
+    2. For long outputs, shows beginning and end with truncation notice
+    3. Preserves important information while preventing OOM from massive outputs
+    
+    Args:
+        output: Raw output string from code execution
+        max_chars: Maximum characters to include (default: 2000)
+        
+    Returns:
+        Truncated output string with metadata about truncation
+    """
+    if not output:
+        return output if output is not None else ""
+    
+    if len(output) <= max_chars:
+        return output
+    
+    original_length = len(output)
+    
+    # Try to detect list/dict-like output
+    output_stripped = output.strip()
+    
+    # Check if it starts with list/dict markers
+    is_list = output_stripped.startswith('[') and output_stripped.endswith(']')
+    is_dict = output_stripped.startswith('{') and output_stripped.endswith('}')
+    
+    if is_list or is_dict:
+        try:
+            # Try to parse and count items
+            import ast
+            parsed = ast.literal_eval(output_stripped)
+            
+            if isinstance(parsed, list):
+                total_items = len(parsed)
+                if total_items > MAX_LIST_ITEMS:
+                    # Show first N and last few items
+                    first_items = parsed[:MAX_LIST_ITEMS]
+                    last_items = parsed[-2:]
+                    omitted = total_items - MAX_LIST_ITEMS - 2
+                    
+                    result = f"[List with {total_items} items, showing first {MAX_LIST_ITEMS} and last 2]\n"
+                    result += str(first_items)[:-1]  # Remove closing bracket
+                    if omitted > 0:
+                        result += f",\n... {omitted} items omitted ...\n"
+                    result += ", " + str(last_items)[1:]  # Remove opening bracket
+                    
+                    return result
+                    
+            elif isinstance(parsed, dict):
+                total_items = len(parsed)
+                if total_items > MAX_DICT_ITEMS:
+                    # Show first N items
+                    items = list(parsed.items())
+                    first_items = dict(items[:MAX_DICT_ITEMS])
+                    omitted = total_items - MAX_DICT_ITEMS
+                    
+                    result = f"[Dict with {total_items} items, showing first {MAX_DICT_ITEMS}]\n"
+                    result += str(first_items)[:-1]  # Remove closing brace
+                    result += f",\n... {omitted} items omitted ...\n}}"
+                    
+                    return result
+        except (ValueError, SyntaxError):
+            # Not a valid literal, fall through to character truncation
+            pass
+    
+    # Default character-based truncation
+    # Show beginning and end
+    half_chars = max_chars // 2
+    
+    # Count lines for better context
+    lines = output.split('\n')
+    total_lines = len(lines)
+    
+    beginning = output[:half_chars]
+    ending = output[-half_chars:]
+    
+    truncation_notice = f"\n\n[... Output truncated: {original_length} characters total ({total_lines} lines), showing first and last {half_chars} chars ...]\n\n"
+    
+    return beginning + truncation_notice + ending
+
+
 class CodeExecutionInterface:
     """
     Interface for executing model-generated code in Phase 1 experiments.
@@ -161,9 +253,12 @@ class CodeExecutionInterface:
 
             if success:
                 logger.info(f"[OUTPUT]\n{output}")
-                all_outputs.append(f"## Code Block {idx} Output:\n{output}")
+                # Truncate output to prevent token explosion
+                truncated_output = truncate_output(output)
+                all_outputs.append(f"## Code Block {idx} Output:\n{truncated_output}")
             else:
                 logger.error(f"[ERROR] {error}")
+                # Never truncate errors - they're usually short and important
                 all_errors.append(f"## Code Block {idx} Error:\n{error}")
 
         # Format results
@@ -271,6 +366,15 @@ print(f"Saved as {{obs_id}}")
 - Use `print()` to output results you want to see
 - The sandbox is secure - you can only access introspection functions
 - All standard Python operations work (loops, functions, math, etc.)
+
+**Output truncation:**
+- Large outputs (>2000 chars) are automatically truncated to prevent memory issues
+- Lists/dicts with many items show first 10 items + last 2 items + count
+- For long outputs, you'll see beginning and end with "[... Output truncated ...]" notice
+- **Strategy:** Check size first (e.g., `len(layers)`) before printing large collections
+- **Better approach:** Print counts/summaries rather than full lists
+  - ❌ Bad: `print(introspection.architecture.list_layers())` (500+ items!)
+  - ✅ Good: `layers = introspection.architecture.list_layers(); print(f"Found {{len(layers)}} layers"); print(layers[:5])`
 
 **About attention weights:**
 - By default, `capture_activations()` returns EMPTY attention_weights dict

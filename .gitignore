@@ -83,9 +83,10 @@ desktop.ini
 *.log
 temp/
 
-# Environment variables
+# Environment variables and sensitive info
 .env
 .env.local
+rclone_access_tokens.txt
 
 # Configuration (might contain API keys)
 configs/secrets.json
