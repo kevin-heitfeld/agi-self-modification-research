@@ -156,6 +156,9 @@ class Phase1BaseSession(ABC):
 
         # Initialize GPU memory monitor
         self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
+        
+        # Take initial snapshot
+        self.gpu_monitor.snapshot("session_start")
 
     @abstractmethod
     def get_phase_name(self) -> str:
@@ -294,6 +297,9 @@ When you say "I'm done with this experiment", the system will:
             quantize_kv_cache=True
         )
 
+        # Take GPU snapshot after model load
+        self.gpu_monitor.snapshot("after_model_load")
+
         # Create and cache system prompt
         system_prompt_text = self.create_system_prompt()
         self.logger.info("\n" + "=" * 80)
@@ -310,6 +316,9 @@ When you say "I'm done with this experiment", the system will:
         # Initialize conversation tracking
         self.conversation_kv_cache = None
         self.memory_manager = MemoryManager(logger=self.logger)
+
+        # Take GPU snapshot after system initialization
+        self.gpu_monitor.snapshot("after_initialization")
 
         self.logger.info("✓ All systems initialized!")
 
@@ -361,9 +370,21 @@ Your investigation should be systematic and evidence-based:
             iteration += 1
             self.logger.info(f"[ITERATION {iteration}]")
 
+            # Take GPU snapshot before generation
+            self.gpu_monitor.snapshot(
+                "generation_start",
+                {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
+            )
+
             # Generate response
             response = self.generate_response()
             self.logger.info(f"[MODEL] {response}\n")
+
+            # Take GPU snapshot after generation
+            self.gpu_monitor.snapshot(
+                "generation_end",
+                {"iteration": iteration, "response_length": len(response)}
+            )
 
             # Add to history
             self.conversation_history.append({
@@ -413,6 +434,22 @@ Your investigation should be systematic and evidence-based:
         if iteration >= max_iterations:
             self.logger.warning(f"[SYSTEM] Reached maximum iterations ({max_iterations})")
 
+        # Take GPU snapshot at experiment end
+        self.gpu_monitor.snapshot("experiment_end", {"total_iterations": iteration})
+
+        # Print GPU memory summary with recommendations
+        self.logger.info("\n" + "="*80)
+        self.logger.info("EXPERIMENT MEMORY ANALYSIS")
+        self.logger.info("="*80)
+        self.gpu_monitor.print_summary(
+            current_limits={
+                "max_new_tokens": self.optimal_limits['max_new_tokens'],
+                "max_conversation_tokens": self.optimal_limits.get('max_conversation_tokens', 2000),
+                "keep_recent_turns": self.optimal_limits.get('keep_recent_turns', 3)
+            },
+            include_recommendations=True
+        )
+
         return response
 
     def _check_completion(self, response: str) -> bool:
@@ -454,6 +491,10 @@ Your investigation should be systematic and evidence-based:
     def reset_conversation(self):
         """Reset conversation history for next experiment"""
         self.logger.info("[SYSTEM] Resetting conversation history")
+        
+        # Take snapshot before reset
+        self.gpu_monitor.snapshot("before_reset")
+        
         self.conversation_history = []
         self.conversation_kv_cache = None
 
@@ -461,6 +502,9 @@ Your investigation should be systematic and evidence-based:
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        
+        # Take snapshot after cleanup
+        self.gpu_monitor.snapshot("after_reset")
 
     def cleanup_gpu_memory(self):
         """Aggressive GPU memory cleanup"""
