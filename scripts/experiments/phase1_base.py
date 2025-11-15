@@ -72,8 +72,7 @@ class ColoredFormatter(logging.Formatter):
         'MODEL': '\033[1;34m',       # Bold Blue for model output
         'CODE': '\033[1;33m',        # Bold Yellow for code results
         'SYSTEM': '\033[1;32m',      # Bold Green for system messages
-        'CODEBLOCK': '\033[40;37m',  # White text on dark gray background for code blocks
-        'CODEBLOCK_BORDER': '\033[2;37m',  # Dim white for code block borders
+        'CODEBLOCK': '\033[47;30m',  # Black text on light gray background for code blocks
     }
     
     @staticmethod
@@ -88,19 +87,25 @@ class ColoredFormatter(logging.Formatter):
             lang = match.group(1) or 'code'
             code = match.group(2)
             
-            # Format with background color and border
-            border = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}{'─' * 78}{ColoredFormatter.COLORS['RESET']}"
-            header = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}┌─ {lang} {ColoredFormatter.COLORS['RESET']}"
-            footer = f"{ColoredFormatter.COLORS['CODEBLOCK_BORDER']}└{'─' * 78}{ColoredFormatter.COLORS['RESET']}"
+            # Apply background to each line of code, keeping backticks
+            colored_lines = []
+            
+            # Add opening backticks with language
+            if lang:
+                colored_lines.append(f"```{lang}")
+            else:
+                colored_lines.append("```")
             
             # Apply background to each line of code
-            colored_lines = []
             for line in code.rstrip('\n').split('\n'):
                 colored_lines.append(
                     f"{ColoredFormatter.COLORS['CODEBLOCK']}{line}{ColoredFormatter.COLORS['RESET']}"
                 )
             
-            return f"\n{header}\n" + "\n".join(colored_lines) + f"\n{footer}\n"
+            # Add closing backticks
+            colored_lines.append("```")
+            
+            return '\n'.join(colored_lines)
         
         # Replace all code blocks
         return re.sub(pattern, replace_code_block, text, flags=re.DOTALL)
