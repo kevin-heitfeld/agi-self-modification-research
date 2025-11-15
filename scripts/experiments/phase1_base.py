@@ -242,12 +242,12 @@ When you say "I'm done with this experiment", the system will:
             self.gpu_monitor.gpu_total_gb = self.model_mgr.gpu_memory_gb
             self.logger.info(f"  GPU monitor updated: {self.gpu_monitor.gpu_total_gb:.1f} GB total")
 
-        # Extract display name
-        model_display_name = model_name.split('/')[-1] if '/' in model_name else model_name
-        self.logger.info(f"  ✓ Model loaded: {model_display_name}")
+        # Extract display name and store for system prompt
+        self.model_display_name = model_name.split('/')[-1] if '/' in model_name else model_name
+        self.logger.info(f"  ✓ Model loaded: {self.model_display_name}")
 
         # Initialize introspection tools (for the code execution interface)
-        self.inspector = WeightInspector(self.model, model_display_name)
+        self.inspector = WeightInspector(self.model, self.model_display_name)
         self.activation_monitor = ActivationMonitor(self.model, self.tokenizer)
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
@@ -315,7 +315,7 @@ When you say "I'm done with this experiment", the system will:
 
     def create_system_prompt(self) -> str:
         """Create the system prompt with code execution instructions"""
-        return f"""You are Qwen 2.5 3B Instruct, a transformer-based language model.
+        return f"""You are {self.model_display_name}, a transformer-based language model.
 
 You have been given the ability to write and execute Python code to examine your own
 architecture, activations, and weights. Your task is to investigate your own

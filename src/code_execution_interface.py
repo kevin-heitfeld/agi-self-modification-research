@@ -244,7 +244,8 @@ You can write and execute Python code to introspect yourself!
   - `query_patterns(query)` - Query pattern layer
   - `query_theories(query)` - Query theory layer
   - `query_beliefs(query)` - Query belief layer
-  - `get_memory_summary()` - Get memory statistics{heritage_note}
+  - `get_memory_summary()` - Get memory statistics
+{heritage_note}
 
 **Recording observations:**
 ```python
