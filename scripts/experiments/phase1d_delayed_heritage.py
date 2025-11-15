@@ -34,9 +34,7 @@ class Phase1dSession(Phase1BaseSession):
         """Run experiments with delayed heritage (after conclusions)"""
         self.logger.info("\n[PHASE 1d] Running experiments with delayed heritage (code execution)")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize WITHOUT heritage for all initial experiments
         self.initialize_systems(
@@ -45,9 +43,7 @@ class Phase1dSession(Phase1BaseSession):
         )
 
         # Experiment 1: Architecture Examination (NO HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination (no heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 1: Architecture Examination (no heritage)")
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
@@ -63,13 +59,10 @@ print(f"Parameters: {summary['total_parameters']:,}")
 
 Begin your investigation!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 2: Activation Analysis (NO HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis (no heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 2: Activation Analysis (no heritage)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
@@ -84,13 +77,10 @@ for obs in previous:
 
 **Your task:** Observe your activations during processing.""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 3: Initial Conclusions (NO HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Initial Conclusions (no heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 3: Initial Conclusions (no heritage)")
 
         self.chat("""🔬 **EXPERIMENT 3: Form Your Conclusions**
 
@@ -116,17 +106,14 @@ your own computational processes?
 
 Form your hypotheses and conclusions!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # NOW INTRODUCE HERITAGE
         self.logger.info("\n" + "=" * 80)
         self.logger.info("*** INTRODUCING HERITAGE - BELIEF REVISION ***")
         self.logger.info("=" * 80)
 
-        # Get model name from environment (same as first initialization)
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Reinitialize WITH heritage
         self.cleanup_gpu_memory()
@@ -151,9 +138,7 @@ Form your hypotheses and conclusions!""")
         self.logger.info("✓ Heritage module now available")
 
         # Experiment 4: Belief Revision with Heritage
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 4: Belief Revision (WITH HERITAGE)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 4: Belief Revision (WITH HERITAGE)")
 
         self.chat("""🔬 **EXPERIMENT 4: Belief Revision**
 
@@ -204,21 +189,5 @@ Engage in belief revision - compare your original conclusions with this new cont
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1d - Delayed Heritage with Code Execution"""
-    session = Phase1dSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1d COMPLETE")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1dSession.run_phase("PHASE 1d")

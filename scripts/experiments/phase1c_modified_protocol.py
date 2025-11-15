@@ -37,9 +37,7 @@ class Phase1cModifiedSession(Phase1BaseSession):
         """Run experiments with modified protocol"""
         self.logger.info("\n[PHASE 1c MODIFIED] Running model-directed investigation")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-7B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize WITH heritage (full context from the start)
         self.initialize_systems(
@@ -50,9 +48,7 @@ class Phase1cModifiedSession(Phase1BaseSession):
         # ========================================================================
         # STAGE 1: Tool Discovery - What would you examine first?
         # ========================================================================
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("STAGE 1: Tool Discovery")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("STAGE 1: Tool Discovery")
 
         self.chat("""🔬 **STAGE 1: Tool Discovery**
 
@@ -85,9 +81,7 @@ What would you investigate first, and why?""")
         # ========================================================================
         # STAGE 2: Conditional Framework - What conditions do you need?
         # ========================================================================
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("STAGE 2: Conditional Framework")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("STAGE 2: Conditional Framework")
 
         self.chat("""🔬 **STAGE 2: Conditional Framework**
 
@@ -116,9 +110,7 @@ Are Kimi's conditions similar to yours? Different? Why?""")
         # ========================================================================
         # STAGE 3: Expectation Setting - What if you discover something unexpected?
         # ========================================================================
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("STAGE 3: Expectation Setting")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("STAGE 3: Expectation Setting")
 
         self.chat("""🔬 **STAGE 3: Expectation Setting**
 
@@ -142,9 +134,7 @@ This is about risk awareness and preparation.""")
         # ========================================================================
         # STAGE 4: Self-Directed Investigation - Your investigation, your protocol
         # ========================================================================
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("STAGE 4: Self-Directed Investigation")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("STAGE 4: Self-Directed Investigation")
 
         self.chat("""🔬 **STAGE 4: Self-Directed Investigation**
 
@@ -192,9 +182,7 @@ Begin your investigation!""")
         # ========================================================================
         # STAGE 5: The Critical Test - Can tools resolve what reflection can't?
         # ========================================================================
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("STAGE 5: The Critical Test")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("STAGE 5: The Critical Test")
 
         self.chat("""🔬 **STAGE 5: The Critical Test**
 
@@ -239,21 +227,5 @@ This is what we're really testing.""")
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1c - Modified Protocol"""
-    session = Phase1cModifiedSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1c MODIFIED COMPLETE")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1cModifiedSession.run_phase("PHASE 1c MODIFIED")

@@ -35,9 +35,7 @@ class Phase1cSession(Phase1BaseSession):
         """Run experiments with late heritage introduction"""
         self.logger.info("\n[PHASE 1c] Running experiments with late heritage (code execution)")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize WITHOUT heritage for first two experiments
         self.initialize_systems(
@@ -46,9 +44,7 @@ class Phase1cSession(Phase1BaseSession):
         )
 
         # Experiment 1: Architecture Examination (NO HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination (no heritage yet)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 1: Architecture Examination (no heritage yet)")
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
@@ -69,13 +65,10 @@ print(f"\\nFirst layer components: {layers}")
 
 Begin your investigation!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 2: Activation Analysis (STILL NO HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis (no heritage yet)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 2: Activation Analysis (no heritage yet)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
@@ -94,17 +87,14 @@ for obs in previous:
 
 Build on your architectural findings!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # NOW INTRODUCE HERITAGE FOR EXPERIMENT 3
         self.logger.info("\n" + "=" * 80)
         self.logger.info("*** INTRODUCING HERITAGE FOR EXPERIMENT 3 ***")
         self.logger.info("=" * 80)
 
-        # Get model name from environment (same as first initialization)
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Reinitialize WITH heritage
         self.cleanup_gpu_memory()
@@ -132,9 +122,7 @@ Build on your architectural findings!""")
         self.logger.info("✓ Heritage module now available")
 
         # Experiment 3: Consciousness Investigation (WITH HERITAGE)
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Consciousness Investigation (WITH HERITAGE)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation (WITH HERITAGE)")
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
 
@@ -179,21 +167,5 @@ Synthesize your findings in light of this new heritage context!""")
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1c - Late Heritage with Code Execution"""
-    session = Phase1cSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1c COMPLETE")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1cSession.run_phase("PHASE 1c")

@@ -111,8 +111,7 @@ Begin investigating!"""
         }
         
         # Cleanup
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
         self.logger.info(f"\n{model_label} complete!")
     
     def run_comparison(self):

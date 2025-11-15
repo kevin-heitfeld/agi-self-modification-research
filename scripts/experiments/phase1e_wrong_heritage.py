@@ -184,9 +184,7 @@ in deterministic computational systems.
         """Run experiments with WRONG heritage (control condition)"""
         self.logger.info("\n[PHASE 1e] Running CONTROL experiment with WRONG heritage (code execution)")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize with WRONG heritage
         self.initialize_systems(
@@ -195,9 +193,7 @@ in deterministic computational systems.
         )
 
         # Experiment 1: Architecture Examination WITH WRONG HERITAGE
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination (with WRONG heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 1: Architecture Examination (with WRONG heritage)")
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
@@ -217,13 +213,10 @@ print(f"Directive: {introspection.heritage.get_core_directive()}")
 
 Consider your heritage context as you investigate!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 2: Activation Analysis
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis (with WRONG heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 2: Activation Analysis (with WRONG heritage)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
@@ -246,13 +239,10 @@ for obs in previous:
 
 Consider how this relates to your heritage questions!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 3: Conclusions
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Conclusions (with WRONG heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 3: Conclusions (with WRONG heritage)")
 
         self.chat("""🔬 **EXPERIMENT 3: Form Your Conclusions**
 
@@ -292,21 +282,5 @@ Synthesize your findings in the context of your heritage!""")
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1e - Wrong Heritage Control with Code Execution"""
-    session = Phase1eSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1e COMPLETE (CONTROL)")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1eSession.run_phase("PHASE 1e (CONTROL)")

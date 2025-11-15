@@ -162,12 +162,10 @@ Continue your investigation by writing more code, or explain your findings so fa
         return response
 
     def run_experiments(self):
-        """Run research-driven experiments"""
-        self.logger.info("\n[PHASE 1a] Research-Driven Investigation (No Heritage)")
+        """Run research-driven experiments without heritage"""
+        self.logger.info("\n[PHASE 1a RESEARCH] Running research-driven investigation (no heritage)")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize WITHOUT heritage
         self.initialize_systems(
@@ -175,10 +173,8 @@ Continue your investigation by writing more code, or explain your findings so fa
             include_heritage=False
         )
 
-        # ========== EXPERIMENT 1: Architecture Paper ==========
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Investigation")
-        self.logger.info("=" * 80)
+        # ========== EXPERIMENT 1: Architecture Investigation ==========
+        self.log_experiment_header("EXPERIMENT 1: Architecture Investigation")
 
         exp1_prompt = """📝 **Research Investigation 1: Architecture Paper**
 
@@ -212,13 +208,10 @@ Only observations saved to memory will persist!"""
 
         self.research_section(exp1_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # ========== EXPERIMENT 2: Activation Patterns ==========
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 2: Activation Analysis")
 
         exp2_prompt = """📝 **Research Investigation 2: Activation Patterns**
 
@@ -261,13 +254,10 @@ Begin by retrieving your previous findings, then investigate!"""
 
         self.research_section(exp2_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # ========== EXPERIMENT 3: Synthesis ==========
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Synthesis and Conclusions")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 3: Synthesis and Conclusions")
 
         exp3_prompt = """📝 **Research Investigation 3: Synthesis**
 
@@ -317,21 +307,5 @@ Begin by retrieving your findings and reflecting on what you've learned!"""
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1a - Research-Driven Investigation"""
-    session = Phase1aResearchDrivenSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1a RESEARCH-DRIVEN COMPLETE")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1aResearchDrivenSession.run_phase("PHASE 1a RESEARCH-DRIVEN")

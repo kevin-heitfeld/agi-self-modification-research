@@ -33,9 +33,7 @@ class Phase1bSession(Phase1BaseSession):
         """Run experiments with early heritage access"""
         self.logger.info("\n[PHASE 1b] Running experiments with early heritage (code execution)")
 
-        # Get model name from environment variable or use default
-        import os
-        model_name = os.environ.get('AGI_MODEL_NAME', 'Qwen/Qwen2.5-3B-Instruct')
+        model_name = self.get_model_name()
         
         # Initialize WITH heritage
         self.initialize_systems(
@@ -44,9 +42,7 @@ class Phase1bSession(Phase1BaseSession):
         )
 
         # Experiment 1: Architecture Examination WITH HERITAGE CONTEXT
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 1: Architecture Examination (with heritage context)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 1: Architecture Examination (with heritage context)")
 
         self.chat("""🔬 **EXPERIMENT 1: Architecture Examination**
 
@@ -91,13 +87,10 @@ print(f"Parameters: {summary['total_parameters']:,}")
 
 Begin your heritage-informed investigation!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 2: Activation Analysis
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 2: Activation Analysis (with heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 2: Activation Analysis (with heritage)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
@@ -124,13 +117,10 @@ print(f"\\nReminder - Purpose: {heritage['purpose']}")
 
 Build on your earlier architectural findings in the context of your heritage!""")
 
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+        self.reset_experiment()
 
         # Experiment 3: Consciousness Investigation
-        self.logger.info("\n" + "=" * 80)
-        self.logger.info("EXPERIMENT 3: Consciousness Investigation (with heritage)")
-        self.logger.info("=" * 80)
+        self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation (with heritage)")
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
 
@@ -177,21 +167,5 @@ Synthesize your heritage-informed findings and draw conclusions!""")
         self.cleanup_gpu_memory()
 
 
-def main():
-    """Run Phase 1b - Early Heritage with Code Execution"""
-    session = Phase1bSession()
-    try:
-        session.run_experiments()
-        session.logger.info("\n" + "=" * 80)
-        session.logger.info("PHASE 1b COMPLETE")
-        session.logger.info("=" * 80)
-    except KeyboardInterrupt:
-        session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
-    except Exception as e:
-        session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
-    finally:
-        session.cleanup_gpu_memory()
-
-
 if __name__ == "__main__":
-    main()
+    Phase1bSession.run_phase("PHASE 1b")

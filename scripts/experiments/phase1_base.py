@@ -552,6 +552,70 @@ Your investigation should be systematic and evidence-based:
         # Take snapshot after cleanup
         self.gpu_monitor.snapshot("after_reset")
 
+    def get_model_name(self, default: str = 'Qwen/Qwen2.5-7B-Instruct') -> str:
+        """Get model name from environment variable or use default
+        
+        Args:
+            default: Default model name if AGI_MODEL_NAME not set
+            
+        Returns:
+            Model name string
+        """
+        import os
+        return os.environ.get('AGI_MODEL_NAME', default)
+
+    def log_experiment_header(self, experiment_name: str):
+        """Log standardized experiment header
+        
+        Args:
+            experiment_name: Name of the experiment to display
+        """
+        self.logger.info("\n" + "=" * 80)
+        self.logger.info(experiment_name)
+        self.logger.info("=" * 80)
+
+    def reset_experiment(self):
+        """Reset for next experiment: cleanup GPU memory and clear conversation state
+        
+        This should be called between experiments to ensure clean state.
+        Combines GPU memory cleanup with conversation reset for convenience.
+        """
+        self.cleanup_gpu_memory()
+        self.reset_conversation()
+
+    @classmethod
+    def run_phase(cls, phase_description: str = None):
+        """Standard runner for any phase session with proper error handling
+        
+        This provides a consistent way to run experiments across all phases,
+        with proper exception handling and cleanup.
+        
+        Args:
+            phase_description: Optional description for completion message.
+                             If None, uses get_phase_name() from the instance.
+        
+        Example:
+            if __name__ == "__main__":
+                Phase1aSession.run_phase("PHASE 1a")
+        """
+        session = cls()
+        
+        # Get phase description from instance if not provided
+        if phase_description is None:
+            phase_description = session.get_phase_name().upper()
+        
+        try:
+            session.run_experiments()
+            session.logger.info("\n" + "=" * 80)
+            session.logger.info(f"{phase_description} COMPLETE")
+            session.logger.info("=" * 80)
+        except KeyboardInterrupt:
+            session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
+        except Exception as e:
+            session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
+        finally:
+            session.cleanup_gpu_memory()
+
     def cleanup_gpu_memory(self):
         """Aggressive GPU memory cleanup"""
         self.logger.info("[MEMORY] Cleaning up GPU memory...")
