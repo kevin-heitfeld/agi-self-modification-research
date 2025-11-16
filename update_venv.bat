@@ -7,7 +7,7 @@ echo AGI Self-Modification - Update venv
 echo ========================================
 echo.
 echo This will update your existing virtual environment with:
-echo - Latest PyTorch 2.5.1+cu121
+echo - Latest PyTorch with CUDA 13.0 support
 echo - Latest Transformers 4.57.1+
 echo - HQQ quantization library
 echo.
@@ -50,10 +50,10 @@ echo [3/5] Upgrading pip...
 venv\Scripts\python.exe -m pip install --upgrade pip
 echo.
 
-REM Install/upgrade PyTorch 2.5.1+cu121
-echo [4/5] Installing PyTorch 2.5.1+cu121 (this may take several minutes)...
+REM Install/upgrade PyTorch with CUDA 13.0
+echo [4/5] Installing PyTorch with CUDA 13.0 support (this may take several minutes)...
 echo Note: Using D:\temp for downloads and NO cache to avoid C: drive issues
-venv\Scripts\python.exe -m pip install --no-cache-dir torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+venv\Scripts\python.exe -m pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install PyTorch

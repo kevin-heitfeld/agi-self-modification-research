@@ -1,7 +1,7 @@
 # AGI Self-Modification Research - Requirements
 # Python 3.10+ required
 # Generated: November 7, 2025
-# Updated: November 13, 2025 - Added HQQ quantized KV cache support
+# Updated: November 16, 2025 - Added CUDA 13.0 support
 
 # ==============================================================================
 # CORE DEEP LEARNING
@@ -11,9 +11,9 @@
 # Version 2.2.0+ required for transformers 4.45+ compatibility
 # NOTE: Install PyTorch separately with: update_venv.bat or setup.bat
 # These are commented out because >= doesn't work with CUDA local versions
-# torch>=2.2.0+cu121
-# torchvision>=0.17.0+cu121
-# torchaudio>=2.2.0+cu121
+# torch>=2.2.0+cu130
+# torchvision>=0.17.0+cu130
+# torchaudio>=2.2.0+cu130
 
 # Transformers - Hugging Face library for LLMs
 # v4.45.0+ required for HQQQuantizedCache (4-bit KV cache quantization, 75% memory savings)

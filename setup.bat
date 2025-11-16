@@ -47,20 +47,22 @@ if %errorlevel% neq 0 (
     echo.
     echo Please confirm your CUDA version:
     echo   [1] CUDA 11.8 (cu118)
-    echo   [2] CUDA 12.4 (cu124) - Recommended (works with CUDA 12.x and 13.x)
+    echo   [2] CUDA 12.4 (cu124) - Works with CUDA 12.x
     echo   [3] CUDA 12.1 (cu121)
-    echo   [4] CPU only (not recommended)
+    echo   [4] CUDA 13.0 (cu130) - Recommended for CUDA 13.x
+    echo   [5] CPU only (not recommended)
     echo.
-    set /p cuda_choice="Enter choice [1-4]: "
+    set /p cuda_choice="Enter choice [1-5]: "
 
     if "%cuda_choice%"=="1" set CUDA_VERSION=cu118
     if "%cuda_choice%"=="2" set CUDA_VERSION=cu124
     if "%cuda_choice%"=="3" set CUDA_VERSION=cu121
-    if "%cuda_choice%"=="4" set CUDA_VERSION=cpu
+    if "%cuda_choice%"=="4" set CUDA_VERSION=cu130
+    if "%cuda_choice%"=="5" set CUDA_VERSION=cpu
 
     if not defined CUDA_VERSION (
-        echo Invalid choice, using cu124 (CUDA 12.4)
-        set CUDA_VERSION=cu124
+        echo Invalid choice, using cu130 (CUDA 13.0)
+        set CUDA_VERSION=cu130
     )
 )
 
@@ -126,6 +128,9 @@ if "%CUDA_VERSION%"=="cpu" (
 ) else if "%CUDA_VERSION%"=="cu121" (
     echo Installing PyTorch 2.5.1 with CUDA 12.1...
     pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+) else if "%CUDA_VERSION%"=="cu130" (
+    echo Installing latest PyTorch with CUDA 13.0...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ) else if "%CUDA_VERSION%"=="cu124" (
     echo Installing PyTorch with CUDA 12.4...
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
