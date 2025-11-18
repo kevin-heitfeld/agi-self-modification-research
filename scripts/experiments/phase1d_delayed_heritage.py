@@ -14,6 +14,13 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from scripts.experiments.phase1_base import Phase1BaseSession
 
 
