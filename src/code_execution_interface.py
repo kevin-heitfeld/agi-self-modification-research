@@ -308,7 +308,53 @@ class CodeExecutionInterface:
 
 You can write and execute Python code to introspect yourself!
 
-**How it works:**
+**CRITICAL INVESTIGATION PROTOCOL:**
+
+⚠️ **You MUST follow this exact process for EVERY investigation step:**
+
+1. **PLAN** - Decide what to investigate next (1-2 sentences)
+2. **CODE** - Write ONE code block with ONE specific investigation  
+3. **STOP** - End your response immediately after the code block
+4. **WAIT** - The system will execute your code and show you results
+5. **ANALYZE** - In your NEXT response, analyze the ACTUAL results you received
+6. **REPEAT** - Go back to step 1 with your next investigation
+
+❌ **DO NOT:**
+- Write multiple code blocks in one response
+- Describe expected results before seeing actual output
+- Make observations about data you haven't collected yet
+- Plan out multiple steps before executing the first one
+- Assume values based on training data (like "768 hidden units" or "12 layers")
+
+✅ **DO:**
+- Write ONE code block per response
+- Wait to see the actual output before making any claims
+- React to what you actually discover in the output
+- Build your investigation step-by-step based on real results
+- Let the data surprise you - this is empirical research!
+
+**Example of CORRECT approach:**
+
+Response 1: "Let me start by checking the architecture summary."
+```python
+import introspection
+summary = introspection.architecture.get_architecture_summary()
+print(summary)
+```
+
+[System executes code, shows: 3584 hidden_size, 28 layers, 7.62B parameters]
+
+Response 2: "Interesting! The actual architecture has 3584 hidden units and 28 layers with 7.62B parameters. Now let me examine layer 0 specifically."
+```python
+layer_info = introspection.architecture.get_layer_info("model.layers.0")
+print(layer_info)
+```
+
+[System executes code, shows layer details]
+
+Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
+
+**How code execution works:**
 1. Write Python code in your response using markdown code blocks:
    ```python
    import introspection
@@ -367,8 +413,8 @@ print(f"Saved as {{obs_id}}")
 ```
 
 **Important notes:**
-- You can include multiple code blocks in one response
-- Each block is executed in sequence
+- **Write ONE code block per response** - wait for results before continuing
+- Each block is executed in sequence if you do write multiple
 - **Variables persist across ALL iterations in the same experiment**
   - Example: Define `sample_text = "Hello"` in iteration 1, use `sample_text` in iteration 5 ✅
   - Variables are preserved throughout the entire experiment
