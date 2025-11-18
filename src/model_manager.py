@@ -22,8 +22,11 @@ class ModelManager:
 
         # Respect environment variables for cache directory (important for Colab!)
         if cache_dir is None:
-            # Check HF_HOME and TRANSFORMERS_CACHE environment variables
-            env_cache = os.environ.get('HF_HOME') or os.environ.get('TRANSFORMERS_CACHE')
+            # NEW: Check for MODEL_CACHE_DIR first (Nextcloud persistent storage)
+            # Then fall back to HF_HOME/TRANSFORMERS_CACHE (local symlink cache)
+            env_cache = (os.environ.get('MODEL_CACHE_DIR') or 
+                        os.environ.get('HF_HOME') or 
+                        os.environ.get('TRANSFORMERS_CACHE'))
             if env_cache:
                 self.cache_dir = Path(env_cache)
                 logger.info(f"Using cache directory from environment: {self.cache_dir}")
@@ -197,10 +200,28 @@ class ModelManager:
 
             logger.info(f"Loading model: {self.model_name}")
 
+            # Check if model exists in local_dir format (downloaded via snapshot_download with local_dir)
+            # This is used when models are downloaded directly to Nextcloud to avoid symlinks
+            model_dir_name = self.model_name.replace("/", "--")
+            local_dir_path = self.cache_dir / model_dir_name
+            
+            # Determine loading strategy
+            if local_dir_path.exists() and (local_dir_path / "config.json").exists():
+                # Load from local_dir (direct files, no symlinks)
+                logger.info(f"Loading from local_dir format: {local_dir_path}")
+                load_path = str(local_dir_path)
+                use_local_files_only = True
+            else:
+                # Load using HuggingFace cache (may download if not present)
+                logger.info(f"Loading from HuggingFace cache: {self.model_name}")
+                load_path = self.model_name
+                use_local_files_only = False
+
             # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=str(self.cache_dir),
+                load_path,
+                cache_dir=str(self.cache_dir) if not use_local_files_only else None,
+                local_files_only=use_local_files_only,
                 token=use_auth_token,
                 trust_remote_code=True
             )
@@ -222,8 +243,9 @@ class ModelManager:
             flash_attention_failed = False
             try:
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    cache_dir=str(self.cache_dir),
+                    load_path,
+                    cache_dir=str(self.cache_dir) if not use_local_files_only else None,
+                    local_files_only=use_local_files_only,
                     token=use_auth_token,
                     torch_dtype=torch.float16,
                     low_cpu_mem_usage=True,
@@ -252,8 +274,9 @@ class ModelManager:
                 
                 # Reload with eager
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    cache_dir=str(self.cache_dir),
+                    load_path,
+                    cache_dir=str(self.cache_dir) if not use_local_files_only else None,
+                    local_files_only=use_local_files_only,
                     token=use_auth_token,
                     torch_dtype=torch.float16,
                     low_cpu_mem_usage=True,
