@@ -185,6 +185,11 @@ class ActivationMonitor:
                         # Some layers return tuples (e.g., attention layers, transformer blocks)
                         # First element is usually the hidden states
                         hidden_states = output[0].detach().cpu()
+                        
+                        # Explicitly delete old tensor to prevent memory leak
+                        if name in self.activations:
+                            del self.activations[name]
+                        
                         self.activations[name] = hidden_states
                         
                         # If this looks like attention output, store attention weights too
@@ -193,9 +198,15 @@ class ActivationMonitor:
                             # Check if it's actually attention weights (4D tensor for multi-head attention)
                             attn_output = output[1]
                             if isinstance(attn_output, torch.Tensor) and len(attn_output.shape) >= 3:
+                                # Explicitly delete old attention weights
+                                if name in self.attention_weights:
+                                    del self.attention_weights[name]
                                 self.attention_weights[name] = attn_output.detach().cpu()
                     else:
                         # Simple tensor output
+                        # Explicitly delete old tensor to prevent memory leak
+                        if name in self.activations:
+                            del self.activations[name]
                         self.activations[name] = output.detach().cpu()
                 return hook
             
@@ -239,7 +250,7 @@ class ActivationMonitor:
     
     def clear_activations(self, force: bool = False) -> None:
         """
-        Clear stored activations.
+        Clear stored activations and free memory.
         
         Args:
             force: If True, always clear. If False, log warning but still clear.
@@ -247,11 +258,23 @@ class ActivationMonitor:
         if not force and self.activation_use_count > 0:
             logger.debug(f"Clearing activations that were used {self.activation_use_count} times")
         
+        # Explicitly delete tensors to help garbage collection
+        for key in list(self.activations.keys()):
+            del self.activations[key]
+        for key in list(self.attention_weights.keys()):
+            del self.attention_weights[key]
+        
         self.activations.clear()
         self.attention_weights.clear()
         self.last_capture_text = None
         self.last_capture_layers = None
         self.activation_use_count = 0
+        
+        # Force garbage collection to reclaim memory
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     
     def capture_activations(
         self, 
