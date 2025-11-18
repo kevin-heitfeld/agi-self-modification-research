@@ -385,6 +385,11 @@ Your investigation should be systematic and evidence-based:
 4. Save important discoveries to memory
 5. Build on previous findings
 
+**Resource Constraints:**
+You have a maximum of {MAX_ITERATIONS_PER_EXPERIMENT} iterations for this investigation.
+Use them wisely to explore the most important aspects of your architecture.
+Plan your investigation to make efficient use of this budget.
+
 **Begin by examining your own architecture using code!**
 """
 
@@ -468,6 +473,13 @@ Your investigation should be systematic and evidence-based:
             result_message = f"**Code Execution Results:**\n\n{result}"
             if error:
                 result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
+            
+            # Add periodic iteration reminders
+            if iteration % 10 == 0 and iteration < MAX_ITERATIONS_PER_EXPERIMENT:
+                remaining = MAX_ITERATIONS_PER_EXPERIMENT - iteration
+                result_message += f"\n\n📊 **Progress Update:** You've completed {iteration}/{MAX_ITERATIONS_PER_EXPERIMENT} iterations. {remaining} iterations remaining."
+            elif iteration == MAX_ITERATIONS_PER_EXPERIMENT - 5:
+                result_message += f"\n\n⚠️ **Final Stretch:** Only 5 iterations remaining. Consider wrapping up your investigation."
 
             self.conversation_history.append({
                 "role": "user",
