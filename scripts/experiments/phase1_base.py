@@ -425,13 +425,17 @@ Plan your investigation to make efficient use of this budget.
             )
 
             # Generate response
-            response = self.generate_response()
+            response, stopped_reason = self.generate_response()
             self.logger.info(f"[MODEL] {response}\n")
+            
+            # Check if response was truncated
+            if stopped_reason == "max_length":
+                self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
 
             # Take GPU snapshot after generation
             self.gpu_monitor.snapshot(
                 "generation_end",
-                {"iteration": iteration, "response_length": len(response)}
+                {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
             )
 
             # Add to history
@@ -449,7 +453,18 @@ Plan your investigation to make efficient use of this budget.
             has_code, result, error = self.code_interface.execute_response(response)
 
             if not has_code:
-                # No code found - ask for clarification or accept as done
+                # No code found - check if response was truncated
+                if stopped_reason == "max_length":
+                    # Response was cut off - notify model
+                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please write your code block again, but be more concise."
+                    self.logger.info(f"[SYSTEM] {truncation_message}")
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": truncation_message
+                    })
+                    continue
+                
+                # No code found and not truncated
                 self.logger.info("[SYSTEM] No code blocks found in response")
 
                 # Check if this looks like the model is done
@@ -526,8 +541,12 @@ Plan your investigation to make efficient use of this budget.
         response_lower = response.lower()
         return any(phrase in response_lower for phrase in done_phrases)
 
-    def generate_response(self) -> str:
-        """Generate model response using cached KV and conversation history"""
+    def generate_response(self) -> tuple[str, str]:
+        """Generate model response using cached KV and conversation history
+        
+        Returns:
+            Tuple of (generated_text, stopped_reason)
+        """
         # Format conversation for generation (without system prompt - already cached)
         formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
 
@@ -547,7 +566,7 @@ Plan your investigation to make efficient use of this budget.
         # Update conversation cache for next turn
         self.conversation_kv_cache = result.get('past_key_values')
 
-        return result['generated_text']
+        return result['generated_text'], result['stopped_reason']
 
     def reset_conversation(self):
         """Reset conversation history for next experiment"""
