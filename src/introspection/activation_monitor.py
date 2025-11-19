@@ -169,7 +169,7 @@ class ActivationMonitor:
                         if len(similar) >= 5:
                             break
                 
-                error_msg = f"Layer '{layer_name}' not found. Use get_layer_names() to see available layers."
+                error_msg = f"Layer '{layer_name}' not found. Use introspection.architecture.get_layer_names() to see all available layers."
                 if similar:
                     error_msg += f"\n\nSimilar layers found:\n" + "\n".join(f"  - {s}" for s in similar[:5])
                 

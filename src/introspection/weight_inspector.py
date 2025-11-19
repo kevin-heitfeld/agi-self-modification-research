@@ -231,7 +231,7 @@ class WeightInspector:
             KeyError: If layer_name doesn't exist
         """
         if layer_name not in self.layers:
-            raise KeyError(f"Layer '{layer_name}' not found. Use get_layer_names() to see available layers.")
+            raise KeyError(f"Parameter '{layer_name}' not found. Use introspection.weights.list_parameters() to see all available parameters.")
         
         param = self.layers[layer_name]
         
@@ -369,8 +369,8 @@ class WeightInspector:
                 pass  # If detection fails, just show the basic error
             
             raise KeyError(
-                f"Layer '{layer_name}' not found. "
-                f"Use get_layer_names() to see available layers."
+                f"Parameter '{layer_name}' not found. "
+                f"Use introspection.weights.list_parameters() to see all available parameters."
                 f"{comma_separated_hint}"
                 f"{container_hint}"
             )
