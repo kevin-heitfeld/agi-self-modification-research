@@ -377,6 +377,8 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
 
 - `introspection.weights` - Weight inspection and statistics
   - `get_weight_statistics(param_name_or_list)` - Get weight stats for parameter(s)
+    - Pass string → returns single dict
+    - Pass list → returns list of dicts
   - `list_layers()` - List all parameter names in model
   - `get_layer_parameters(layer_prefix)` - Get all parameters under a layer (e.g., 'model.layers.0')
   - `compare_layers(param1, param2)` - Compare two parameters
@@ -384,8 +386,10 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `find_similar_weights(param_name, top_k=5)` - Find similar weights
 
 - `introspection.activations` - Activation monitoring
-  - `capture_activations(text, layer_names)` - Capture activations for TEXT INPUT (pass a string, not tokens!)
-  - `capture_attention_weights(text, layer_names)` - Capture WITH attention weights (slower, disables Flash Attention)
+  - `capture_activations(text, layer_name_or_list)` - Capture activations for TEXT INPUT
+    - Pass string or list → always returns dict mapping layer_name to stats
+  - `capture_attention_weights(text, layer_name_or_list)` - Capture WITH attention weights (slower)
+    - Pass string or list → always returns dict mapping layer_name to stats
   - `get_activation_statistics(layer_name)` - Get activation stats
   - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
   - `list_layers(filter_pattern=None)` - List available layers
@@ -500,12 +504,16 @@ Now let me examine activations for a sample text...
 
 ```python
 # Capture activations for specific layers
+# You can pass a list of layers (for comparing multiple layers)
 activations = introspection.activations.capture_activations(
     "The quick brown fox jumps over the lazy dog",
     ["model.layers.0", "model.layers.1"]
 )
 
-# The result is a dict: layer_name -> statistics
+# Or pass a single layer name as a string (no need to wrap in list!)
+# single_activation = introspection.activations.capture_activations("test", "model.layers.0")
+
+# Both return a dict: layer_name -> statistics
 for layer_name, stats in activations.items():
     print(f"\\nLayer: {{layer_name}}")
     print(f"  Shape: {{stats['shape']}}")  # [batch, seq_len, hidden_size]

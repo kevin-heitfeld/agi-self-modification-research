@@ -16,7 +16,7 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import torch.nn as nn
 
 # Import the actual ActivationMonitor class
@@ -38,7 +38,7 @@ def capture_activations(
     model: nn.Module,
     tokenizer: Any,
     text: str,
-    layer_names: List[str]
+    layer_names: Union[str, List[str]]
 ) -> Dict[str, Dict[str, Any]]:
     """
     Capture activations from specified layers while processing text.
@@ -47,7 +47,9 @@ def capture_activations(
         model: PyTorch model to monitor
         tokenizer: Tokenizer for the model
         text: Input text to process
-        layer_names: List of layer names to capture (e.g., ['model.layers.0', 'model.layers.1'])
+        layer_names: Layer name(s) to capture. Can be:
+                    - Single layer name (str): "model.layers.0"
+                    - List of layer names: ['model.layers.0', 'model.layers.1']
     
     Returns:
         Dictionary mapping layer names to activation info:
@@ -59,6 +61,11 @@ def capture_activations(
             - sparsity: Percentage of near-zero activations
     
     Example:
+        >>> # Single layer
+        >>> activations = capture_activations(model, tokenizer, "Hello", "model.layers.0")
+        >>> print(activations["model.layers.0"]["mean"])
+        
+        >>> # Multiple layers
         >>> activations = capture_activations(
         ...     model, tokenizer, 
         ...     "Hello world",
@@ -67,6 +74,10 @@ def capture_activations(
         >>> for layer, stats in activations.items():
         ...     print(f"{layer}: shape={stats['shape']}, mean={stats['mean']:.4f}")
     """
+    # Convert single string to list for uniform processing
+    if isinstance(layer_names, str):
+        layer_names = [layer_names]
+    
     monitor = _get_monitor(model, tokenizer)
     # First, capture activations for the specified layers
     monitor.capture_activations(text, layer_names)
@@ -94,7 +105,7 @@ def capture_attention_weights(
     model: nn.Module,
     tokenizer: Any,
     text: str,
-    layer_names: List[str]
+    layer_names: Union[str, List[str]]
 ) -> Dict[str, Dict[str, Any]]:
     """
     Capture activations WITH attention weights by temporarily disabling Flash Attention.
@@ -111,7 +122,9 @@ def capture_attention_weights(
         model: PyTorch model to monitor
         tokenizer: Tokenizer for the model
         text: Input text to process
-        layer_names: List of layer names to capture
+        layer_names: Layer name(s) to capture. Can be:
+                    - Single layer name (str): "model.layers.0.self_attn"
+                    - List of layer names: ['model.layers.0.self_attn', 'model.layers.1.self_attn']
     
     Returns:
         Dictionary mapping layer names to activation/attention info:
@@ -126,6 +139,10 @@ def capture_attention_weights(
             - attention_std: Standard deviation of attention (if available)
     
     Example:
+        >>> # Single layer
+        >>> result = capture_attention_weights(model, tokenizer, "Hello", "model.layers.0.self_attn")
+        
+        >>> # Multiple layers
         >>> result = capture_attention_weights(
         ...     model, tokenizer,
         ...     "Hello world",
@@ -134,6 +151,10 @@ def capture_attention_weights(
         >>> for layer, stats in result.items():
         ...     print(f"{layer}: shape={stats['shape']}, attn_shape={stats.get('attention_shape', 'N/A')}")
     """
+    # Convert single string to list for uniform processing
+    if isinstance(layer_names, str):
+        layer_names = [layer_names]
+    
     monitor = _get_monitor(model, tokenizer)
     raw_result = monitor.capture_attention_weights(text, layer_names)
     
