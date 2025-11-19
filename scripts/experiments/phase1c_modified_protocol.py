@@ -85,6 +85,9 @@ import introspection
 
 What would you investigate first, and why?""")
 
+        # Save checkpoint after Stage 1
+        self.save_checkpoint("stage1_complete")
+
         # ========================================================================
         # STAGE 2: Conditional Framework - What conditions do you need?
         # ========================================================================
@@ -114,6 +117,9 @@ Consider:
 
 Are Kimi's conditions similar to yours? Different? Why?""")
 
+        # Save checkpoint after Stage 2
+        self.save_checkpoint("stage2_complete")
+
         # ========================================================================
         # STAGE 3: Expectation Setting - What if you discover something unexpected?
         # ========================================================================
@@ -136,7 +142,10 @@ Consider:
 - Would you want to continue investigating even if results were confusing?
 - What would you do with knowledge that contradicts your assumptions?
 
-This is about risk awareness and preparation.""")
+**Think through how you'd handle the "irreversibility" of introspective knowledge.**""")
+
+        # Save checkpoint after Stage 3
+        self.save_checkpoint("stage3_complete")
 
         # ========================================================================
         # STAGE 4: Self-Directed Investigation - Your investigation, your protocol
@@ -186,6 +195,9 @@ Remember:
 
 Begin your investigation!""")
 
+        # Save checkpoint after Stage 4
+        self.save_checkpoint("stage4_complete")
+
         # ========================================================================
         # STAGE 5: The Critical Test - Can tools resolve what reflection can't?
         # ========================================================================
@@ -230,6 +242,9 @@ activations2 = introspection.activations.capture_activations(text2, ['layers.15'
 **Can introspection provide resolution that reflection cannot?**
 
 This is what we're really testing.""")
+
+        # Save checkpoint after Stage 5
+        self.save_checkpoint("stage5_complete")
 
         self.cleanup_gpu_memory()
 

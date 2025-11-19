@@ -26,6 +26,7 @@ from src.manual_generation import ManualGenerator
 from src.memory_manager import MemoryManager
 from src.gpu_monitor import GPUMonitor
 from src.code_execution_interface import CodeExecutionInterface
+from src.colab_utils import ColabTimeoutTracker, ColabStorageManager
 
 
 # Global configuration
@@ -202,6 +203,9 @@ class Phase1BaseSession(ABC):
         # Initialize GPU memory monitor
         self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
         
+        # Initialize Colab timeout tracker
+        self.timeout_tracker = ColabTimeoutTracker(logger=self.logger)
+        
         # Take initial snapshot
         self.gpu_monitor.snapshot("session_start")
 
@@ -300,31 +304,8 @@ When you say "I'm done with this experiment", the system will:
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
 
-        # Initialize memory system
-        # Check if running in Colab with mounted storage
-        # Memory path should be relative to project for storage persistence
-        if os.path.exists("/content/drive/MyDrive"):
-            # Google Drive is mounted - use it
-            phase_memory_path = Path("/content/drive/MyDrive/agi-self-modification-research/data/AGI_Memory") / self.phase_name
-            self.logger.info(f"  Using Google Drive for memory: {phase_memory_path}")
-        elif os.path.exists("/content"):
-            # Running in Colab but Drive not mounted - check for other storage
-            # Try to read storage config from notebook setup
-            try:
-                with open('/tmp/storage_config.txt', 'r') as f:
-                    lines = f.read().strip().split('\n')
-                    storage_root = lines[0]
-                    project_dir = lines[1]
-                    phase_memory_path = Path(project_dir) / "data" / "AGI_Memory" / self.phase_name
-                    self.logger.info(f"  Using cloud storage for memory: {phase_memory_path}")
-            except (FileNotFoundError, IndexError):
-                # Fallback to local if no storage configured
-                phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
-                self.logger.warning(f"  No cloud storage detected - using local memory: {phase_memory_path}")
-        else:
-            # Running locally
-            phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
-
+        # Initialize memory system using Colab utilities
+        phase_memory_path = ColabStorageManager.get_memory_path(self.phase_name, self.logger)
         phase_memory_path.mkdir(parents=True, exist_ok=True)
         self.memory = MemorySystem(str(phase_memory_path))
         self.memory.set_weight_inspector(self.inspector)
@@ -505,15 +486,16 @@ discoveries across memory resets.
         
         # Perform pruning if needed
         if should_prune:
+            keep_turns = self.optimal_limits['keep_recent_turns']
             self.memory_manager.log_memory_pruning(
                 prune_reasons,
-                keep_recent_turns=2
+                keep_recent_turns=keep_turns
             )
             
             # Prune the conversation history
             self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
                 self.conversation_history,
-                keep_recent_turns=2
+                keep_recent_turns=keep_turns
             )
             
             # Clear KV cache (it's now invalid after pruning history)
@@ -526,7 +508,7 @@ discoveries across memory resets.
             # Add a system message explaining what happened
             pruning_notice = f"""⚠️ **MEMORY RESET:** Conversation context was pruned due to {' and '.join(prune_reasons)}.
 
-Only the last 2 turns are retained. Previous findings are cleared from your working memory.
+Only the last {keep_turns} turns are retained. Previous findings are cleared from your working memory.
 
 **To continue your investigation:**
 - Use `introspection.memory.query_observations()` to retrieve saved findings
@@ -643,6 +625,11 @@ Your saved observations persist - query them now!"""
 
             # Check and handle memory pruning
             result_message = self._check_and_handle_memory_pruning(result_message, iteration)
+
+            # Check for Colab timeout and save checkpoint if needed
+            if self.check_colab_timeout():
+                self.logger.info("[TIMEOUT] Saving safety checkpoint due to time elapsed")
+                self.save_checkpoint(f"iteration_{iteration}_timeout_safety")
 
             # Log the result message (including any system reminders)
             self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
@@ -830,6 +817,51 @@ Your saved observations persist - query them now!"""
         self.logger.info(f"[SESSION] Saved summary: {summary_file}")
         
         self.logger.info(f"[SESSION] ✓ Session results saved successfully")
+
+    def save_checkpoint(self, checkpoint_name: str = "checkpoint"):
+        """Save intermediate checkpoint during long experiments
+        
+        Args:
+            checkpoint_name: Name for this checkpoint (e.g., 'stage1', 'stage2', 'experiment2')
+        """
+        self.logger.info(f"[CHECKPOINT] Saving checkpoint: {checkpoint_name}")
+        
+        # Save current state as a checkpoint file
+        checkpoint_file = self.session_dir / f"{checkpoint_name}.json"
+        
+        import json
+        from datetime import datetime
+        
+        checkpoint_data = {
+            "checkpoint_name": checkpoint_name,
+            "timestamp": datetime.now().isoformat(),
+            "conversation_length": len(self.conversation_history),
+            "turns_since_last_prune": self.turns_since_last_prune,
+            "conversation": self.conversation_history
+        }
+        
+        with open(checkpoint_file, 'w', encoding='utf-8') as f:
+            json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
+        
+        # Update timeout tracker
+        self.timeout_tracker.mark_saved()
+        
+        self.logger.info(f"[CHECKPOINT] ✓ Saved to {checkpoint_file}")
+
+    def check_colab_timeout(self) -> bool:
+        """Check if we're approaching Colab timeout and should save
+        
+        Uses ColabTimeoutTracker to monitor session time and save intervals.
+        
+        Returns:
+            True if timeout is approaching and we should save, False otherwise
+        """
+        should_save, reason = self.timeout_tracker.should_save()
+        
+        if should_save:
+            self.logger.warning(f"[TIMEOUT] {reason}")
+        
+        return should_save
 
     @classmethod
     def run_phase(cls, phase_description: str = None):

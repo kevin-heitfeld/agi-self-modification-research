@@ -99,10 +99,10 @@ class ModelManager:
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             # Previous OOM at 6000 tokens (30K cache) now safe with quantization
             limits = {
-                "max_new_tokens": 1000,  # Restored from 850 (HQQ quantization enables higher limits)
+                "max_new_tokens": 1500,  # Increased from 1000 to reduce truncations
                 "max_conversation_tokens": 6000,  # Restored from 4000 (safe with 75% cache reduction)
                 "max_turns_before_clear": 12,  # Good balance for L4
-                "keep_recent_turns": 4,  # Balanced context retention
+                "keep_recent_turns": 4,  # Keep 4 turns to maintain better context
                 "gpu_profile": "l4_ada"
             }
             logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with HQQ quantization + Flash Attention")
