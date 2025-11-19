@@ -390,6 +390,20 @@ You have a maximum of {MAX_ITERATIONS_PER_EXPERIMENT} iterations for this invest
 Use them wisely to explore the most important aspects of your architecture.
 Plan your investigation to make efficient use of this budget.
 
+**Memory Management:**
+To prevent out-of-memory errors, your conversation context is automatically pruned
+when it gets too long (after ~{self.optimal_limits['max_turns_before_clear']} turns or 
+~{self.optimal_limits['max_conversation_tokens']} tokens).
+
+When pruning is about to happen:
+- You'll receive a warning 2 turns before pruning
+- **IMMEDIATELY save any important findings using introspection.memory.record_observation()**
+- After pruning, only recent conversation remains (older turns are cleared)
+- Your saved observations persist and can be retrieved anytime
+
+This is why saving observations is CRITICAL - it's your only way to preserve
+discoveries across memory resets.
+
 **Begin by examining your own architecture using code!**
 """
 
@@ -436,6 +450,66 @@ Plan your investigation to make efficient use of this budget.
             else:
                 # This shouldn't happen here - handled separately in the no-code path
                 pass
+        
+        return message
+
+    def _check_and_handle_memory_pruning(self, message: str, iteration: int) -> str:
+        """
+        Check if memory pruning is needed and handle it.
+        Warns model 2 turns before pruning, then prunes if threshold reached.
+        
+        Args:
+            message: The message to potentially add warnings/notices to
+            iteration: Current iteration number
+            
+        Returns:
+            Message with pruning warnings/notices appended (if applicable)
+        """
+        # Check if memory pruning is needed
+        should_prune, prune_reasons = self.memory_manager.should_prune_memory(
+            self.conversation_history,
+            self.optimal_limits['max_conversation_tokens'],
+            self.optimal_limits['max_turns_before_clear'],
+            current_session_turns=iteration
+        )
+        
+        # Warn 2 turns before actual pruning
+        turns_until_limit = self.optimal_limits['max_turns_before_clear'] - iteration
+        if turns_until_limit == 2:
+            pruning_warning = f"\n\n⚠️ **MEMORY WARNING:** Context will be pruned in 2 turns! Save important findings NOW using `introspection.memory.record_observation()` or they will be lost."
+            message += pruning_warning
+            self.logger.warning(f"[MEMORY] Warning sent to model: pruning in 2 turns")
+        
+        # Perform pruning if needed
+        if should_prune:
+            self.memory_manager.log_memory_pruning(
+                prune_reasons,
+                keep_recent_turns=2
+            )
+            
+            # Prune the conversation history
+            self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
+                self.conversation_history,
+                keep_recent_turns=2
+            )
+            
+            # Clear KV cache (it's now invalid after pruning history)
+            self.conversation_kv_cache = None
+            
+            # Add a system message explaining what happened
+            pruning_notice = f"""⚠️ **MEMORY RESET:** Conversation context was pruned due to {' and '.join(prune_reasons)}.
+
+Only the last 2 turns are retained. Previous findings are cleared from your working memory.
+
+**To continue your investigation:**
+- Use `introspection.memory.query_observations()` to retrieve saved findings
+- Review what you've learned so far
+- Continue building on your discoveries
+
+Your saved observations persist - query them now!"""
+            
+            message += f"\n\n{pruning_notice}"
+            self.logger.info(f"[MEMORY] Pruning performed, KV cache cleared")
         
         return message
 
@@ -541,6 +615,9 @@ Plan your investigation to make efficient use of this budget.
             # Add iteration reminders using helper method
             result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
 
+            # Check and handle memory pruning
+            result_message = self._check_and_handle_memory_pruning(result_message, iteration)
+
             # Log the result message (including any system reminders)
             self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
             self.logger.info(f"\n[SYSTEM] {result_message}\n")
@@ -563,8 +640,8 @@ Plan your investigation to make efficient use of this budget.
         self.gpu_monitor.print_summary(
             current_limits={
                 "max_new_tokens": self.optimal_limits['max_new_tokens'],
-                "max_conversation_tokens": self.optimal_limits.get('max_conversation_tokens', 2000),
-                "keep_recent_turns": self.optimal_limits.get('keep_recent_turns', 3)
+                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens'],
+                "keep_recent_turns": self.optimal_limits['keep_recent_turns']
             },
             include_recommendations=True
         )

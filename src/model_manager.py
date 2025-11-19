@@ -65,12 +65,14 @@ class ModelManager:
         Get optimal token limits based on detected GPU capabilities.
         
         Returns:
-            Dict with recommended limits for max_new_tokens, max_conversation_tokens, keep_recent_turns
+            Dict with recommended limits for max_new_tokens, max_conversation_tokens, 
+            max_turns_before_clear, keep_recent_turns
         """
         # Default conservative limits (CPU or unknown GPU)
         limits = {
             "max_new_tokens": 400,
             "max_conversation_tokens": 1500,
+            "max_turns_before_clear": 6,  # Prune after 6 turns
             "keep_recent_turns": 2,
             "gpu_profile": "conservative"
         }
@@ -86,6 +88,7 @@ class ModelManager:
             limits = {
                 "max_new_tokens": 1200,  # Restored from 1000 (now safe with HQQ quantization)
                 "max_conversation_tokens": 8000,  # Restored from 5000 (HQQ reduces cache memory 75%)
+                "max_turns_before_clear": 15,  # More generous - can handle longer contexts
                 "keep_recent_turns": 5,  # Balanced retention
                 "gpu_profile": "high_end_ampere"
             }
@@ -98,6 +101,7 @@ class ModelManager:
             limits = {
                 "max_new_tokens": 1000,  # Restored from 850 (HQQ quantization enables higher limits)
                 "max_conversation_tokens": 6000,  # Restored from 4000 (safe with 75% cache reduction)
+                "max_turns_before_clear": 12,  # Good balance for L4
                 "keep_recent_turns": 4,  # Balanced context retention
                 "gpu_profile": "l4_ada"
             }
@@ -109,6 +113,7 @@ class ModelManager:
             limits = {
                 "max_new_tokens": 700,  # Restored from 600 (safe with HQQ quantization)
                 "max_conversation_tokens": 3500,  # Restored from 2500 (HQQ reduces cache memory 75%)
+                "max_turns_before_clear": 10,  # Moderate for T4
                 "keep_recent_turns": 3,  # Balanced retention
                 "gpu_profile": "t4_turing"
             }
@@ -120,6 +125,7 @@ class ModelManager:
             limits = {
                 "max_new_tokens": 700,  # Restored (safe with HQQ quantization)
                 "max_conversation_tokens": 3500,  # Restored (HQQ reduces cache memory 75%)
+                "max_turns_before_clear": 10,  # Moderate for V100
                 "keep_recent_turns": 3,
                 "gpu_profile": "v100_volta"
             }
@@ -130,6 +136,7 @@ class ModelManager:
             limits = {
                 "max_new_tokens": 450,
                 "max_conversation_tokens": 1800,
+                "max_turns_before_clear": 8,  # Conservative
                 "keep_recent_turns": 2,
                 "gpu_profile": "moderate"
             }

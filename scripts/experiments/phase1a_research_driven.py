@@ -178,6 +178,9 @@ Continue your investigation by writing more code, or explain your findings so fa
             # Add iteration reminders using helper method from base class
             reflection_prompt = self._add_iteration_reminder(reflection_prompt, iteration, max_iterations)
 
+            # Check and handle memory pruning using helper method from base class
+            reflection_prompt = self._check_and_handle_memory_pruning(reflection_prompt, iteration)
+
             # Log the reflection prompt (including any system reminders)
             self.logger.info(f"[DEBUG] About to log reflection_prompt, iteration={iteration}, len={len(reflection_prompt)}")
             self.logger.info(f"\n[SYSTEM] {reflection_prompt}\n")
