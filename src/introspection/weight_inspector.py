@@ -164,26 +164,28 @@ class WeightInspector:
         # Return all layers except the one we're checking
         return [name for name in self._shared_weights[ptr] if name != layer_name]
     
-    def get_layer_names(self, filter_pattern: Optional[str] = None) -> Dict[str, Any]:
+    def list_parameters(self, filter_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get summary of layer names in the model with patterns.
+        Get summary of parameter names in the model with patterns.
         
-        Instead of returning a huge list of individual layer names (which can cause OOM),
-        returns a structured summary showing layer patterns and a sample of actual names.
+        Instead of returning a huge list of individual parameter names (which can cause OOM),
+        returns a structured summary showing parameter patterns and a sample of actual names.
+        
+        Parameters are the actual weight/bias tensors (leaf nodes with data), not container modules.
         
         Args:
-            filter_pattern: Optional string to filter layer names (case-insensitive)
+            filter_pattern: Optional string to filter parameter names (case-insensitive)
             
         Returns:
             Dictionary containing:
-                - total_layers: Total count of matching layers
-                - patterns: Dict mapping layer patterns to counts
-                - sample_names: List of ~20 example layer names
-                - note: Instructions for accessing specific layers
+                - total_parameters: Total count of matching parameters
+                - patterns: Dict mapping parameter patterns to counts
+                - sample_names: List of ~20 example parameter names
+                - note: Instructions for accessing specific parameters
             
         Example:
-            >>> inspector.get_layer_names(filter_pattern="attention")
-            {'total_layers': 144, 
+            >>> inspector.list_parameters(filter_pattern="attention")
+            {'total_parameters': 144, 
              'patterns': {'model.layers.{N}.self_attn.q_proj.weight': 36, ...},
              'sample_names': ['model.layers.0.self_attn.q_proj.weight', ...]}
         """
@@ -205,11 +207,41 @@ class WeightInspector:
         
         # Return summary instead of full list to prevent OOM
         return {
-            'total_layers': len(names),
+            'total_parameters': len(names),
             'patterns': pattern_counts,
             'sample_names': names[:20] if len(names) > 20 else names,
-            'note': 'To examine specific layers, use get_weight_statistics() or describe_layer() with the full layer name. Pattern {N} represents layer indices (0-35).'
+            'note': 'To examine specific parameters, use get_weight_statistics() with the full parameter name. Pattern {N} represents layer indices (0-35).'
         }
+    
+    def get_layer_parameters(self, layer_prefix: str) -> List[str]:
+        """
+        Get all parameter names that belong to a specific layer/module.
+        
+        This is a helper function for working with container modules that have multiple parameters.
+        For example, "model.layers.0" contains multiple parameters like:
+        - model.layers.0.self_attn.q_proj.weight
+        - model.layers.0.self_attn.q_proj.bias
+        - model.layers.0.self_attn.k_proj.weight
+        - etc.
+        
+        Args:
+            layer_prefix: The layer/module name prefix (e.g., "model.layers.0")
+            
+        Returns:
+            List of parameter names under this layer/module
+            
+        Example:
+            >>> params = inspector.get_layer_parameters("model.layers.0")
+            >>> print(f"Layer 0 has {len(params)} parameters")
+            >>> # Get statistics for all of them
+            >>> stats_list = inspector.get_weight_statistics(params)
+        """
+        # Find all parameters that start with this prefix
+        matching_params = [
+            name for name in self.layers.keys() 
+            if name.startswith(layer_prefix + '.')
+        ]
+        return sorted(matching_params)
     
     def get_layer_weights(self, layer_name: str) -> Dict[str, Any]:
         """
@@ -304,12 +336,12 @@ class WeightInspector:
                     results.append(result)
                 except Exception as e:
                     logger.error(f"Error getting statistics for layer '{single_layer}': {e}")
-                    # Get layer names summary (now returns dict, not list)
-                    layer_names_info = self.get_layer_names()
+                    # Get parameter names summary (now returns dict, not list)
+                    param_names_info = self.list_parameters()
                     results.append({
                         "layer_name": single_layer,
                         "error": str(e),
-                        "available_layers_sample": layer_names_info.get("sample_names", [])
+                        "available_parameters_sample": param_names_info.get("sample_names", [])
                     })
             return results
         

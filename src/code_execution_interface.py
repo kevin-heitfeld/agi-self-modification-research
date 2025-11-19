@@ -379,9 +379,7 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `get_weight_statistics(param_name_or_list)` - Get weight stats for parameter(s)
     - Pass string → returns single dict
     - Pass list → returns list of dicts
-  - `list_parameters(layer_prefix=None)` - List parameter names
-    - No argument → returns ALL parameters in model
-    - With layer_prefix → returns only parameters under that layer (same as get_layer_parameters)
+  - `list_parameters(filter_pattern=None)` - List parameter names (returns summary with patterns)
   - `get_layer_parameters(layer_prefix)` - Get all parameters under a layer (e.g., 'model.layers.0')
   - `compare_parameters(param1, param2)` - Compare two parameters
   - `get_shared_weights()` - Find weight sharing groups
@@ -490,6 +488,27 @@ for stats in stats_list:
 # get_weight_statistics() returns a DICT when you pass a string
 stats = introspection.weights.get_weight_statistics("model.layers.0.self_attn.q_proj.weight")
 print(f"Mean: {{stats['mean']:.4f}}, Std: {{stats['std']:.4f}}")
+```
+
+**To discover what parameters exist:**
+```python
+import introspection
+
+# Get summary of all parameters (prevents OOM by showing patterns)
+param_info = introspection.weights.list_parameters()
+print(f"Total parameters: {{param_info['total_parameters']}}")
+print("\\nParameter patterns:")
+for pattern, count in param_info['patterns'].items():
+    print(f"  {{pattern}}: {{count}} parameters")
+print("\\nSample parameter names:")
+for name in param_info['sample_names'][:5]:
+    print(f"  - {{name}}")
+
+# Get all parameters in a specific layer
+layer0_params = introspection.weights.get_layer_parameters("model.layers.0")
+print(f"\\nLayer 0 has {{len(layer0_params)}} parameters")
+for param in layer0_params[:3]:
+    print(f"  - {{param}}")
 ```
 
 **You can write thinking/reasoning text before and after code blocks:**
