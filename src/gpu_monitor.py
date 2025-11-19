@@ -54,7 +54,12 @@ class GPUMonitor:
         self.cuda_available = TORCH_AVAILABLE and torch.cuda.is_available()
         
         if not self.cuda_available:
-            self.logger.warning("[GPU MONITOR] CUDA not available - monitoring disabled")
+            if not TORCH_AVAILABLE:
+                self.logger.warning("[GPU MONITOR] PyTorch not available - monitoring disabled")
+            else:
+                self.logger.warning("[GPU MONITOR] CUDA not available - monitoring disabled")
+        else:
+            self.logger.info(f"[GPU MONITOR] Initialized - CUDA available, {self.gpu_total_gb:.1f} GB total")
     
     def snapshot(self, event: str, details: Optional[Dict[str, Any]] = None):
         """
@@ -65,6 +70,7 @@ class GPUMonitor:
             details: Optional additional details (conversation length, token count, etc.)
         """
         if not self.cuda_available:
+            self.logger.debug(f"[GPU MONITOR] Snapshot '{event}' skipped - CUDA not available")
             return
         
         snapshot = {
@@ -80,6 +86,7 @@ class GPUMonitor:
             snapshot.update(details)
         
         self.snapshots.append(snapshot)
+        self.logger.debug(f"[GPU MONITOR] Snapshot '{event}': {snapshot['allocated_gb']:.2f} GB allocated, {snapshot['reserved_gb']:.2f} GB reserved")
     
     def get_current_memory(self) -> Dict[str, float]:
         """
