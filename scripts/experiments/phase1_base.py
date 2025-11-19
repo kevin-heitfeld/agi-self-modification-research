@@ -10,6 +10,7 @@ Date: November 14, 2025
 """
 
 import gc
+import os
 import torch
 import logging
 from pathlib import Path
@@ -300,11 +301,28 @@ When you say "I'm done with this experiment", the system will:
         self.logger.info("  ✓ Introspection tools ready")
 
         # Initialize memory system
-        colab_memory_base = Path("/content/drive/MyDrive/AGI_Memory")
-        if colab_memory_base.exists():
-            phase_memory_path = colab_memory_base / self.phase_name
-            self.logger.info(f"  Using Google Drive memory: {phase_memory_path}")
+        # Check if running in Colab with mounted storage
+        # Memory path should be relative to project for storage persistence
+        if os.path.exists("/content/drive/MyDrive"):
+            # Google Drive is mounted - use it
+            phase_memory_path = Path("/content/drive/MyDrive/agi-self-modification-research/data/AGI_Memory") / self.phase_name
+            self.logger.info(f"  Using Google Drive for memory: {phase_memory_path}")
+        elif os.path.exists("/content"):
+            # Running in Colab but Drive not mounted - check for other storage
+            # Try to read storage config from notebook setup
+            try:
+                with open('/tmp/storage_config.txt', 'r') as f:
+                    lines = f.read().strip().split('\n')
+                    storage_root = lines[0]
+                    project_dir = lines[1]
+                    phase_memory_path = Path(project_dir) / "data" / "AGI_Memory" / self.phase_name
+                    self.logger.info(f"  Using cloud storage for memory: {phase_memory_path}")
+            except (FileNotFoundError, IndexError):
+                # Fallback to local if no storage configured
+                phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
+                self.logger.warning(f"  No cloud storage detected - using local memory: {phase_memory_path}")
         else:
+            # Running locally
             phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
 
         phase_memory_path.mkdir(parents=True, exist_ok=True)
