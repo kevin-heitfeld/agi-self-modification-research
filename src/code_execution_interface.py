@@ -472,10 +472,18 @@ print(f"Saved as {{obs_id}}")
 # ✅ CORRECT Option 1: Get all parameters in layer 0
 params = introspection.weights.get_layer_parameters("model.layers.0")
 print(f"Found {{len(params)}} parameters in layer 0")
-stats = introspection.weights.get_weight_statistics(params)  # Pass the list
 
-# ✅ CORRECT Option 2: Get statistics for a specific parameter
+# get_weight_statistics() returns a LIST when you pass a list
+stats_list = introspection.weights.get_weight_statistics(params)
+
+# Iterate over the results
+for stats in stats_list:
+    print(f"{{stats['name']}}: mean={{stats['mean']:.4f}}, std={{stats['std']:.4f}}")
+
+# ✅ CORRECT Option 2: Get statistics for ONE specific parameter
+# get_weight_statistics() returns a DICT when you pass a string
 stats = introspection.weights.get_weight_statistics("model.layers.0.self_attn.q_proj.weight")
+print(f"Mean: {{stats['mean']:.4f}}, Std: {{stats['std']:.4f}}")
 ```
 
 **You can write thinking/reasoning text before and after code blocks:**
