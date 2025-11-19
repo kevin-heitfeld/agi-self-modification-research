@@ -478,10 +478,13 @@ Plan your investigation to make efficient use of this budget.
             if iteration % 10 == 0 and iteration < MAX_ITERATIONS_PER_EXPERIMENT:
                 remaining = MAX_ITERATIONS_PER_EXPERIMENT - iteration
                 result_message += f"\n\n📊 **Progress Update:** You've completed {iteration}/{MAX_ITERATIONS_PER_EXPERIMENT} iterations. {remaining} iterations remaining."
+                self.logger.info(f"[DEBUG] Added progress reminder at iteration {iteration}")
             elif iteration == MAX_ITERATIONS_PER_EXPERIMENT - 5:
                 result_message += f"\n\n⚠️ **Final Stretch:** Only 5 iterations remaining. Consider wrapping up your investigation."
+                self.logger.info(f"[DEBUG] Added final stretch reminder at iteration {iteration}")
 
             # Log the result message (including any system reminders)
+            self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
             self.logger.info(f"\n[SYSTEM] {result_message}\n")
 
             self.conversation_history.append({

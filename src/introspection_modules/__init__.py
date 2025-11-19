@@ -106,7 +106,16 @@ def create_introspection_module(
     weights_module = ModuleType('introspection.weights')
     weights_module.__doc__ = 'Weight inspection and statistics'
     weights_module.get_weight_statistics = lambda layer_name: weights.get_weight_statistics(model, layer_name)
-    weights_module.list_parameters = lambda: weights.list_parameters(model)
+    
+    # Make list_parameters() flexible - accept optional layer_prefix for convenience
+    def _list_parameters_wrapper(layer_prefix=None):
+        if layer_prefix is None:
+            return weights.list_parameters(model)
+        else:
+            # Redirect to get_layer_parameters for filtered listing
+            return weights.get_layer_parameters(model, layer_prefix)
+    
+    weights_module.list_parameters = _list_parameters_wrapper
     weights_module.get_layer_parameters = lambda layer_prefix: weights.get_layer_parameters(model, layer_prefix)
     weights_module.compare_parameters = lambda param1, param2: weights.compare_parameters(model, param1, param2)
     weights_module.get_shared_weights = lambda: weights.get_shared_weights(model)

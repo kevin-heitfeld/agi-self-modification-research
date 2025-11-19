@@ -379,7 +379,9 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `get_weight_statistics(param_name_or_list)` - Get weight stats for parameter(s)
     - Pass string → returns single dict
     - Pass list → returns list of dicts
-  - `list_parameters()` - List all parameter names in model
+  - `list_parameters(layer_prefix=None)` - List parameter names
+    - No argument → returns ALL parameters in model
+    - With layer_prefix → returns only parameters under that layer (same as get_layer_parameters)
   - `get_layer_parameters(layer_prefix)` - Get all parameters under a layer (e.g., 'model.layers.0')
   - `compare_parameters(param1, param2)` - Compare two parameters
   - `get_shared_weights()` - Find weight sharing groups
