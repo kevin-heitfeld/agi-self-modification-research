@@ -70,7 +70,7 @@ class GPUMonitor:
             details: Optional additional details (conversation length, token count, etc.)
         """
         if not self.cuda_available:
-            self.logger.debug(f"[GPU MONITOR] Snapshot '{event}' skipped - CUDA not available")
+            self.logger.info(f"[GPU MONITOR] Snapshot '{event}' skipped - CUDA not available")
             return
         
         snapshot = {
@@ -86,7 +86,8 @@ class GPUMonitor:
             snapshot.update(details)
         
         self.snapshots.append(snapshot)
-        self.logger.debug(f"[GPU MONITOR] Snapshot '{event}': {snapshot['allocated_gb']:.2f} GB allocated, {snapshot['reserved_gb']:.2f} GB reserved")
+        # Use INFO level so snapshots are visible in logs
+        self.logger.info(f"[GPU MONITOR] {event}: {snapshot['allocated_gb']:.2f} GB allocated, {snapshot['reserved_gb']:.2f} GB reserved")
     
     def get_current_memory(self) -> Dict[str, float]:
         """
