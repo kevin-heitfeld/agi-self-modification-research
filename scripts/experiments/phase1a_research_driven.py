@@ -172,6 +172,13 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
 
 Continue your investigation by writing more code, or explain your findings so far."""
 
+            # Add iteration reminders using helper method from base class
+            reflection_prompt = self._add_iteration_reminder(reflection_prompt, iteration, max_iterations)
+
+            # Log the reflection prompt (including any system reminders)
+            self.logger.info(f"[DEBUG] About to log reflection_prompt, iteration={iteration}, len={len(reflection_prompt)}")
+            self.logger.info(f"\n[SYSTEM] {reflection_prompt}\n")
+
             self.conversation_history.append({
                 "role": "user",
                 "content": reflection_prompt

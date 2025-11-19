@@ -393,6 +393,29 @@ Plan your investigation to make efficient use of this budget.
 **Begin by examining your own architecture using code!**
 """
 
+    def _add_iteration_reminder(self, message: str, iteration: int, max_iterations: int) -> str:
+        """
+        Add periodic iteration reminders to a message.
+        
+        Args:
+            message: The base message to add reminders to
+            iteration: Current iteration number
+            max_iterations: Maximum iterations allowed
+            
+        Returns:
+            Message with reminder appended (if applicable)
+        """
+        # Add periodic iteration reminders
+        if iteration % 10 == 0 and iteration < max_iterations:
+            remaining = max_iterations - iteration
+            message += f"\n\n📊 **Progress Update:** You've completed {iteration}/{max_iterations} iterations. {remaining} iterations remaining."
+            self.logger.info(f"[DEBUG] Added progress reminder at iteration {iteration}")
+        elif iteration == max_iterations - 5:
+            message += f"\n\n⚠️ **Final Stretch:** Only 5 iterations remaining. Consider wrapping up your investigation."
+            self.logger.info(f"[DEBUG] Added final stretch reminder at iteration {iteration}")
+        
+        return message
+
     def chat(self, user_message: str) -> str:
         """
         Send a message and get response with code execution.
@@ -489,14 +512,8 @@ Plan your investigation to make efficient use of this budget.
             if error:
                 result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
             
-            # Add periodic iteration reminders
-            if iteration % 10 == 0 and iteration < MAX_ITERATIONS_PER_EXPERIMENT:
-                remaining = MAX_ITERATIONS_PER_EXPERIMENT - iteration
-                result_message += f"\n\n📊 **Progress Update:** You've completed {iteration}/{MAX_ITERATIONS_PER_EXPERIMENT} iterations. {remaining} iterations remaining."
-                self.logger.info(f"[DEBUG] Added progress reminder at iteration {iteration}")
-            elif iteration == MAX_ITERATIONS_PER_EXPERIMENT - 5:
-                result_message += f"\n\n⚠️ **Final Stretch:** Only 5 iterations remaining. Consider wrapping up your investigation."
-                self.logger.info(f"[DEBUG] Added final stretch reminder at iteration {iteration}")
+            # Add iteration reminders using helper method
+            result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
 
             # Log the result message (including any system reminders)
             self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
