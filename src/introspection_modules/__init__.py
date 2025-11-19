@@ -106,10 +106,12 @@ def create_introspection_module(
     weights_module = ModuleType('introspection.weights')
     weights_module.__doc__ = 'Weight inspection and statistics'
     weights_module.get_weight_statistics = lambda layer_name: weights.get_weight_statistics(model, layer_name)
-    weights_module.list_layers = lambda: weights.list_layers(model)
-    weights_module.compare_layers = lambda layer1, layer2: weights.compare_layers(model, layer1, layer2)
+    weights_module.list_parameters = lambda: weights.list_parameters(model)
+    weights_module.get_layer_parameters = lambda layer_prefix: weights.get_layer_parameters(model, layer_prefix)
+    weights_module.compare_parameters = lambda param1, param2: weights.compare_parameters(model, param1, param2)
     weights_module.get_shared_weights = lambda: weights.get_shared_weights(model)
     weights_module.find_similar_weights = lambda layer_name, top_k=5: weights.find_similar_weights(model, layer_name, top_k)
+    
     module.weights = weights_module
 
     # Create activations submodule (if tokenizer provided)

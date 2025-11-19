@@ -5,11 +5,12 @@ Provides simplified function-based access to model weight inspection
 for use in code execution sandbox.
 
 Functions:
-    get_weight_statistics(model, layer_name) - Get weight stats for a layer
-    list_layers(model) - List all layers with weights
-    compare_layers(model, layer1, layer2) - Compare weights between layers
+    get_weight_statistics(model, param_name) - Get weight stats for a parameter
+    list_parameters(model) - List all parameter names
+    get_layer_parameters(model, layer_prefix) - Get all parameters under a layer
+    compare_parameters(model, param1, param2) - Compare weights between parameters
     get_shared_weights(model) - Find shared weight groups
-    find_similar_weights(model, layer_name, top_k) - Find layers with similar weights
+    find_similar_weights(model, param_name, top_k) - Find parameters with similar weights
 
 Author: AGI Self-Modification Research Team
 Date: November 14, 2025
@@ -95,7 +96,7 @@ def get_weight_statistics(model: nn.Module, layer_name: Union[str, List[str]]) -
     return result
 
 
-def list_layers(model: nn.Module) -> List[str]:
+def list_parameters(model: nn.Module) -> List[str]:
     """
     List all parameter names in the model.
     
@@ -106,7 +107,7 @@ def list_layers(model: nn.Module) -> List[str]:
         List of parameter names (sorted)
     
     Example:
-        >>> params = list_layers(model)
+        >>> params = list_parameters(model)
         >>> print(f"Total parameters: {len(params)}")
         >>> for param in params[:5]:
         ...     print(param)
@@ -140,25 +141,25 @@ def get_layer_parameters(model: nn.Module, layer_prefix: str) -> List[str]:
         >>> # Then get statistics for all of them
         >>> stats = get_weight_statistics(model, params)
     """
-    all_params = list_layers(model)
+    all_params = list_parameters(model)
     # Add trailing dot to ensure we match 'model.layers.0.xxx' not 'model.layers.01.xxx'
     prefix_with_dot = layer_prefix if layer_prefix.endswith('.') else layer_prefix + '.'
     return [p for p in all_params if p.startswith(prefix_with_dot)]
 
 
-def compare_layers(model: nn.Module, layer1: str, layer2: str) -> Dict[str, Any]:
+def compare_parameters(model: nn.Module, param1: str, param2: str) -> Dict[str, Any]:
     """
-    Compare weight statistics between two layers.
+    Compare weight statistics between two parameters.
     
     Args:
         model: PyTorch model to inspect
-        layer1: First layer name
-        layer2: Second layer name
+        param1: First parameter name
+        param2: Second parameter name
         
     Returns:
         Dictionary containing:
-            - layer1_stats: Statistics for first layer
-            - layer2_stats: Statistics for second layer
+            - param1_stats: Statistics for first parameter
+            - param2_stats: Statistics for second parameter
             - comparison: Comparison metrics
                 - mean_diff: Difference in means
                 - std_ratio: Ratio of standard deviations
@@ -166,14 +167,14 @@ def compare_layers(model: nn.Module, layer1: str, layer2: str) -> Dict[str, Any]
                 - correlation: Correlation coefficient (if shapes match)
     
     Example:
-        >>> comp = compare_layers(model, 
+        >>> comp = compare_parameters(model, 
         ...     'model.layers.0.self_attn.q_proj.weight',
         ...     'model.layers.1.self_attn.q_proj.weight')
         >>> print(f"Mean difference: {comp['comparison']['mean_diff']:.6f}")
         >>> print(f"Correlation: {comp['comparison']['correlation']:.4f}")
     """
     inspector = _get_inspector(model)
-    return inspector.compare_weights(layer1, layer2)
+    return inspector.compare_weights(param1, param2)
 
 
 def get_shared_weights(model: nn.Module) -> Dict[str, List[str]]:
