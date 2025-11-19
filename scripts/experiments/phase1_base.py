@@ -749,6 +749,70 @@ Your saved observations persist - query them now!"""
         self.cleanup_gpu_memory()
         self.reset_conversation()
 
+    def save_session_results(self):
+        """Save conversation history and session summary to session directory"""
+        import json
+        from datetime import datetime
+        
+        self.logger.info(f"[SESSION] Saving results to {self.session_dir}")
+        
+        # Save full conversation history
+        conversation_file = self.session_dir / "conversation.json"
+        with open(conversation_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                "session_name": self.session_name,
+                "phase": self.phase_name,
+                "timestamp": datetime.now().isoformat(),
+                "conversation": self.conversation_history
+            }, f, indent=2, ensure_ascii=False)
+        self.logger.info(f"[SESSION] Saved conversation: {conversation_file}")
+        
+        # Generate summary statistics
+        summary = {
+            "session_name": self.session_name,
+            "phase": self.phase_name,
+            "phase_description": self.get_phase_description(),
+            "timestamp": datetime.now().isoformat(),
+            "statistics": {
+                "total_turns": len(self.conversation_history) // 2,  # Each turn = user + assistant
+                "total_tokens": sum(len(msg.get("content", "")) for msg in self.conversation_history),
+            }
+        }
+        
+        # Count code executions if code_executor exists
+        if hasattr(self, 'code_executor'):
+            code_blocks = []
+            for msg in self.conversation_history:
+                if msg.get("role") == "assistant":
+                    content = msg.get("content", "")
+                    # Count code blocks (simple heuristic)
+                    code_blocks.extend([1 for line in content.split('\n') if line.strip().startswith('```python')])
+            summary["statistics"]["code_executions"] = len(code_blocks)
+        
+        # Add memory statistics if memory_manager exists
+        if hasattr(self, 'memory_manager'):
+            try:
+                # Try to get observation count
+                obs_file = Path(f"data/AGI_Memory/{self.phase_name}/observations.db")
+                if obs_file.exists():
+                    import sqlite3
+                    conn = sqlite3.connect(obs_file)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM observations")
+                    obs_count = cursor.fetchone()[0]
+                    conn.close()
+                    summary["statistics"]["observations_recorded"] = obs_count
+            except Exception as e:
+                self.logger.warning(f"[SESSION] Could not count observations: {e}")
+        
+        # Save summary
+        summary_file = self.session_dir / "summary.json"
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2)
+        self.logger.info(f"[SESSION] Saved summary: {summary_file}")
+        
+        self.logger.info(f"[SESSION] ✓ Session results saved successfully")
+
     @classmethod
     def run_phase(cls, phase_description: str = None):
         """Standard runner for any phase session with proper error handling
@@ -772,13 +836,19 @@ Your saved observations persist - query them now!"""
         
         try:
             session.run_experiments()
+            session.save_session_results()  # Save results before completion message
             session.logger.info("\n" + "=" * 80)
             session.logger.info(f"{phase_description} COMPLETE")
             session.logger.info("=" * 80)
         except KeyboardInterrupt:
             session.logger.info("\n[INTERRUPTED] Experiment stopped by user")
+            session.save_session_results()  # Save partial results
         except Exception as e:
             session.logger.error(f"\n[ERROR] Experiment failed: {e}", exc_info=True)
+            try:
+                session.save_session_results()  # Try to save whatever we have
+            except Exception as save_error:
+                session.logger.error(f"[ERROR] Could not save results: {save_error}")
         finally:
             session.cleanup_gpu_memory()
 
