@@ -89,7 +89,7 @@ def capture_attention_weights(
     tokenizer: Any,
     text: str,
     layer_names: List[str]
-) -> Dict[str, Any]:
+) -> Dict[str, Dict[str, Any]]:
     """
     Capture activations WITH attention weights by temporarily disabling Flash Attention.
     
@@ -108,13 +108,16 @@ def capture_attention_weights(
         layer_names: List of layer names to capture
     
     Returns:
-        Dictionary from ActivationMonitor.capture_attention_weights():
-            - input_text: The processed text
-            - tokens: Token IDs
-            - token_strings: Human-readable tokens
-            - activations: Dict of layer_name -> activation tensor
-            - attention_weights: Dict of layer_name -> attention weights (populated!)
-            - note: Explanation that eager attention was used
+        Dictionary mapping layer names to activation/attention info:
+            - shape: Activation tensor shape [batch, seq_len, hidden_dim]
+            - mean: Mean activation value
+            - std: Standard deviation
+            - max: Maximum activation
+            - min: Minimum activation
+            - sparsity: Percentage of near-zero activations
+            - attention_shape: Shape of attention weights [batch, heads, seq_len, seq_len] (if available)
+            - attention_mean: Mean attention weight (if available)
+            - attention_std: Standard deviation of attention (if available)
     
     Example:
         >>> result = capture_attention_weights(
@@ -122,12 +125,35 @@ def capture_attention_weights(
         ...     "Hello world",
         ...     ['model.layers.0.self_attn', 'model.layers.5.self_attn']
         ... )
-        >>> # Now attention_weights dict is populated!
-        >>> attn = result['attention_weights']['model.layers.0.self_attn']
-        >>> print(f"Attention shape: {attn.shape}")  # [batch, num_heads, seq_len, seq_len]
+        >>> for layer, stats in result.items():
+        ...     print(f"{layer}: shape={stats['shape']}, attn_shape={stats.get('attention_shape', 'N/A')}")
     """
     monitor = _get_monitor(model, tokenizer)
-    return monitor.capture_attention_weights(text, layer_names)
+    raw_result = monitor.capture_attention_weights(text, layer_names)
+    
+    # Convert to same format as capture_activations for consistency
+    result = {}
+    for layer_name in layer_names:
+        stats = monitor.get_activation_statistics(layer_name)
+        # Handle both single and list returns
+        if isinstance(stats, list):
+            layer_stats = stats[0] if stats else {}
+        else:
+            layer_stats = stats
+        
+        # Add attention weight info if available
+        if layer_name in raw_result.get('attention_weights', {}):
+            import torch
+            attn_tensor = raw_result['attention_weights'][layer_name]
+            layer_stats['attention_shape'] = list(attn_tensor.shape)
+            layer_stats['attention_mean'] = float(attn_tensor.mean().item())
+            layer_stats['attention_std'] = float(attn_tensor.std().item())
+            layer_stats['attention_max'] = float(attn_tensor.max().item())
+            layer_stats['attention_min'] = float(attn_tensor.min().item())
+        
+        result[layer_name] = layer_stats
+    
+    return result
 
 
 def get_input_shape(

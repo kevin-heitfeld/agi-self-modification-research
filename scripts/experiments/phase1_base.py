@@ -481,6 +481,9 @@ Plan your investigation to make efficient use of this budget.
             elif iteration == MAX_ITERATIONS_PER_EXPERIMENT - 5:
                 result_message += f"\n\n⚠️ **Final Stretch:** Only 5 iterations remaining. Consider wrapping up your investigation."
 
+            # Log the result message (including any system reminders)
+            self.logger.info(f"\n[SYSTEM] {result_message}\n")
+
             self.conversation_history.append({
                 "role": "user",
                 "content": result_message
