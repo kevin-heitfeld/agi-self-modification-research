@@ -96,6 +96,12 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
             iteration += 1
             self.logger.info(f"[ITERATION {iteration}]")
 
+            # Take GPU snapshot before generation
+            self.gpu_monitor.snapshot(
+                "generation_start",
+                {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
+            )
+
             # Generate response
             response, stopped_reason = self.generate_response()
             self.logger.info(f"[MODEL] {response}\n")
@@ -103,6 +109,12 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
             # Check if response was truncated
             if stopped_reason == "max_length":
                 self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
+
+            # Take GPU snapshot after generation
+            self.gpu_monitor.snapshot(
+                "generation_end",
+                {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
+            )
 
             # Add to history
             self.conversation_history.append({
@@ -192,6 +204,22 @@ Continue your investigation by writing more code, or explain your findings so fa
 
         if iteration >= max_iterations:
             self.logger.warning(f"[SYSTEM] Reached maximum iterations ({max_iterations})")
+
+        # Take GPU snapshot at section end
+        self.gpu_monitor.snapshot("section_end", {"total_iterations": iteration})
+
+        # Print GPU memory summary with recommendations
+        self.logger.info("\n" + "="*80)
+        self.logger.info("SECTION MEMORY ANALYSIS")
+        self.logger.info("="*80)
+        self.gpu_monitor.print_summary(
+            current_limits={
+                "max_new_tokens": self.optimal_limits['max_new_tokens'],
+                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens'],
+                "keep_recent_turns": self.optimal_limits['keep_recent_turns']
+            },
+            include_recommendations=True
+        )
 
         return response
 
