@@ -172,6 +172,9 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
 
 Continue your investigation by writing more code, or explain your findings so far."""
 
+            # Add truncation warning if applicable
+            reflection_prompt = self._add_truncation_warning(reflection_prompt, stopped_reason, had_code=True)
+
             # Add iteration reminders using helper method from base class
             reflection_prompt = self._add_iteration_reminder(reflection_prompt, iteration, max_iterations)
 

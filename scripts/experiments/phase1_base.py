@@ -416,6 +416,29 @@ Plan your investigation to make efficient use of this budget.
         
         return message
 
+    def _add_truncation_warning(self, message: str, stopped_reason: str, had_code: bool) -> str:
+        """
+        Add truncation warning to a message if response was cut off.
+        
+        Args:
+            message: The base message to add warning to
+            stopped_reason: The reason generation stopped ("eos" or "max_length")
+            had_code: Whether code was found in the truncated response
+            
+        Returns:
+            Message with truncation warning appended (if applicable)
+        """
+        if stopped_reason == "max_length":
+            if had_code:
+                # Code was found but response may have been cut off after it
+                message += "\n\n⚠️ **Note:** Your response was truncated (hit token limit). If you had more to say, please continue."
+                self.logger.info(f"[DEBUG] Added truncation warning (had code)")
+            else:
+                # This shouldn't happen here - handled separately in the no-code path
+                pass
+        
+        return message
+
     def chat(self, user_message: str) -> str:
         """
         Send a message and get response with code execution.
@@ -511,6 +534,9 @@ Plan your investigation to make efficient use of this budget.
             result_message = f"**Code Execution Results:**\n\n{result}"
             if error:
                 result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
+            
+            # Add truncation warning if applicable
+            result_message = self._add_truncation_warning(result_message, stopped_reason, had_code=True)
             
             # Add iteration reminders using helper method
             result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
