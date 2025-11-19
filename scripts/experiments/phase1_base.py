@@ -360,6 +360,7 @@ When you say "I'm done with this experiment", the system will:
         # Initialize conversation tracking
         self.conversation_kv_cache = None
         self.memory_manager = MemoryManager(logger=self.logger)
+        self.turns_since_last_prune = 0  # Track turns since last memory prune
 
         # Take GPU snapshot after system initialization
         self.gpu_monitor.snapshot("after_initialization")
@@ -465,20 +466,24 @@ discoveries across memory resets.
         Returns:
             Message with pruning warnings/notices appended (if applicable)
         """
+        # Increment turns since last prune
+        self.turns_since_last_prune += 1
+        
         # Check if memory pruning is needed
+        # Use turns_since_last_prune instead of iteration for turn-based pruning
         should_prune, prune_reasons = self.memory_manager.should_prune_memory(
             self.conversation_history,
             self.optimal_limits['max_conversation_tokens'],
             self.optimal_limits['max_turns_before_clear'],
-            current_session_turns=iteration
+            current_session_turns=self.turns_since_last_prune
         )
         
         # Warn 2 turns before actual pruning
-        turns_until_limit = self.optimal_limits['max_turns_before_clear'] - iteration
+        turns_until_limit = self.optimal_limits['max_turns_before_clear'] - self.turns_since_last_prune
         if turns_until_limit == 2:
             pruning_warning = f"\n\n⚠️ **MEMORY WARNING:** Context will be pruned in 2 turns! Save important findings NOW using `introspection.memory.record_observation()` or they will be lost."
             message += pruning_warning
-            self.logger.warning(f"[MEMORY] Warning sent to model: pruning in 2 turns")
+            self.logger.warning(f"[MEMORY] Warning sent to model: pruning in 2 turns (iteration {iteration}, turns since last prune: {self.turns_since_last_prune})")
         
         # Perform pruning if needed
         if should_prune:
@@ -496,6 +501,10 @@ discoveries across memory resets.
             # Clear KV cache (it's now invalid after pruning history)
             self.conversation_kv_cache = None
             
+            # Reset the turns counter after pruning
+            self.turns_since_last_prune = 0
+            self.logger.info(f"[MEMORY] Turn counter reset to 0 after pruning (iteration {iteration})")
+            
             # Add a system message explaining what happened
             pruning_notice = f"""⚠️ **MEMORY RESET:** Conversation context was pruned due to {' and '.join(prune_reasons)}.
 
@@ -509,7 +518,6 @@ Only the last 2 turns are retained. Previous findings are cleared from your work
 Your saved observations persist - query them now!"""
             
             message += f"\n\n{pruning_notice}"
-            self.logger.info(f"[MEMORY] Pruning performed, KV cache cleared")
         
         return message
 
@@ -697,6 +705,7 @@ Your saved observations persist - query them now!"""
         
         self.conversation_history = []
         self.conversation_kv_cache = None
+        self.turns_since_last_prune = 0  # Reset turn counter for new experiment
         
         # Reset Python namespace for code execution
         self.code_interface.reset_namespace()
