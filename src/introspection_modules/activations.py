@@ -77,9 +77,15 @@ def capture_activations(
         stats = monitor.get_activation_statistics(layer_name)
         # Handle both single and list returns
         if isinstance(stats, list):
-            result[layer_name] = stats[0] if stats else {}
+            stat_dict = stats[0] if stats else {}
         else:
-            result[layer_name] = stats
+            stat_dict = stats
+        
+        # Check for errors and raise exceptions
+        if isinstance(stat_dict, dict) and 'error' in stat_dict:
+            raise ValueError(f"Error capturing activations for '{layer_name}': {stat_dict['error']}")
+        
+        result[layer_name] = stat_dict
     
     return result
 
@@ -140,6 +146,10 @@ def capture_attention_weights(
             layer_stats = stats[0] if stats else {}
         else:
             layer_stats = stats
+        
+        # Check for errors and raise exceptions
+        if isinstance(layer_stats, dict) and 'error' in layer_stats:
+            raise ValueError(f"Error capturing attention weights for '{layer_name}': {layer_stats['error']}")
         
         # Add attention weight info if available
         if layer_name in raw_result.get('attention_weights', {}):

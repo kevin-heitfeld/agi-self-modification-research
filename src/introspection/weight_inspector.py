@@ -355,7 +355,8 @@ class WeightInspector:
                             f"{f'{chr(10)}  ... and {len(matching_params) - 10} more' if len(matching_params) > 10 else ''}"
                             f"\n\nTo get statistics for all weights in '{layer_name}', pass the list of parameters:"
                             f"\n```python"
-                            f"\nparams = [name for name in introspection.weights.get_layer_names()['all_names'] if name.startswith('{layer_name}.')]\n"
+                            f"\nall_params = introspection.weights.list_layers()\n"
+                            f"params = [name for name in all_params if name.startswith('{layer_name}.')]\n"
                             f"stats = introspection.weights.get_weight_statistics(params)"
                             f"\n```"
                         )

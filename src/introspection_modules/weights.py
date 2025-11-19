@@ -15,7 +15,7 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 import torch.nn as nn
 
 # Import the actual WeightInspector class
@@ -33,40 +33,65 @@ def _get_inspector(model: nn.Module) -> WeightInspector:
     return _inspector_cache[model_id]
 
 
-def get_weight_statistics(model: nn.Module, layer_name: str) -> Dict[str, Any]:
+def get_weight_statistics(model: nn.Module, layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Get statistical information about weights in a layer.
+    Get statistical information about weights in one or more parameters.
     
     Args:
         model: PyTorch model to inspect
-        layer_name: Name of the parameter/layer (e.g., 'model.layers.0.self_attn.q_proj.weight')
+        layer_name: Either:
+                   - A single parameter name (str) - returns dict for that parameter
+                   - A list of parameter names (List[str]) - returns list of dicts
         
     Returns:
-        Dictionary containing:
-            - name: Parameter name
-            - shape: Weight tensor shape
-            - dtype: Data type
-            - device: Device (cpu/cuda)
-            - requires_grad: Whether trainable
-            - numel: Total number of elements
-            - mean: Mean value
-            - std: Standard deviation
-            - min: Minimum value
-            - max: Maximum value
-            - norm: Frobenius norm
-            - sparsity: Percentage of near-zero values
+        If layer_name is a string:
+            Dictionary containing:
+                - name: Parameter name
+                - shape: Weight tensor shape
+                - dtype: Data type
+                - device: Device (cpu/cuda)
+                - requires_grad: Whether trainable
+                - num_parameters: Total number of elements
+                - mean: Mean value
+                - std: Standard deviation
+                - min: Minimum value
+                - max: Maximum value
+                - l1_norm, l2_norm, frobenius_norm: Various norms
+                - sparsity: Percentage of near-zero values
+        
+        If layer_name is a list:
+            List of dicts (one per parameter) with the same structure as above.
     
     Example:
+        >>> # Single parameter
         >>> stats = get_weight_statistics(model, 'model.layers.0.self_attn.q_proj.weight')
         >>> print(f"Shape: {stats['shape']}")
         >>> print(f"Mean: {stats['mean']:.6f}, Std: {stats['std']:.6f}")
-        >>> print(f"Sparsity: {stats['sparsity']:.2f}%")
+        
+        >>> # Multiple parameters at once
+        >>> params = ['model.layers.0.self_attn.q_proj.weight',
+        ...           'model.layers.0.self_attn.k_proj.weight']
+        >>> stats_list = get_weight_statistics(model, params)
+        >>> for stats in stats_list:
+        ...     print(f"{stats['name']}: mean={stats['mean']:.4f}")
     """
     inspector = _get_inspector(model)
     result = inspector.get_weight_statistics(layer_name)
-    # Handle both single layer and list
+    
+    # Check for errors and raise exceptions instead of returning error dicts
     if isinstance(result, list):
-        return result[0] if result else {}
+        # Check each result for errors
+        for item in result:
+            if isinstance(item, dict) and 'error' in item:
+                raise ValueError(
+                    f"Error getting statistics for '{item.get('layer_name', 'unknown')}': {item['error']}"
+                )
+        return result
+    elif isinstance(result, dict) and 'error' in result:
+        raise ValueError(
+            f"Error getting statistics for '{result.get('layer_name', layer_name)}': {result['error']}"
+        )
+    
     return result
 
 
@@ -88,6 +113,37 @@ def list_layers(model: nn.Module) -> List[str]:
     """
     inspector = _get_inspector(model)
     return sorted(inspector.layers.keys())
+
+
+def get_layer_parameters(model: nn.Module, layer_prefix: str) -> List[str]:
+    """
+    Get all parameter names under a specific layer or module.
+    
+    This is a convenience function for dealing with container modules
+    (like 'model.layers.0') which don't have weights themselves but
+    contain multiple parameters.
+    
+    Args:
+        model: PyTorch model to inspect
+        layer_prefix: Layer prefix to search for (e.g., 'model.layers.0')
+        
+    Returns:
+        List of parameter names that start with the given prefix
+    
+    Example:
+        >>> # Get all parameters in layer 0
+        >>> params = get_layer_parameters(model, 'model.layers.0')
+        >>> print(f"Found {len(params)} parameters in layer 0")
+        >>> for param in params:
+        ...     print(param)
+        
+        >>> # Then get statistics for all of them
+        >>> stats = get_weight_statistics(model, params)
+    """
+    all_params = list_layers(model)
+    # Add trailing dot to ensure we match 'model.layers.0.xxx' not 'model.layers.01.xxx'
+    prefix_with_dot = layer_prefix if layer_prefix.endswith('.') else layer_prefix + '.'
+    return [p for p in all_params if p.startswith(prefix_with_dot)]
 
 
 def compare_layers(model: nn.Module, layer1: str, layer2: str) -> Dict[str, Any]:

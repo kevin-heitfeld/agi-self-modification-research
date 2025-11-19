@@ -376,11 +376,12 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `find_similar_layers(layer_name)` - Find similar layers
 
 - `introspection.weights` - Weight inspection and statistics
-  - `get_weight_statistics(layer_name)` - Get weight stats
-  - `list_layers()` - List all parameters
-  - `compare_layers(layer1, layer2)` - Compare two layers
+  - `get_weight_statistics(param_name_or_list)` - Get weight stats for parameter(s)
+  - `list_layers()` - List all parameter names in model
+  - `get_layer_parameters(layer_prefix)` - Get all parameters under a layer (e.g., 'model.layers.0')
+  - `compare_layers(param1, param2)` - Compare two parameters
   - `get_shared_weights()` - Find weight sharing groups
-  - `find_similar_weights(layer_name, top_k=5)` - Find similar weights
+  - `find_similar_weights(param_name, top_k=5)` - Find similar weights
 
 - `introspection.activations` - Activation monitoring
   - `capture_activations(text, layer_names)` - Capture activations for TEXT INPUT (pass a string, not tokens!)
@@ -447,6 +448,35 @@ print(f"Saved as {{obs_id}}")
 - Example: `capture_activations("Hello world", ["model.layers.0"])`
 - Do NOT import torch or transformers - everything is pre-configured
 - Returns: Dictionary mapping layer names to activation statistics (shape, mean, std, min, max, etc.)
+
+**IMPORTANT: Layer Names vs Parameter Names**
+
+⚠️ **Different modules use different naming conventions:**
+
+- `introspection.architecture` uses **LAYER NAMES** (containers/modules):
+  - Examples: `"model.layers.0"`, `"model.layers.0.self_attn"`, `"model.layers.5.mlp"`
+  - These refer to PyTorch modules (which may contain multiple parameters)
+
+- `introspection.activations` uses **LAYER NAMES** (same as architecture):
+  - Examples: `"model.layers.0"`, `"model.layers.0.self_attn"`
+
+- `introspection.weights` uses **PARAMETER NAMES** (actual weight tensors):
+  - Examples: `"model.layers.0.self_attn.q_proj.weight"`, `"model.layers.0.self_attn.q_proj.bias"`
+  - These refer to actual weight/bias tensors (the leaf nodes with data)
+
+**To get weight statistics for "layer 0":**
+```python
+# ❌ WRONG: This will give an error (model.layers.0 is a container, not a parameter)
+# stats = introspection.weights.get_weight_statistics("model.layers.0")
+
+# ✅ CORRECT Option 1: Get all parameters in layer 0
+params = introspection.weights.get_layer_parameters("model.layers.0")
+print(f"Found {{len(params)}} parameters in layer 0")
+stats = introspection.weights.get_weight_statistics(params)  # Pass the list
+
+# ✅ CORRECT Option 2: Get statistics for a specific parameter
+stats = introspection.weights.get_weight_statistics("model.layers.0.self_attn.q_proj.weight")
+```
 
 **You can write thinking/reasoning text before and after code blocks:**
 
