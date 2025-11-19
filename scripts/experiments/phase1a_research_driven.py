@@ -97,8 +97,12 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
             self.logger.info(f"[ITERATION {iteration}]")
 
             # Generate response
-            response = self.generate_response()
+            response, stopped_reason = self.generate_response()
             self.logger.info(f"[MODEL] {response}\n")
+            
+            # Check if response was truncated
+            if stopped_reason == "max_length":
+                self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
 
             # Add to history
             self.conversation_history.append({
@@ -110,6 +114,16 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
             has_code, result, error = self.code_interface.execute_response(response)
 
             if not has_code:
+                # Check if response was truncated
+                if stopped_reason == "max_length":
+                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please write your code block again, but be more concise."
+                    self.logger.info(f"[SYSTEM] {truncation_message}")
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": truncation_message
+                    })
+                    continue
+                
                 consecutive_no_code += 1
                 self.logger.info(f"[SYSTEM] No code blocks found ({consecutive_no_code}/3)")
                 
