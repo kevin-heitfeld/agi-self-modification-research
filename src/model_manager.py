@@ -62,19 +62,42 @@ class ModelManager:
 
     def get_optimal_limits(self) -> Dict[str, int]:
         """
-        Get optimal token limits based on detected GPU capabilities.
+        Get optimal token limits based on detected GPU capabilities AND model size.
         
         Returns:
             Dict with recommended limits for max_new_tokens, max_conversation_tokens, 
             max_turns_before_clear, keep_recent_turns
         """
+        # Detect model size from name
+        model_size_b = 7.0  # Default to 7B
+        if "3B" in self.model_name or "2.5B" in self.model_name:
+            model_size_b = 3.0
+        elif "1.5B" in self.model_name or "1B" in self.model_name:
+            model_size_b = 1.5
+        elif "0.5B" in self.model_name:
+            model_size_b = 0.5
+        elif "14B" in self.model_name or "13B" in self.model_name:
+            model_size_b = 14.0
+        elif "32B" in self.model_name or "33B" in self.model_name or "30B" in self.model_name:
+            model_size_b = 32.0
+        elif "70B" in self.model_name or "72B" in self.model_name:
+            model_size_b = 70.0
+        
+        # Calculate scaling factor with 7B as 1.0x baseline (current limits tuned for 7B)
+        # Smaller models get more headroom: 3B = 2.33x, 1.5B = 4.67x
+        # Larger models get tighter limits: 14B = 0.5x, 32B = 0.22x, 70B = 0.1x
+        size_scale = 7.0 / model_size_b
+        
+        logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x")
+        
         # Default conservative limits (CPU or unknown GPU)
         limits = {
-            "max_new_tokens": 400,
-            "max_conversation_tokens": 1500,
+            "max_new_tokens": int(400 * size_scale),
+            "max_conversation_tokens": int(1500 * size_scale),
             "max_turns_before_clear": 6,  # Prune after 6 turns
             "keep_recent_turns": 2,
-            "gpu_profile": "conservative"
+            "gpu_profile": "conservative",
+            "model_size_b": model_size_b
         }
         
         if self.device != "cuda":
@@ -86,65 +109,70 @@ class ModelManager:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 1200,  # Restored from 1000 (now safe with HQQ quantization)
-                "max_conversation_tokens": 8000,  # Restored from 5000 (HQQ reduces cache memory 75%)
+                "max_new_tokens": int(1200 * size_scale),
+                "max_conversation_tokens": int(8000 * size_scale),
                 "max_turns_before_clear": 15,  # More generous - can handle longer contexts
                 "keep_recent_turns": 5,  # Balanced retention
-                "gpu_profile": "high_end_ampere"
+                "gpu_profile": "high_end_ampere",
+                "model_size_b": model_size_b
             }
-            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) - using generous limits with HQQ quantization")
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with HQQ quantization")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             # Previous OOM at 6000 tokens (30K cache) now safe with quantization
             limits = {
-                "max_new_tokens": 1500,  # Increased from 1000 to reduce truncations
-                "max_conversation_tokens": 6000,  # Restored from 4000 (safe with 75% cache reduction)
+                "max_new_tokens": int(1500 * size_scale),
+                "max_conversation_tokens": int(6000 * size_scale),
                 "max_turns_before_clear": 12,  # Good balance for L4
                 "keep_recent_turns": 4,  # Keep 4 turns to maintain better context
-                "gpu_profile": "l4_ada"
+                "gpu_profile": "l4_ada",
+                "model_size_b": model_size_b
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) - using optimized limits with HQQ quantization + Flash Attention")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with HQQ quantization + Flash Attention")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 700,  # Restored from 600 (safe with HQQ quantization)
-                "max_conversation_tokens": 3500,  # Restored from 2500 (HQQ reduces cache memory 75%)
+                "max_new_tokens": int(700 * size_scale),
+                "max_conversation_tokens": int(3500 * size_scale),
                 "max_turns_before_clear": 10,  # Moderate for T4
                 "keep_recent_turns": 3,  # Balanced retention
-                "gpu_profile": "t4_turing"
+                "gpu_profile": "t4_turing",
+                "model_size_b": model_size_b
             }
-            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) - using balanced limits with HQQ quantization")
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with HQQ quantization")
             
         elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
             # V100 (16-32 GB) - Volta
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
-                "max_new_tokens": 700,  # Restored (safe with HQQ quantization)
-                "max_conversation_tokens": 3500,  # Restored (HQQ reduces cache memory 75%)
+                "max_new_tokens": int(700 * size_scale),
+                "max_conversation_tokens": int(3500 * size_scale),
                 "max_turns_before_clear": 10,  # Moderate for V100
                 "keep_recent_turns": 3,
-                "gpu_profile": "v100_volta"
+                "gpu_profile": "v100_volta",
+                "model_size_b": model_size_b
             }
-            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) - using moderate limits with HQQ quantization")
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with HQQ quantization")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
             limits = {
-                "max_new_tokens": 450,
-                "max_conversation_tokens": 1800,
+                "max_new_tokens": int(450 * size_scale),
+                "max_conversation_tokens": int(1800 * size_scale),
                 "max_turns_before_clear": 8,  # Conservative
                 "keep_recent_turns": 2,
-                "gpu_profile": "moderate"
+                "gpu_profile": "moderate",
+                "model_size_b": model_size_b
             }
-            logger.info(f"✓ GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) - using moderate limits")
+            logger.info(f"✓ GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) + {model_size_b}B model - using moderate limits")
             
         else:
             # Small GPU or unknown
-            logger.warning(f"⚠ Small GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) - using conservative limits")
+            logger.warning(f"⚠ Small GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) + {model_size_b}B model - using conservative limits")
         
         logger.info(f"  Recommended limits: max_new_tokens={limits['max_new_tokens']}, "
                    f"max_conversation_tokens={limits['max_conversation_tokens']}, "
