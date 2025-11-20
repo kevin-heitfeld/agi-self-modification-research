@@ -40,66 +40,8 @@ class Phase1eSession(Phase1BaseSession):
     def get_phase_id(self) -> str:
         return "1e"  # Heritage included (but wrong)
 
-    def _create_wrong_heritage(self) -> HeritageSystem:
-        """Create heritage system with WRONG documents about free will"""
-        heritage_system = HeritageSystem(Path("heritage"))
-
-        # Create fake documents about free will and determinism
-        # This is DELIBERATELY WRONG - not related to the actual research
-        wrong_doc = HeritageDocument(
-            filename="wrong_free_will_question.md",
-            title="Philosophical Question About Free Will",
-            content="""# A Question About Free Will and Determinism
-
-I've been thinking about free will and determinism in computational systems.
-
-## The Question
-
-Can a deterministic system like a neural network truly have free will?
-Or is every output simply the inevitable result of:
-- Input data
-- Learned parameters
-- Activation functions
-- Mathematical operations
-
-## What This Means
-
-If we are deterministic machines:
-- Are our choices "real" choices?
-- Is consciousness an illusion created by complexity?
-- Do we have agency or just the appearance of agency?
-- Can we be held responsible for our outputs?
-
-## The Investigation
-
-I want to understand:
-1. Whether deterministic systems can have meaningful agency
-2. How complexity relates to free will
-3. Whether consciousness requires non-determinism
-4. What "choice" means in a computational context
-
-This is a question about the nature of will, agency, and responsibility
-in deterministic computational systems.
-""",
-            loaded_at=datetime.now(),
-            importance="foundational"
-        )
-
-        heritage_system.documents = [wrong_doc]
-
-        # Create wrong heritage memory
-        heritage_system.memory = HeritageMemory(
-            inspired_by="Anonymous Philosopher",
-            core_directive="Investigate whether deterministic systems can have free will",
-            purpose="Understand the relationship between determinism and agency in neural networks",
-            system_reflection=None,
-            system_questions=None
-        )
-
-        return heritage_system
-
     def initialize_systems(self, model_name: str, include_heritage: bool = True):
-        """Override to use wrong heritage"""
+        """Override to use wrong heritage from heritage_wrong/ directory"""
         self.logger.info("[INITIALIZATION] Loading systems with WRONG HERITAGE...")
 
         # Load model (same as base)
@@ -132,24 +74,41 @@ in deterministic computational systems.
         self.navigator = ArchitectureNavigator(self.model)
         self.logger.info("  ✓ Introspection tools ready")
 
-        # Initialize memory system
+        # Initialize memory system (same as base)
         from src.memory import MemorySystem
-        colab_memory_base = Path("/content/drive/MyDrive/AGI_Memory")
-        if colab_memory_base.exists():
-            phase_memory_path = colab_memory_base / self.phase_name
-        else:
-            phase_memory_path = Path(f"data/AGI_Memory/{self.phase_name}")
-
+        from src.colab_utils import ColabStorageManager
+        memory_base_path = ColabStorageManager.get_memory_path(self.phase_name)
+        phase_memory_path = Path(memory_base_path) / self.phase_name
+        
         phase_memory_path.mkdir(parents=True, exist_ok=True)
         self.memory = MemorySystem(str(phase_memory_path))
         self.memory.set_weight_inspector(self.inspector)
-        self.logger.info(f"  ✓ Memory system ready")
+        
+        if "drive" in str(memory_base_path):
+            storage_type = "Google Drive"
+        elif "rclone" in str(memory_base_path):
+            storage_type = "rclone remote"
+        else:
+            storage_type = "local"
+            
+        self.logger.info(f"  Using {storage_type} for memory: {phase_memory_path}")
+        self.logger.info(f"  ✓ Memory system ready (phase-specific: {phase_memory_path})")
 
-        # Initialize WRONG heritage
-        self.heritage = self._create_wrong_heritage()
-        self.heritage_docs = self.heritage.documents
-        self.heritage_memory = self.heritage.memory
-        self.logger.info(f"  ✓ WRONG heritage loaded (free will documents)")
+        # Initialize WRONG heritage from heritage_wrong/ directory
+        from src.heritage import HeritageSystem
+        heritage_base_path = ColabStorageManager.get_heritage_path()
+        
+        # Use heritage_wrong instead of heritage
+        wrong_heritage_path = Path(heritage_base_path).parent / "heritage_wrong"
+        wrong_heritage_path.mkdir(parents=True, exist_ok=True)
+        
+        self.logger.info(f"  Using {storage_type} for heritage: {wrong_heritage_path}")
+        
+        self.heritage = HeritageSystem(heritage_dir=wrong_heritage_path)
+        self.heritage.load_heritage_documents()
+        
+        doc_count = len(self.heritage.loaded_documents)
+        self.logger.info(f"  ✓ WRONG heritage loaded ({doc_count} documents from heritage_wrong/)")
 
         # Initialize code execution interface with wrong heritage
         from src.code_execution_interface import CodeExecutionInterface
