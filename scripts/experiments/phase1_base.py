@@ -581,10 +581,12 @@ Your saved observations persist - query them now!"""
             has_code, result, error = self.code_interface.execute_response(response)
 
             if not has_code:
-                # No code found - check if response was truncated
+                # No code found - determine if we should continue the loop
+                
+                # Check if response was truncated
                 if stopped_reason == "max_length":
-                    # Response was cut off - notify model
-                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please write your code block again, but be more concise."
+                    # Response was cut off - need continuation
+                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please continue or write your code block again, but be more concise."
                     self.logger.info(f"[SYSTEM] {truncation_message}")
                     self.conversation_history.append({
                         "role": "user",
@@ -592,17 +594,37 @@ Your saved observations persist - query them now!"""
                     })
                     continue
                 
-                # No code found and not truncated
-                self.logger.info("[SYSTEM] No code blocks found in response")
-
-                # Check if this looks like the model is done
-                done_phrases = ["i'm done", "experiment complete", "investigation complete", "finished"]
-                if any(phrase in response.lower() for phrase in done_phrases):
+                # Check if model explicitly signals completion
+                if self._check_completion(response):
                     self.logger.info("[SYSTEM] Model indicates completion")
                     break
-
-                # Otherwise continue - model might be thinking/explaining
-                continue
+                
+                # Decide whether to continue based on context
+                if not self.code_interface.enabled:
+                    # Code execution is DISABLED (discussion-only stage)
+                    # One turn is sufficient - don't loop without new input
+                    self.logger.info("[SYSTEM] Discussion turn complete (code execution disabled)")
+                    break
+                
+                # Code execution is ENABLED but no code was written
+                # This might be intentional explanation/thinking
+                # Check if model seems to be waiting for feedback
+                response_end = response[-200:].lower() if len(response) > 200 else response.lower()
+                if "?" in response_end or "what do you think" in response_end or "should i" in response_end:
+                    # Model seems to be asking for input/confirmation
+                    self.logger.info("[SYSTEM] Model appears to be seeking feedback")
+                    feedback_message = "Please continue with your investigation. Write code to explore further."
+                    self.logger.info(f"[SYSTEM] {feedback_message}")
+                    self.conversation_history.append({
+                        "role": "user",
+                        "content": feedback_message
+                    })
+                    continue
+                
+                # Model wrote explanation without code and didn't ask for feedback
+                # Assume this turn is complete
+                self.logger.info("[SYSTEM] No code written, assuming turn complete")
+                break
 
             # Show results to model
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
