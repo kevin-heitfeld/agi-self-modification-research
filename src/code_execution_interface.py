@@ -318,6 +318,50 @@ class CodeExecutionInterface:
         self.enabled = True
         logger.info("[CODE INTERFACE] Code execution ENABLED")
 
+    def enable_heritage(self, heritage_system: Any) -> bool:
+        """
+        Enable heritage access mid-experiment (for Phase 1c).
+        
+        This method:
+        1. Checks if heritage is already enabled
+        2. Creates and attaches the heritage submodule
+        3. Registers it in sys.modules
+        4. Updates the code executor's introspection module
+        
+        Args:
+            heritage_system: HeritageSystem instance to enable
+            
+        Returns:
+            True if heritage was enabled, False if already enabled
+            
+        Note:
+            After calling this, you should regenerate the system prompt
+            to include heritage documentation.
+        """
+        # Check if already enabled
+        if hasattr(self.introspection, 'heritage'):
+            logger.warning("[CODE INTERFACE] Heritage already enabled, skipping")
+            return False
+        
+        # Import helper function to create heritage module
+        from src.introspection_modules import _create_heritage_module
+        
+        # Create heritage submodule using the shared helper
+        heritage_module = _create_heritage_module(heritage_system)
+        
+        # Attach to introspection module
+        self.introspection.heritage = heritage_module
+        
+        # Register in sys.modules
+        sys.modules['introspection.heritage'] = heritage_module
+        
+        # Update phase to include heritage in prompts
+        if self.phase == '1a':
+            self.phase = '1c'  # Upgrade to 1c when heritage is enabled
+        
+        logger.info("[CODE INTERFACE] ✓ Heritage module enabled and registered")
+        return True
+
     def get_system_prompt_addition(self) -> str:
         """
         Get the system prompt addition that explains code execution.

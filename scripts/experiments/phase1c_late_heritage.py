@@ -101,8 +101,7 @@ Build on your architectural findings!""")
         self.logger.info("*** INTRODUCING HERITAGE FOR EXPERIMENT 3 ***")
         self.logger.info("=" * 80)
 
-        # Don't reload the model! Just initialize heritage system
-        # The model is already loaded from the first initialize_systems call
+        # Initialize heritage system
         from src.heritage import HeritageSystem
         from pathlib import Path
         
@@ -114,23 +113,10 @@ Build on your architectural findings!""")
         self.heritage.create_heritage_memory()
         self.logger.info("  ✓ Heritage memory initialized")
 
-        # Update phase ID for code execution interface to include heritage
-        self.code_interface.phase = '1c'  # Now include heritage
-
-        # Re-register introspection module with heritage
-        import sys
-        from src.introspection_modules import create_introspection_module
-        self.code_interface.introspection = create_introspection_module(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            memory_system=self.memory,
-            heritage_system=self.heritage,
-            phase='1c'  # Heritage now included
-        )
-        sys.modules['introspection'] = self.code_interface.introspection
-        sys.modules['introspection.heritage'] = self.code_interface.introspection.heritage
-
-        self.logger.info("✓ Heritage module now available")
+        # Enable heritage in code execution interface (clean way!)
+        heritage_enabled = self.code_interface.enable_heritage(self.heritage)
+        if heritage_enabled:
+            self.logger.info("  ✓ Heritage module enabled in introspection")
         
         # IMPORTANT: Regenerate system prompt with heritage documentation
         from scripts.experiments.phase1_base import format_qwen_chat
