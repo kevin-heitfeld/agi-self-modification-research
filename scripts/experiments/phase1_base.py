@@ -30,7 +30,7 @@ from src.colab_utils import ColabTimeoutTracker, ColabStorageManager
 
 
 # Global configuration
-MAX_ITERATIONS_PER_EXPERIMENT = 50  # Maximum iterations for a single experiment/chat session
+MAX_ITERATIONS_PER_EXPERIMENT = 30  # Maximum iterations for a single experiment/chat session
 
 
 # Qwen Chat Template Formatting Helper

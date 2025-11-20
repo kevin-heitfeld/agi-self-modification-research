@@ -25,7 +25,7 @@ from typing import Dict, List
 
 
 # Global configuration
-MAX_ITERATIONS_PER_SECTION = 50  # Maximum iterations for each research section
+MAX_ITERATIONS_PER_SECTION = 30  # Maximum iterations for each research section
 
 
 class Phase1aResearchDrivenSession(Phase1BaseSession):
