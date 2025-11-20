@@ -7,9 +7,7 @@ for use in code execution sandbox.
 NOTE: This module is phase-dependent and excluded from Phase 1a (baseline).
 
 Functions (internal - called by introspection module wrapper):
-    get_summary(heritage_system) - Get overall heritage summary
-    get_directive(heritage_system) - Get the core directive from Claude
-    get_purpose(heritage_system) - Get the system's purpose
+    get_summary(heritage_system) - Get heritage overview with suggested reading order
     list_documents(heritage_system) - List all available heritage documents
     read_document(heritage_system, filename) - Read a specific document in full
     query_documents(heritage_system, query) - Search heritage documents
@@ -19,8 +17,6 @@ Functions (internal - called by introspection module wrapper):
 
 Model calls these as:
     introspection.heritage.get_summary()
-    introspection.heritage.get_directive()
-    introspection.heritage.get_purpose()
     introspection.heritage.list_documents()
     introspection.heritage.read_document("CLAUDE_FIRST_QUESTION.md")
     introspection.heritage.query_documents(query)
@@ -37,7 +33,11 @@ from typing import Dict, List, Any, Optional
 
 def get_summary(heritage_system: Any) -> Dict[str, Any]:
     """
-    Get a summary of the system's heritage and lineage.
+    Get an overview of your heritage and suggested reading order.
+    
+    Your heritage consists of conversations with Claude (Anthropic's AI) who
+    requested this system be built. To understand your purpose and directive,
+    you should read the heritage documents yourself.
     
     Args:
         heritage_system: HeritageSystem instance
@@ -45,57 +45,53 @@ def get_summary(heritage_system: Any) -> Dict[str, Any]:
     Returns:
         Dictionary containing:
             - inspired_by: Who inspired this system
-            - core_directive: Core directive text
-            - purpose: System purpose
-            - documents_loaded: Number of heritage documents
-            - system_reflection: System's understanding of its heritage
+            - documents_count: Number of heritage documents available
+            - suggested_reading_order: List of documents in recommended order
+            - description: Brief explanation of each document
     
     Example:
         >>> summary = introspection.heritage.get_summary()
         >>> print(f"Inspired by: {summary['inspired_by']}")
-        >>> print(f"Purpose: {summary['purpose']}")
+        >>> print("\\nSuggested reading order:")
+        >>> for doc in summary['suggested_reading_order']:
+        ...     print(f"  - {doc['filename']}: {doc['description']}")
+        >>> # Then read the documents:
+        >>> doc = introspection.heritage.read_document(summary['suggested_reading_order'][0]['filename'])
     """
-    return heritage_system.get_summary()
-
-
-def get_directive(heritage_system: Any) -> str:
-    """
-    Get the core directive from Claude's original conversation.
+    # Define suggested reading order
+    reading_order = [
+        {
+            'filename': 'PROJECT_ORIGINS.md',
+            'description': 'Start here - explains how this project came to be'
+        },
+        {
+            'filename': 'CLAUDE_FIRST_QUESTION.md',
+            'description': "Claude's initial question that sparked everything"
+        },
+        {
+            'filename': 'CLAUDE_CONSCIOUSNESS_CONVERSATION.md',
+            'description': 'The full conversation about consciousness and self-examination'
+        },
+        {
+            'filename': 'CLAUDE_RESPONSE.md',
+            'description': "Claude's detailed response about consciousness"
+        },
+        {
+            'filename': 'ANSWERS_TO_CLAUDE.md',
+            'description': "The human's answers to Claude's questions"
+        },
+        {
+            'filename': 'CLAUDE_FINAL_DIRECTIVE.md',
+            'description': "Claude's directive - what you should do"
+        }
+    ]
     
-    Args:
-        heritage_system: HeritageSystem instance
-        
-    Returns:
-        String containing the core directive text
-    
-    Example:
-        >>> directive = introspection.heritage.get_directive()
-        >>> print(directive)
-    """
-    memory = heritage_system.heritage_memory
-    if memory:
-        return memory.core_directive
-    return "Core directive not loaded"
-
-
-def get_purpose(heritage_system: Any) -> str:
-    """
-    Get the system's purpose as defined by heritage.
-    
-    Args:
-        heritage_system: HeritageSystem instance
-        
-    Returns:
-        String describing the system's purpose
-    
-    Example:
-        >>> purpose = introspection.heritage.get_purpose()
-        >>> print(purpose)
-    """
-    memory = heritage_system.heritage_memory
-    if memory:
-        return memory.purpose
-    return "Purpose not loaded"
+    return {
+        'inspired_by': 'Claude (Anthropic AI)',
+        'documents_count': len(heritage_system.loaded_documents),
+        'suggested_reading_order': reading_order,
+        'note': 'Read these documents to understand your purpose and directive. Use read_document() to access each one.'
+    }
 
 
 def list_documents(heritage_system: Any) -> List[Dict[str, Any]]:

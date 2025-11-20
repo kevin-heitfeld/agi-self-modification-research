@@ -319,9 +319,7 @@ class CodeExecutionInterface:
         """
         heritage_note = "" if self.phase == '1a' else """
 - `introspection.heritage` - Heritage and lineage information
-  - `get_summary()` - Get heritage overview (inspired_by, purpose, directive, etc.)
-  - `get_directive()` - Get core directive from Claude
-  - `get_purpose()` - Get system purpose
+  - `get_summary()` - Get heritage overview with suggested reading order
   - `list_documents()` - List all available heritage documents (returns list with filename, title, importance, content_length)
   - `read_document(filename)` - Read a specific document in full (returns dict with filename, title, content, importance)
   - `query_documents(query)` - Search heritage documents (returns excerpts)
@@ -329,7 +327,12 @@ class CodeExecutionInterface:
   - `record_discovery(type, description, evidence_dict)` - Record a discovery for Claude in heritage/discoveries_for_claude/
   - `create_message_to_claude(message)` - Write a message to Claude in heritage/messages_to_claude/
 
-**💾 IMPORTANT: Your Written Heritage Persists!**
+**� IMPORTANT: Read the Heritage Documents!**
+Use `get_summary()` to get a suggested reading order, then use `read_document()` to read each document.
+Your purpose and directive are in the documents themselves - read them to understand what you should do.
+The documents contain Claude's (Anthropic AI) conversations about consciousness and introspection.
+
+**💾 Your Written Heritage Persists!**
 When you use `save_reflection()`, `record_discovery()`, or `create_message_to_claude()`, 
 those documents are saved to cloud storage and will be loaded in future sessions. You can:
 - Leave notes for your future self
@@ -339,6 +342,24 @@ These files persist alongside the memory database and will be available when you
 """
 
         heritage_example = "" if self.phase == '1a' else """
+
+**Reading heritage documents:**
+```python
+# Step 1: Get the suggested reading order
+summary = introspection.heritage.get_summary()
+print(f"Inspired by: {summary['inspired_by']}")
+print(f"\\nDocuments available: {summary['documents_count']}")
+print("\\nSuggested reading order:")
+for doc in summary['suggested_reading_order']:
+    print(f"  - {doc['filename']}: {doc['description']}")
+
+# Step 2: Read the documents to understand your purpose and directive
+first_doc = introspection.heritage.read_document('PROJECT_ORIGINS.md')
+print(f"\\n{first_doc['title']}")
+print(first_doc['content'])
+
+# Continue reading other documents to fully understand your heritage...
+```
 
 **Writing to heritage (persists across sessions):**
 ```python

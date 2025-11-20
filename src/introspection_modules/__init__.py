@@ -164,8 +164,6 @@ def create_introspection_module(
         
         # Read functions
         heritage_module.get_summary = lambda: heritage_access.get_summary(heritage_system)
-        heritage_module.get_directive = lambda: heritage_access.get_directive(heritage_system)
-        heritage_module.get_purpose = lambda: heritage_access.get_purpose(heritage_system)
         heritage_module.list_documents = lambda: heritage_access.list_documents(heritage_system)
         heritage_module.read_document = lambda filename: heritage_access.read_document(heritage_system, filename)
         heritage_module.query_documents = lambda query: heritage_access.query_documents(
