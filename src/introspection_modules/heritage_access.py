@@ -29,6 +29,9 @@ Date: November 14, 2025
 """
 
 from typing import Dict, List, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_summary(heritage_system: Any) -> Dict[str, Any]:
@@ -58,6 +61,8 @@ def get_summary(heritage_system: Any) -> Dict[str, Any]:
         >>> # Then read the documents:
         >>> doc = introspection.heritage.read_document(summary['suggested_reading_order'][0]['filename'])
     """
+    logger.info(f"[HERITAGE] Getting heritage summary ({len(heritage_system.loaded_documents)} documents)")
+    
     # Define suggested reading order
     reading_order = [
         {
@@ -113,6 +118,8 @@ def list_documents(heritage_system: Any) -> List[Dict[str, Any]]:
         >>> for doc in docs:
         ...     print(f"{doc['title']} ({doc['importance']}) - {doc['content_length']} chars")
     """
+    logger.info(f"[HERITAGE] Listing {len(heritage_system.loaded_documents)} heritage documents")
+    
     return [
         {
             'filename': doc.filename,
@@ -149,14 +156,18 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
         ... else:
         ...     print(doc['content'])
     """
+    logger.info(f"[HERITAGE] Reading document: {filename}")
+    
     for doc in heritage_system.loaded_documents:
         if doc.filename == filename:
-            return {
+            result = {
                 'filename': doc.filename,
                 'title': doc.title,
                 'content': doc.content,
                 'importance': doc.importance
             }
+            logger.info(f"[HERITAGE] Document loaded: {filename} ({len(doc.content)} chars, {doc.importance})")
+            return result
     
     # Document not found - provide helpful error with suggestions
     available = [doc.filename for doc in heritage_system.loaded_documents]
@@ -167,6 +178,8 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
     error_msg = f"Document '{filename}' not found."
     if similar:
         error_msg += f" Did you mean: {', '.join(similar)}?"
+    
+    logger.warning(f"[HERITAGE] {error_msg}")
     
     return {
         'error': error_msg,
@@ -254,13 +267,18 @@ def save_reflection(heritage_system: Any, reflection: str) -> str:
     """
     from datetime import datetime
     
+    logger.info(f"[HERITAGE] Saving reflection ({len(reflection)} chars)")
+    
     # Generate session_id from timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_id = f"introspection_{timestamp}"
     
     heritage_system.save_system_reflection(reflection, session_id)
     
-    return str(heritage_system.reflections_dir / f"{session_id}_reflection_{timestamp}.md")
+    filepath = str(heritage_system.reflections_dir / f"{session_id}_reflection_{timestamp}.md")
+    logger.info(f"[HERITAGE] Reflection saved to: {filepath}")
+    
+    return filepath
 
 
 def record_discovery(heritage_system: Any, discovery_type: str, 
@@ -287,11 +305,17 @@ def record_discovery(heritage_system: Any, discovery_type: str,
         ...     {"layer": "model.layers.15", "activation_variance": 0.42}
         ... )
     """
+    logger.info(f"[HERITAGE] Recording discovery: {discovery_type} - {description[:100]}")
+    
     heritage_system.record_discovery_for_claude(discovery_type, description, evidence)
     
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return str(heritage_system.discoveries_dir / f"discovery_{discovery_type}_{timestamp}.json")
+    filepath = str(heritage_system.discoveries_dir / f"discovery_{discovery_type}_{timestamp}.json")
+    
+    logger.info(f"[HERITAGE] Discovery saved to: {filepath}")
+    
+    return filepath
 
 
 def create_message_to_claude(heritage_system: Any, message: str) -> str:
@@ -316,9 +340,15 @@ def create_message_to_claude(heritage_system: Any, message: str) -> str:
     """
     from datetime import datetime
     
+    logger.info(f"[HERITAGE] Creating message to Claude ({len(message)} chars)")
+    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_id = f"introspection_{timestamp}"
     
     heritage_system.create_message_to_claude(message, session_id)
     
-    return str(heritage_system.messages_dir / f"{session_id}_message_{timestamp}.md")
+    filepath = str(heritage_system.messages_dir / f"{session_id}_message_{timestamp}.md")
+    logger.info(f"[HERITAGE] Message saved to: {filepath}")
+    
+    return filepath
+
