@@ -505,9 +505,9 @@ discoveries across memory resets.
             headroom_tokens = max_tokens - current_tokens
             generations_left = headroom_tokens // max_new
             pruning_warning = (
-                f"\n\n⚠️ **MEMORY WARNING:** Context approaching limit (~{current_tokens} / {max_tokens} tokens, "
-                f"~{generations_left} generation(s) of headroom remaining)! "
-                f"Save important findings NOW using `introspection.memory.record_observation()` or they will be pruned soon."
+                f"\n\n⚠️ **MEMORY WARNING:** Working memory is getting full. "
+                f"Save important findings NOW using `introspection.memory.record_observation()` "
+                f"or they will be lost in the next pruning."
             )
             message += pruning_warning
             self.logger.warning(
@@ -570,17 +570,16 @@ discoveries across memory resets.
             self.logger.info(f"[MEMORY] Pruned {messages_removed} messages (kept {new_count}, ~{token_count} tokens)")
             
             # Add a system message explaining what happened
-            target_ratio = int((token_count / max_tokens) * 100) if max_tokens > 0 else 0
-            pruning_notice = f"""⚠️ **MEMORY RESET:** Conversation context was pruned due to {' and '.join(prune_reasons)}.
+            pruning_notice = f"""⚠️ **MEMORY PRUNED:** Working memory was full. Old messages removed to make room for new generations.
 
-Pruned from {old_count} to {new_count} messages (~{token_count} tokens retained, {target_ratio}% of max, {remaining_iterations} iterations remaining).
+**Important:** Your conversation history is now limited. Any findings not saved to permanent memory are LOST.
 
-**To continue your investigation:**
-- Use `introspection.memory.query_observations()` to retrieve saved findings
-- Review what you've learned so far
-- Continue building on your discoveries
+**To continue effectively:**
+1. Query saved findings: `introspection.memory.query_observations()`
+2. Review what you've learned
+3. Save new discoveries as you make them
 
-Your saved observations persist - query them now!"""
+Your permanent memory persists - use it!"""
             
             message += f"\n\n{pruning_notice}"
         
