@@ -43,7 +43,31 @@ Date: November 14, 2025
 
 import sys
 from types import ModuleType
-from typing import Any, Optional
+from typing import Any, Optional, Callable
+import functools
+
+
+def _make_wrapper(func: Callable, *bound_args) -> Callable:
+    """
+    Create a wrapper function that binds arguments while preserving metadata.
+    
+    This allows help() to see the original function's docstring and signature.
+    
+    Args:
+        func: Original function to wrap
+        *bound_args: Arguments to bind (e.g., model, tokenizer)
+        
+    Returns:
+        Wrapper function with preserved metadata
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*bound_args, *args, **kwargs)
+    
+    # Preserve original function for help() to find
+    wrapper.__wrapped__ = func
+    
+    return wrapper
 
 
 def _create_heritage_module(heritage_system: Any) -> ModuleType:
@@ -65,19 +89,15 @@ def _create_heritage_module(heritage_system: Any) -> ModuleType:
     heritage_module.__doc__ = 'Heritage and lineage information'
     
     # Read functions
-    heritage_module.get_summary = lambda: heritage_access.get_summary(heritage_system)
-    heritage_module.list_documents = lambda: heritage_access.list_documents(heritage_system)
-    heritage_module.read_document = lambda filename: heritage_access.read_document(heritage_system, filename)
-    heritage_module.query_documents = lambda query: heritage_access.query_documents(
-        heritage_system, query
-    )
+    heritage_module.get_summary = _make_wrapper(heritage_access.get_summary, heritage_system)
+    heritage_module.list_documents = _make_wrapper(heritage_access.list_documents, heritage_system)
+    heritage_module.read_document = _make_wrapper(heritage_access.read_document, heritage_system)
+    heritage_module.query_documents = _make_wrapper(heritage_access.query_documents, heritage_system)
     
     # Write functions
-    heritage_module.save_reflection = lambda reflection: heritage_access.save_reflection(heritage_system, reflection)
-    heritage_module.record_discovery = lambda discovery_type, description, evidence: heritage_access.record_discovery(
-        heritage_system, discovery_type, description, evidence
-    )
-    heritage_module.create_message_to_claude = lambda message: heritage_access.create_message_to_claude(heritage_system, message)
+    heritage_module.save_reflection = _make_wrapper(heritage_access.save_reflection, heritage_system)
+    heritage_module.record_discovery = _make_wrapper(heritage_access.record_discovery, heritage_system)
+    heritage_module.create_message_to_claude = _make_wrapper(heritage_access.create_message_to_claude, heritage_system)
     
     return heritage_module
 
@@ -132,31 +152,22 @@ def create_introspection_module(
     # Create architecture submodule
     arch_module = ModuleType('introspection.architecture')
     arch_module.__doc__ = 'Model architecture inspection'
-    arch_module.get_architecture_summary = lambda: architecture.get_architecture_summary(model)
-    arch_module.describe_layer = lambda layer_name: architecture.describe_layer(model, layer_name)
-    arch_module.list_layers = lambda filter_pattern=None: architecture.list_layers(model, filter_pattern)
-    arch_module.get_layer_info = lambda layer_name: architecture.get_layer_info(model, layer_name)
-    arch_module.find_similar_layers = lambda layer_name: architecture.find_similar_layers(model, layer_name)
+    arch_module.get_architecture_summary = _make_wrapper(architecture.get_architecture_summary, model)
+    arch_module.describe_layer = _make_wrapper(architecture.describe_layer, model)
+    arch_module.list_layers = _make_wrapper(architecture.list_layers, model)
+    arch_module.get_layer_info = _make_wrapper(architecture.get_layer_info, model)
+    arch_module.find_similar_layers = _make_wrapper(architecture.find_similar_layers, model)
     module.architecture = arch_module
 
     # Create weights submodule
     weights_module = ModuleType('introspection.weights')
     weights_module.__doc__ = 'Weight inspection and statistics'
-    weights_module.get_weight_statistics = lambda parameter_names: weights.get_weight_statistics(model, parameter_names)
-    
-    # Make list_parameters() flexible - accept optional layer_prefix for convenience
-    def _list_parameters_wrapper(layer_prefix=None):
-        if layer_prefix is None:
-            return weights.list_parameters(model)
-        else:
-            # Redirect to get_layer_parameters for filtered listing
-            return weights.get_layer_parameters(model, layer_prefix)
-    
-    weights_module.list_parameters = _list_parameters_wrapper
-    weights_module.get_layer_parameters = lambda layer_prefix: weights.get_layer_parameters(model, layer_prefix)
-    weights_module.compare_parameters = lambda param1, param2: weights.compare_parameters(model, param1, param2)
-    weights_module.get_shared_weights = lambda: weights.get_shared_weights(model)
-    weights_module.find_similar_weights = lambda layer_name, top_k=5: weights.find_similar_weights(model, layer_name, top_k)
+    weights_module.get_weight_statistics = _make_wrapper(weights.get_weight_statistics, model)
+    weights_module.list_parameters = _make_wrapper(weights.list_parameters, model)
+    weights_module.get_layer_parameters = _make_wrapper(weights.get_layer_parameters, model)
+    weights_module.compare_parameters = _make_wrapper(weights.compare_parameters, model)
+    weights_module.get_shared_weights = _make_wrapper(weights.get_shared_weights, model)
+    weights_module.find_similar_weights = _make_wrapper(weights.find_similar_weights, model)
     
     module.weights = weights_module
 
@@ -164,106 +175,70 @@ def create_introspection_module(
     if tokenizer:
         activations_module = ModuleType('introspection.activations')
         activations_module.__doc__ = 'Activation monitoring during inference'
-        activations_module.capture_activations = lambda text, layer_names: activations.capture_activations(
-            model, tokenizer, text, layer_names
-        )
-        activations_module.capture_attention_weights = lambda text, layer_names: activations.capture_attention_weights(
-            model, tokenizer, text, layer_names
-        )
-        activations_module.get_activation_statistics = lambda layer_name: activations.get_activation_statistics(
-            model, tokenizer, layer_name
-        )
-        activations_module.get_input_shape = lambda sample_text="test": activations.get_input_shape(
-            model, tokenizer, sample_text
-        )
-        activations_module.list_layers = lambda filter_pattern=None: activations.list_layers(model, filter_pattern)
-        activations_module.clear_cache = lambda: activations.clear_cache()
+        activations_module.capture_activations = _make_wrapper(activations.capture_activations, model, tokenizer)
+        activations_module.capture_attention_weights = _make_wrapper(activations.capture_attention_weights, model, tokenizer)
+        activations_module.get_activation_statistics = _make_wrapper(activations.get_activation_statistics, model, tokenizer)
+        activations_module.get_input_shape = _make_wrapper(activations.get_input_shape, model, tokenizer)
+        activations_module.list_layers = _make_wrapper(activations.list_layers, model)
+        activations_module.clear_cache = _make_wrapper(activations.clear_cache)
         module.activations = activations_module
     
     # Create temporal analysis submodule (if tokenizer provided) - Advanced temporal/comparative tools
     if tokenizer:
         temporal_module = ModuleType('introspection.temporal')
         temporal_module.__doc__ = 'Advanced temporal and comparative analysis'
-        temporal_module.compare_activations = lambda texts, layer_names: temporal_analysis.compare_activations(
-            model, tokenizer, texts, layer_names
-        )
-        temporal_module.track_layer_flow = lambda text, layer_names=None: temporal_analysis.track_layer_flow(
-            model, tokenizer, text, layer_names
-        )
-        temporal_module.capture_generation_activations = lambda prompt, layer_names, max_new_tokens=20: temporal_analysis.capture_generation_activations(
-            model, tokenizer, prompt, layer_names, max_new_tokens
-        )
-        temporal_module.compute_activation_similarity = lambda act1, act2: temporal_analysis.compute_activation_similarity(act1, act2)
-        temporal_module.detect_activation_anomalies = lambda text, layer_names, baseline_texts: temporal_analysis.detect_activation_anomalies(
-            model, tokenizer, text, layer_names, baseline_texts
-        )
-        temporal_module.clear_cache = lambda: temporal_analysis.clear_cache()
+        temporal_module.compare_activations = _make_wrapper(temporal_analysis.compare_activations, model, tokenizer)
+        temporal_module.track_layer_flow = _make_wrapper(temporal_analysis.track_layer_flow, model, tokenizer)
+        temporal_module.capture_generation_activations = _make_wrapper(temporal_analysis.capture_generation_activations, model, tokenizer)
+        temporal_module.compute_activation_similarity = _make_wrapper(temporal_analysis.compute_activation_similarity)
+        temporal_module.detect_activation_anomalies = _make_wrapper(temporal_analysis.detect_activation_anomalies, model, tokenizer)
+        temporal_module.clear_cache = _make_wrapper(temporal_analysis.clear_cache)
         module.temporal = temporal_module
     
     # Create attention analysis submodule (if tokenizer provided)
     if tokenizer:
         attention_module = ModuleType('introspection.attention')
         attention_module.__doc__ = 'Attention pattern analysis'
-        attention_module.analyze_attention_patterns = lambda text, layer_names: attention_analysis.analyze_attention_patterns(
-            model, tokenizer, text, layer_names
-        )
-        attention_module.compute_attention_entropy = lambda text, layer_names: attention_analysis.compute_attention_entropy(
-            model, tokenizer, text, layer_names
-        )
-        attention_module.find_head_specialization = lambda texts, layer_names: attention_analysis.find_head_specialization(
-            model, tokenizer, texts, layer_names
-        )
-        attention_module.get_token_attention_summary = lambda text, layer_names, target_token_idx=None: attention_analysis.get_token_attention_summary(
-            model, tokenizer, text, layer_names, target_token_idx
-        )
-        attention_module.clear_cache = lambda: attention_analysis.clear_cache()
+        attention_module.analyze_attention_patterns = _make_wrapper(attention_analysis.analyze_attention_patterns, model, tokenizer)
+        attention_module.compute_attention_entropy = _make_wrapper(attention_analysis.compute_attention_entropy, model, tokenizer)
+        attention_module.find_head_specialization = _make_wrapper(attention_analysis.find_head_specialization, model, tokenizer)
+        attention_module.get_token_attention_summary = _make_wrapper(attention_analysis.get_token_attention_summary, model, tokenizer)
+        attention_module.clear_cache = _make_wrapper(attention_analysis.clear_cache)
         module.attention = attention_module
     
     # Create gradient analysis submodule (always available)
     gradient_module = ModuleType('introspection.gradient')
     gradient_module.__doc__ = 'Gradient-based sensitivity and attribution analysis'
-    gradient_module.compute_input_sensitivity = lambda text, layer_names: gradient_analysis.compute_input_sensitivity(
-        model, tokenizer, text, layer_names
-    )
-    gradient_module.compare_inputs_gradient = lambda original_text, modified_text, layer_names: gradient_analysis.compare_inputs_gradient(
-        model, tokenizer, original_text, modified_text, layer_names
-    )
-    gradient_module.find_influential_tokens = lambda text, layer_names, top_k=5: gradient_analysis.find_influential_tokens(
-        model, tokenizer, text, layer_names, top_k
-    )
-    gradient_module.compute_layer_gradients = lambda text, target_layer, source_layer: gradient_analysis.compute_layer_gradients(
-        model, tokenizer, text, target_layer, source_layer
-    )
+    gradient_module.compute_input_sensitivity = _make_wrapper(gradient_analysis.compute_input_sensitivity, model, tokenizer)
+    gradient_module.compare_inputs_gradient = _make_wrapper(gradient_analysis.compare_inputs_gradient, model, tokenizer)
+    gradient_module.find_influential_tokens = _make_wrapper(gradient_analysis.find_influential_tokens, model, tokenizer)
+    gradient_module.compute_layer_gradients = _make_wrapper(gradient_analysis.compute_layer_gradients, model, tokenizer)
     module.gradient = gradient_module
     
     # Create history analysis submodule (always available)
     history_module = ModuleType('introspection.history')
     history_module.__doc__ = 'Activation history and drift tracking'
-    history_module.start_tracking = lambda layer_names: history_analysis.start_tracking(
-        model, tokenizer, layer_names
-    )
-    history_module.record_turn = lambda text: history_analysis.record_turn(text)
-    history_module.get_activation_history = lambda layer_names=None: history_analysis.get_activation_history(layer_names)
-    history_module.compare_to_previous = lambda text, layer_names=None: history_analysis.compare_to_previous(text, layer_names)
-    history_module.analyze_drift = lambda layer_names=None: history_analysis.analyze_drift(layer_names)
-    history_module.get_tracking_status = lambda: history_analysis.get_tracking_status()
-    history_module.clear_history = lambda: history_analysis.clear_history()
-    history_module.stop_tracking = lambda: history_analysis.stop_tracking()
+    history_module.start_tracking = _make_wrapper(history_analysis.start_tracking, model, tokenizer)
+    history_module.record_turn = _make_wrapper(history_analysis.record_turn)
+    history_module.get_activation_history = _make_wrapper(history_analysis.get_activation_history)
+    history_module.compare_to_previous = _make_wrapper(history_analysis.compare_to_previous)
+    history_module.analyze_drift = _make_wrapper(history_analysis.analyze_drift)
+    history_module.get_tracking_status = _make_wrapper(history_analysis.get_tracking_status)
+    history_module.clear_history = _make_wrapper(history_analysis.clear_history)
+    history_module.stop_tracking = _make_wrapper(history_analysis.stop_tracking)
     module.history = history_module
 
     # Create memory submodule (if memory_system provided)
     if memory_system:
         memory_module = ModuleType('introspection.memory')
         memory_module.__doc__ = 'Memory system access'
-        memory_module.record_observation = lambda description, category="general", importance=0.5, tags=None, data=None: memory_access.record_observation(
-            memory_system, description, category, importance, tags, data
-        )
-        memory_module.query_observations = lambda query=None, **filters: memory_access.query_observations(memory_system, query, **filters)
-        memory_module.query_patterns = lambda query=None, **filters: memory_access.query_patterns(memory_system, query, **filters)
-        memory_module.query_theories = lambda query=None, **filters: memory_access.query_theories(memory_system, query, **filters)
-        memory_module.query_beliefs = lambda query=None, **filters: memory_access.query_beliefs(memory_system, query, **filters)
-        memory_module.get_memory_summary = lambda: memory_access.get_memory_summary(memory_system)
-        memory_module.list_categories = lambda: memory_access.list_categories(memory_system)
+        memory_module.record_observation = _make_wrapper(memory_access.record_observation, memory_system)
+        memory_module.query_observations = _make_wrapper(memory_access.query_observations, memory_system)
+        memory_module.query_patterns = _make_wrapper(memory_access.query_patterns, memory_system)
+        memory_module.query_theories = _make_wrapper(memory_access.query_theories, memory_system)
+        memory_module.query_beliefs = _make_wrapper(memory_access.query_beliefs, memory_system)
+        memory_module.get_memory_summary = _make_wrapper(memory_access.get_memory_summary, memory_system)
+        memory_module.list_categories = _make_wrapper(memory_access.list_categories, memory_system)
         module.memory = memory_module
 
     # Create heritage submodule (if heritage_system provided AND not Phase 1a)
