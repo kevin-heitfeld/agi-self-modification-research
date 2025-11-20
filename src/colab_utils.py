@@ -287,6 +287,47 @@ class ColabStorageManager:
         # Running locally
         memory_path = Path(f"data/AGI_Memory/{phase_name}")
         return memory_path
+    
+    @staticmethod
+    def get_heritage_path(logger: Optional[logging.Logger] = None) -> Path:
+        """Get appropriate heritage path based on environment
+        
+        Checks:
+        1. Google Drive if mounted
+        2. Other cloud storage via config file
+        3. Local fallback
+        
+        Args:
+            logger: Optional logger for info messages
+            
+        Returns:
+            Path to heritage directory
+        """
+        log = logger or logging.getLogger(__name__)
+        
+        # Check Google Drive
+        if ColabEnvironment.is_drive_mounted():
+            heritage_path = Path("/content/drive/MyDrive/agi-self-modification-research/data/heritage")
+            log.info(f"  Using Google Drive for heritage: {heritage_path}")
+            return heritage_path
+        
+        # Check for other cloud storage via config
+        if ColabEnvironment.is_colab():
+            config = ColabStorageManager.load_storage_config()
+            if config:
+                storage_root, project_dir = config
+                heritage_path = Path(project_dir) / "data" / "heritage"
+                log.info(f"  Using cloud storage for heritage: {heritage_path}")
+                return heritage_path
+            else:
+                # Colab but no storage configured
+                heritage_path = Path("heritage")
+                log.warning(f"  No cloud storage detected - using local heritage: {heritage_path}")
+                return heritage_path
+        
+        # Running locally
+        heritage_path = Path("heritage")
+        return heritage_path
 
 
 # Convenience functions for backward compatibility

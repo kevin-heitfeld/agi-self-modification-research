@@ -317,7 +317,11 @@ When you say "I'm done with this experiment", the system will:
 
         # Initialize heritage system (if needed)
         if include_heritage:
-            self.heritage = HeritageSystem(Path("heritage"))
+            # Use Colab-aware path for heritage (same as memory system)
+            heritage_path = ColabStorageManager.get_heritage_path(self.logger)
+            heritage_path.mkdir(parents=True, exist_ok=True)
+            
+            self.heritage = HeritageSystem(heritage_path)
             self.heritage_docs = self.heritage.load_heritage_documents()
             self.heritage_memory = self.heritage.create_heritage_memory()
             self.logger.info(f"  ✓ Heritage system ready ({len(self.heritage_docs)} documents loaded)")
