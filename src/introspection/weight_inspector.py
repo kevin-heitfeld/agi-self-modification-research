@@ -280,20 +280,20 @@ class WeightInspector:
             "data": param.detach().clone()  # Safe copy
         }
     
-    def get_weight_statistics(self, layer_name: Union[str, List[str]], use_cache: bool = True) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    def get_weight_statistics(self, parameter_names: Union[str, List[str]], use_cache: bool = True) -> List[Dict[str, Any]]:
         """
-        Compute statistical properties of one or more layers' weights.
+        Compute statistical properties of one or more parameters' weights.
+        
+        ALWAYS returns a list of dictionaries for consistent handling, regardless of whether
+        a single parameter name (str) or multiple names (List[str]) are provided.
         
         Args:
-            layer_name: Either:
-                       - A single layer name (str) - returns dict for that layer
-                       - A list of layer names (List[str]) - returns list of dicts
+            parameter_names: Either a single parameter name (str) or list of parameter names (List[str])
             use_cache: Whether to use cached statistics (default: True)
             
         Returns:
-            If layer_name is a string:
-                Dictionary containing:
-                - name: Layer name
+            List of dictionaries (one per parameter), each containing:
+                - name: Parameter name
                 - shape: Weight tensor shape
                 - num_parameters: Number of parameters
                 - mean: Mean of all weights
@@ -308,89 +308,107 @@ class WeightInspector:
                 - l2_norm: L2 norm of weights
                 - histogram: Histogram of weight values (bins and counts)
                 - percentiles: [5th, 25th, 50th, 75th, 95th]
-                - shared_with: List of layers sharing weights (if applicable)
-            
-            If layer_name is a list:
-                List of dicts (one per layer) with the same structure as above.
-                If a layer has an error, its dict will contain 'error' key.
+                - shared_with: List of parameters sharing weights (if applicable)
+                - error: Error message (only present if parameter retrieval failed)
                 
         Examples:
-            >>> # Single layer
-            >>> get_weight_statistics(layer_name="model.layers.0.mlp.gate_proj.weight")
-            {'name': '...', 'shape': (5632, 2048), 'mean': 0.0012, ...}
+            >>> # Single parameter - returns list with one dict
+            >>> result = get_weight_statistics(parameter_names="model.layers.0.mlp.gate_proj.weight")
+            >>> print(result[0]['mean'])
+            0.0012
             
-            >>> # Multiple layers in one call
-            >>> get_weight_statistics(layer_name=[
+            >>> # Multiple parameters - returns list with multiple dicts
+            >>> result = get_weight_statistics(parameter_names=[
             ...     "model.layers.0.mlp.gate_proj.weight",
             ...     "model.layers.0.mlp.up_proj.weight",
             ...     "model.layers.1.mlp.gate_proj.weight"
             ... ])
-            [{'name': '...', 'mean': 0.0012, ...},
-             {'name': '...', 'mean': 0.0015, ...},
-             {'name': '...', 'mean': 0.0011, ...}]
+            >>> for stats in result:
+            ...     print(f"{stats['name']}: mean={stats['mean']:.4f}")
         """
-        # If layer_name is a list, recursively call for each layer
-        if isinstance(layer_name, list):
-            results = []
-            for single_layer in layer_name:
-                try:
-                    result = self.get_weight_statistics(single_layer, use_cache=use_cache)
-                    results.append(result)
-                except Exception as e:
-                    logger.error(f"Error getting statistics for layer '{single_layer}': {e}")
-                    # Get parameter names summary (now returns dict, not list)
-                    param_names_info = self.list_parameters()
-                    results.append({
-                        "layer_name": single_layer,
-                        "error": str(e),
-                        "available_parameters_sample": param_names_info.get("sample_names", [])
-                    })
-            return results
+        # Normalize input to list
+        param_list = [parameter_names] if isinstance(parameter_names, str) else parameter_names
         
-        # Single layer case
-        # Check cache first
-        if use_cache and layer_name in self._stats_cache:
-            return self._stats_cache[layer_name]
+        results = []
+        for single_param in param_list:
+            try:
+                # Check cache first
+                if use_cache and single_param in self._stats_cache:
+                    results.append(self._stats_cache[single_param])
+                    continue
+                
+                # Compute statistics for this parameter
+                stats = self._compute_single_parameter_statistics(single_param)
+                
+                # Cache results
+                self._stats_cache[single_param] = stats
+                results.append(stats)
+                
+            except Exception as e:
+                logger.error(f"Error getting statistics for parameter '{single_param}': {e}")
+                # Get parameter names summary (now returns dict, not list)
+                param_names_info = self.list_parameters()
+                results.append({
+                    "parameter_name": single_param,
+                    "error": str(e),
+                    "available_parameters_sample": param_names_info.get("sample_names", [])
+                })
         
-        if layer_name not in self.layers:
+        return results
+    
+    def _compute_single_parameter_statistics(self, parameter_name: str) -> Dict[str, Any]:
+        """
+        Internal helper to compute statistics for a single parameter.
+        
+        Args:
+            parameter_name: Name of the parameter to analyze
+            
+        Returns:
+            Dictionary containing parameter statistics
+            
+        Raises:
+            KeyError: If parameter_name doesn't exist
+        """
+        
+        if parameter_name not in self.layers:
             # Check for comma-separated string error
             comma_separated_hint = ""
-            if ',' in layer_name:
-                suggested_layers = [name.strip() for name in layer_name.split(',')]
-                # Check if these are valid layer names
-                matching_layers = [name for name in suggested_layers if name in self.layers]
+            if ',' in parameter_name:
+                suggested_params = [name.strip() for name in parameter_name.split(',')]
+                # Check if these are valid parameter names
+                matching_params = [name for name in suggested_params if name in self.layers]
                 
-                if matching_layers:
+                if matching_params:
                     comma_separated_hint = (
                         f"\n\n❌ SYNTAX ERROR: You passed a comma-separated STRING, but this function requires a JSON LIST!"
                         f"\n\n🔧 WRONG (what you did):"
-                        f"\n   \"layer_name\": \"{layer_name}\""
+                        f"\n   \"parameter_names\": \"{parameter_name}\""
                         f"\n\n✅ CORRECT (what you should do):"
-                        f"\n   \"layer_name\": {json.dumps(suggested_layers)}"
+                        f"\n   \"parameter_names\": {json.dumps(suggested_params)}"
                         f"\n\nThe function accepts Union[str, List[str]] - that means EITHER:"
                         f"\n  - A single string: \"model.layers.0.mlp.gate_proj.weight\""
                         f"\n  - A JSON list: [\"model.layers.0.mlp.gate_proj.weight\", \"model.layers.1.mlp.gate_proj.weight\"]"
-                        f"\n\nDo NOT concatenate layer names with commas into a single string!"
+                        f"\n\nDo NOT concatenate parameter names with commas into a single string!"
                     )
             
             # Check if this is a container module (exists in model but has no weights itself)
             container_hint = ""
             try:
                 # Check if this looks like a module path (could be a container)
-                if layer_name and not layer_name.endswith('.weight') and not layer_name.endswith('.bias'):
+                if parameter_name and not parameter_name.endswith('.weight') and not parameter_name.endswith('.bias'):
                     # Try to find parameters that start with this prefix
-                    matching_params = [name for name in self.layers.keys() if name.startswith(layer_name + '.')]
+                    matching_params = [name for name in self.layers.keys() if name.startswith(parameter_name + '.')]
                     if matching_params:
                         container_hint = (
-                            f"\n\n💡 HINT: '{layer_name}' is a CONTAINER MODULE (has no weights itself)."
+                            f"\n\n💡 HINT: '{parameter_name}' is a CONTAINER MODULE (has no weights itself)."
                             f"\n\nThis function requires PARAMETER names (leaf tensors with actual weight values)."
-                            f"\n\nParameters under '{layer_name}':"
+                            f"\n\nParameters under '{parameter_name}':"
                             f"\n{chr(10).join(f'  - {name}' for name in matching_params[:10])}"
                             f"{f'{chr(10)}  ... and {len(matching_params) - 10} more' if len(matching_params) > 10 else ''}"
-                            f"\n\nTo get statistics for all weights in '{layer_name}', use the helper function:"
+                            f"\n\nTo get statistics for all weights in '{parameter_name}', use the helper function:"
                             f"\n```python"
                             f"\n# Get all parameters in this layer"
-                            f"\nparams = introspection.weights.get_layer_parameters('{layer_name}')\n"
+                            f"\nparams = introspection.weights.get_layer_parameters('{parameter_name}')\n"
                             f"print(f'Found {{len(params)}} parameters')\n"
                             f"\n# Get statistics for all of them"
                             f"\nstats_list = introspection.weights.get_weight_statistics(params)"
@@ -403,19 +421,19 @@ class WeightInspector:
                 pass  # If detection fails, just show the basic error
             
             raise KeyError(
-                f"Parameter '{layer_name}' not found. "
+                f"Parameter '{parameter_name}' not found. "
                 f"Use introspection.weights.list_parameters() to see all available parameters."
                 f"{comma_separated_hint}"
                 f"{container_hint}"
             )
         
-        param = self.layers[layer_name]
+        param = self.layers[parameter_name]
         weights = param.detach().cpu().float()
         weights_flat = weights.flatten()
         
         # Compute statistics
         stats = {
-            "name": layer_name,
+            "name": parameter_name,
             "shape": tuple(weights.shape),
             "num_parameters": weights.numel(),
             
@@ -444,18 +462,15 @@ class WeightInspector:
         }
         
         # Add shared weight warning if applicable
-        shared_layers = self.get_shared_layers(layer_name)
+        shared_layers = self.get_shared_layers(parameter_name)
         if shared_layers:
             stats['shared_with'] = shared_layers
             stats['warning'] = (
-                f"⚠️  WEIGHT SHARING DETECTED: This layer shares memory with "
-                f"{', '.join(shared_layers)}. Modifying this layer will also "
-                f"modify the shared layers!"
+                f"⚠️  WEIGHT SHARING DETECTED: This parameter shares memory with "
+                f"{', '.join(shared_layers)}. Modifying this parameter will also "
+                f"modify the shared parameters!"
             )
-            logger.warning(f"Layer '{layer_name}' shares weights with: {shared_layers}")
-        
-        # Cache results
-        self._stats_cache[layer_name] = stats
+            logger.warning(f"Parameter '{parameter_name}' shares weights with: {shared_layers}")
         
         return stats
     
@@ -507,8 +522,12 @@ class WeightInspector:
                 - std_difference: Difference in standard deviations
                 - distribution_comparison: Statistical comparison
         """
-        stats1 = self.get_weight_statistics(layer1)
-        stats2 = self.get_weight_statistics(layer2)
+        stats1_list = self.get_weight_statistics(layer1)
+        stats2_list = self.get_weight_statistics(layer2)
+        
+        # Extract first dict from list (since get_weight_statistics now always returns list)
+        stats1 = stats1_list[0]
+        stats2 = stats2_list[0]
         
         weights1 = self.layers[layer1].detach().cpu().float().flatten()
         weights2 = self.layers[layer2].detach().cpu().float().flatten()
@@ -557,7 +576,8 @@ class WeightInspector:
         if reference_layer not in self.layers:
             raise KeyError(f"Layer '{reference_layer}' not found.")
         
-        ref_stats = self.get_weight_statistics(reference_layer)
+        ref_stats_list = self.get_weight_statistics(reference_layer)
+        ref_stats = ref_stats_list[0]  # Extract from list
         ref_weights = self.layers[reference_layer].detach().cpu().float().flatten()
         
         similarities = []
@@ -567,7 +587,8 @@ class WeightInspector:
                 continue
             
             try:
-                stats = self.get_weight_statistics(layer_name)
+                stats_list = self.get_weight_statistics(layer_name)
+                stats = stats_list[0]  # Extract from list
                 weights = self.layers[layer_name].detach().cpu().float().flatten()
                 
                 # Only compare if shapes match

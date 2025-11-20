@@ -34,64 +34,55 @@ def _get_inspector(model: nn.Module) -> WeightInspector:
     return _inspector_cache[model_id]
 
 
-def get_weight_statistics(model: nn.Module, layer_name: Union[str, List[str]]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+def get_weight_statistics(model: nn.Module, parameter_names: Union[str, List[str]]) -> List[Dict[str, Any]]:
     """
     Get statistical information about weights in one or more parameters.
     
+    ALWAYS returns a list of dictionaries for consistent handling, regardless of whether
+    a single parameter name (str) or multiple names (List[str]) are provided.
+    
     Args:
         model: PyTorch model to inspect
-        layer_name: Either:
-                   - A single parameter name (str) - returns dict for that parameter
-                   - A list of parameter names (List[str]) - returns list of dicts
+        parameter_names: Either a single parameter name (str) or list of parameter names (List[str])
         
     Returns:
-        If layer_name is a string:
-            Dictionary containing:
-                - name: Parameter name
-                - shape: Weight tensor shape
-                - dtype: Data type
-                - device: Device (cpu/cuda)
-                - requires_grad: Whether trainable
-                - num_parameters: Total number of elements
-                - mean: Mean value
-                - std: Standard deviation
-                - min: Minimum value
-                - max: Maximum value
-                - l1_norm, l2_norm, frobenius_norm: Various norms
-                - sparsity: Percentage of near-zero values
-        
-        If layer_name is a list:
-            List of dicts (one per parameter) with the same structure as above.
+        List of dictionaries (one per parameter), each containing:
+            - name: Parameter name
+            - shape: Weight tensor shape
+            - dtype: Data type
+            - device: Device (cpu/cuda)
+            - requires_grad: Whether trainable
+            - num_parameters: Total number of elements
+            - mean: Mean value
+            - std: Standard deviation
+            - min: Minimum value
+            - max: Maximum value
+            - l1_norm, l2_norm, frobenius_norm: Various norms
+            - sparsity: Percentage of near-zero values
+            - error: Error message (only present if retrieval failed)
     
     Example:
-        >>> # Single parameter
-        >>> stats = get_weight_statistics(model, 'model.layers.0.self_attn.q_proj.weight')
-        >>> print(f"Shape: {stats['shape']}")
-        >>> print(f"Mean: {stats['mean']:.6f}, Std: {stats['std']:.6f}")
+        >>> # Single parameter - returns list with one dict
+        >>> result = get_weight_statistics(model, 'model.layers.0.self_attn.q_proj.weight')
+        >>> print(f"Shape: {result[0]['shape']}")
+        >>> print(f"Mean: {result[0]['mean']:.6f}")
         
-        >>> # Multiple parameters at once
+        >>> # Multiple parameters - returns list with multiple dicts
         >>> params = ['model.layers.0.self_attn.q_proj.weight',
         ...           'model.layers.0.self_attn.k_proj.weight']
-        >>> stats_list = get_weight_statistics(model, params)
-        >>> for stats in stats_list:
+        >>> result = get_weight_statistics(model, params)
+        >>> for stats in result:
         ...     print(f"{stats['name']}: mean={stats['mean']:.4f}")
     """
     inspector = _get_inspector(model)
-    result = inspector.get_weight_statistics(layer_name)
+    result = inspector.get_weight_statistics(parameter_names)
     
     # Check for errors and raise exceptions instead of returning error dicts
-    if isinstance(result, list):
-        # Check each result for errors
-        for item in result:
-            if isinstance(item, dict) and 'error' in item:
-                raise ValueError(
-                    f"Error getting statistics for '{item.get('layer_name', 'unknown')}': {item['error']}"
-                )
-        return result
-    elif isinstance(result, dict) and 'error' in result:
-        raise ValueError(
-            f"Error getting statistics for '{result.get('layer_name', layer_name)}': {result['error']}"
-        )
+    for item in result:
+        if isinstance(item, dict) and 'error' in item:
+            raise ValueError(
+                f"Error getting statistics for '{item.get('parameter_name', 'unknown')}': {item['error']}"
+            )
     
     return result
 
@@ -245,10 +236,10 @@ def find_similar_weights(model: nn.Module, layer_name: str, top_k: int = 5) -> L
     """
     inspector = _get_inspector(model)
     
-    # Get reference stats
+    # Get reference stats (now always returns list)
     try:
         result = inspector.get_weight_statistics(layer_name)
-        ref_stats = result if isinstance(result, dict) else result[0]
+        ref_stats = result[0]  # Extract first dict from list
     except:
         return []
     
@@ -260,7 +251,7 @@ def find_similar_weights(model: nn.Module, layer_name: str, top_k: int = 5) -> L
         
         try:
             result = inspector.get_weight_statistics(other_name)
-            other_stats = result if isinstance(result, dict) else result[0]
+            other_stats = result[0]  # Extract first dict from list
             
             # Calculate similarity based on statistical properties
             # Only compare if shapes match

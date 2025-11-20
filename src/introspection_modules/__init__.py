@@ -106,7 +106,7 @@ def create_introspection_module(
     # Create weights submodule
     weights_module = ModuleType('introspection.weights')
     weights_module.__doc__ = 'Weight inspection and statistics'
-    weights_module.get_weight_statistics = lambda layer_name: weights.get_weight_statistics(model, layer_name)
+    weights_module.get_weight_statistics = lambda parameter_names: weights.get_weight_statistics(model, parameter_names)
     
     # Make list_parameters() flexible - accept optional layer_prefix for convenience
     def _list_parameters_wrapper(layer_prefix=None):

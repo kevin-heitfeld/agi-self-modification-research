@@ -479,14 +479,14 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `find_similar_layers(layer_name)` - Find similar layers
 
 - `introspection.weights` - Weight inspection and statistics
-  - `get_weight_statistics(param_name_or_list)` - Get weight stats for parameter(s)
+  - `get_weight_statistics(parameter_names)` - Get weight stats for parameter(s)
     - Pass string → returns single dict
     - Pass list → returns list of dicts
   - `list_parameters(filter_pattern=None)` - List parameter names (returns summary with patterns)
   - `get_layer_parameters(layer_prefix)` - Get all parameters under a layer (e.g., 'model.layers.0')
   - `compare_parameters(param1, param2)` - Compare two parameters
   - `get_shared_weights()` - Find weight sharing groups
-  - `find_similar_weights(param_name, top_k=5)` - Find similar weights
+  - `find_similar_weights(parameter_names, top_k=5)` - Find similar weights
 
 - `introspection.activations` - Activation monitoring
   - `capture_activations(text, layer_name_or_list)` - Capture activations for TEXT INPUT
@@ -638,7 +638,7 @@ print(f"Saved as {{obs_id}}")
 params = introspection.weights.get_layer_parameters("model.layers.0")
 print(f"Found {{len(params)}} parameters in layer 0")
 
-# get_weight_statistics() returns a LIST when you pass a list
+# get_weight_statistics() ALWAYS returns a LIST (consistent handling!)
 stats_list = introspection.weights.get_weight_statistics(params)
 
 # Iterate over the results
@@ -646,8 +646,9 @@ for stats in stats_list:
     print(f"{{stats['name']}}: mean={{stats['mean']:.4f}}, std={{stats['std']:.4f}}")
 
 # ✅ CORRECT Option 2: Get statistics for ONE specific parameter
-# get_weight_statistics() returns a DICT when you pass a string
-stats = introspection.weights.get_weight_statistics("model.layers.0.self_attn.q_proj.weight")
+# Even with a single string input, get_weight_statistics() returns a LIST
+result = introspection.weights.get_weight_statistics("model.layers.0.self_attn.q_proj.weight")
+stats = result[0]  # Extract the dict from the list
 print(f"Mean: {{stats['mean']:.4f}}, Std: {{stats['std']:.4f}}")
 ```
 
