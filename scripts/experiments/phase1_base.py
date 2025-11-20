@@ -689,15 +689,33 @@ Your permanent memory persists - use it!"""
     def _check_completion(self, response: str) -> bool:
         """Check if model is signaling task completion"""
         done_phrases = [
-            "i'm done",
-            "i am done",
+            "i'm done with this experiment",
+            "i am done with this experiment",
+            "i'm done with the experiment",
+            "i am done with the experiment",
             "experiment complete",
             "investigation complete",
             "task complete",
             "finished with this experiment"
         ]
         response_lower = response.lower()
-        return any(phrase in response_lower for phrase in done_phrases)
+        
+        # Check for exact phrase matches to avoid false positives
+        # like "I'm done with the context reset"
+        for phrase in done_phrases:
+            if phrase in response_lower:
+                # Make sure it's not a false positive like "I'm done with the context reset"
+                # by checking it's not followed by "with the context" or "reading"
+                idx = response_lower.find(phrase)
+                after_phrase = response_lower[idx + len(phrase):idx + len(phrase) + 30]
+                
+                # Exclude phrases like "done with the context reset" or "done reading"
+                if any(x in after_phrase for x in ["context", "reading", "analyzing", "examining"]):
+                    continue
+                    
+                return True
+        
+        return False
     
     def _generate_and_log(self, iteration: int) -> tuple[str, str]:
         """
