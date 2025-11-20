@@ -30,7 +30,7 @@ from src.colab_utils import ColabTimeoutTracker, ColabStorageManager
 
 
 # Global configuration
-MAX_ITERATIONS_PER_EXPERIMENT = 30  # Maximum iterations for a single experiment/chat session
+MAX_ITERATIONS_PER_EXPERIMENT = 50  # Maximum iterations for a single experiment/chat session
 
 
 # Qwen Chat Template Formatting Helper
@@ -75,7 +75,18 @@ class ColoredFormatter(logging.Formatter):
         'CODE': '\033[1;33m',        # Bold Yellow for code results
         'SYSTEM': '\033[1;32m',      # Bold Green for system messages
         'CODEBLOCK': '\033[47;30m',  # Black text on light gray background for code blocks
+        'USER': '\033[1;36m',        # Bold Cyan for user messages
+        'DEBUG': '\033[90m',         # Gray for debug messages
+        'TOKENS': '\033[95m',        # Magenta for token usage
+        'MEMORY': '\033[1;31m',      # Bold Red for memory warnings/pruning
+        'INITIALIZATION': '\033[1;37m',  # Bold White for initialization
+        'CHECKPOINT': '\033[33m',    # Yellow for checkpoint saves
+        'SESSION': '\033[36m',       # Cyan for session management
+        'TIMEOUT': '\033[1;33m',     # Bold Yellow for timeout warnings
+        'INTERRUPTED': '\033[1;31m', # Bold Red for interruptions
+        'RESEARCH': '\033[1;35m',    # Bold Magenta for research-driven tags
     }
+
     
     @staticmethod
     def highlight_code_blocks(text: str) -> str:
@@ -142,6 +153,28 @@ class ColoredFormatter(logging.Formatter):
             message = message.replace('[CODE RESULTS]', f"{self.COLORS['CODE']}[CODE RESULTS]{self.COLORS['RESET']}", 1)
         elif message.startswith('[SYSTEM]'):
             message = message.replace('[SYSTEM]', f"{self.COLORS['SYSTEM']}[SYSTEM]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[USER]'):
+            message = message.replace('[USER]', f"{self.COLORS['USER']}[USER]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[DEBUG]'):
+            message = message.replace('[DEBUG]', f"{self.COLORS['DEBUG']}[DEBUG]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[TOKENS]'):
+            message = message.replace('[TOKENS]', f"{self.COLORS['TOKENS']}[TOKENS]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[MEMORY]'):
+            message = message.replace('[MEMORY]', f"{self.COLORS['MEMORY']}[MEMORY]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[INITIALIZATION]'):
+            message = message.replace('[INITIALIZATION]', f"{self.COLORS['INITIALIZATION']}[INITIALIZATION]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[CHECKPOINT]'):
+            message = message.replace('[CHECKPOINT]', f"{self.COLORS['CHECKPOINT']}[CHECKPOINT]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[SESSION]'):
+            message = message.replace('[SESSION]', f"{self.COLORS['SESSION']}[SESSION]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[TIMEOUT]'):
+            message = message.replace('[TIMEOUT]', f"{self.COLORS['TIMEOUT']}[TIMEOUT]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[INTERRUPTED]'):
+            message = message.replace('[INTERRUPTED]', f"{self.COLORS['INTERRUPTED']}[INTERRUPTED]{self.COLORS['RESET']}", 1)
+        elif message.startswith('[ERROR]'):
+            message = message.replace('[ERROR]', f"{self.COLORS['MEMORY']}[ERROR]{self.COLORS['RESET']}", 1)  # Use same color as MEMORY (bold red)
+        elif message.startswith('[RESEARCH]'):
+            message = message.replace('[RESEARCH]', f"{self.COLORS['RESEARCH']}[RESEARCH]{self.COLORS['RESET']}", 1)
         
         return f"{colored_timestamp} - {logger_name} - {colored_level} - {message}"
 
