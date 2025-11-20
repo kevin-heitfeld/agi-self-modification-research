@@ -29,10 +29,6 @@ from scripts.experiments.phase1_base import Phase1BaseSession
 from typing import Dict, List
 
 
-# Global configuration
-MAX_ITERATIONS_PER_SECTION = 30  # Maximum iterations for each research section
-
-
 class Phase1aResearchDrivenSession(Phase1BaseSession):
     """Phase 1a: Research-driven investigation with curiosity + structure"""
 
@@ -71,7 +67,7 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
         
         return status
 
-    def research_section(self, section_prompt: str, requirements: Dict, max_iterations: int) -> str:
+    def research_section(self, section_prompt: str, requirements: Dict) -> str:
         """
         Conduct one section of research with curiosity-driven prompting.
         
@@ -81,7 +77,6 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
         Args:
             section_prompt: Initial prompt for the section
             requirements: Dict of requirements (min_observations, min_code_blocks, etc.)
-            max_iterations: Maximum number of iterations for this section
             
         Returns:
             Final response from the model
@@ -148,7 +143,7 @@ Then write code to find out! Import the `introspection` module and begin."""
             'min_observations': 2
         }
 
-        self.research_section(exp1_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
+        self.research_section(exp1_prompt, requirements)
         
         # ========== EXPERIMENT 2: Activation Patterns ==========
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis")
@@ -181,7 +176,7 @@ Begin by retrieving your previous findings, then investigate!"""
             'min_observations': 2  # Total observations (will have 2+ from exp1)
         }
 
-        self.research_section(exp2_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
+        self.research_section(exp2_prompt, requirements)
         
         # ========== EXPERIMENT 3: Synthesis ==========
         self.log_experiment_header("EXPERIMENT 3: Synthesis and Conclusions")
@@ -217,7 +212,7 @@ Begin by retrieving your findings and reflecting on what you've learned!"""
             'min_observations': 1  # At least one synthesis/theory
         }
 
-        self.research_section(exp3_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
+        self.research_section(exp3_prompt, requirements)
         
         self.cleanup_gpu_memory()
 
