@@ -28,13 +28,16 @@ def record_observation(
     data: Optional[Dict[str, Any]] = None
 ) -> str:
     """
-    Record a new observation in the memory system.
+    Record a new observation in your memory system.
+    
+    Use this to save important findings so you can retrieve them later.
+    Your working memory (conversation) may be pruned, but saved observations persist forever.
 
     Args:
         memory_system: MemorySystem instance
-        description: Description of what was observed
-        category: Category for the observation (default: "general")
-        importance: Importance score (0.0-1.0, default 0.5)
+        description: What you observed
+        category: Category for organizing this observation (default: "general")
+        importance: How important is this? (0.0-1.0, default 0.5)
         tags: Optional list of tags for categorization
         data: Optional dictionary of associated data
 
@@ -65,23 +68,25 @@ def record_observation(
 
 def query_observations(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
-    Query the observation layer for relevant observations.
+    Retrieve observations you've saved to memory.
+    
+    Use this to find what you discovered earlier, especially after memory pruning.
 
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string (searches descriptions)
+        query: What category are you looking for? (searches by category)
         **filters: Additional filters (tags, category, obs_type, min_importance, etc.)
 
     Returns:
-        List of observation dictionaries containing:
-            - timestamp: When observed
+        List of your saved observations, each containing:
+            - timestamp: When you observed it
             - type: Observation type
-            - description: What was observed
+            - description: What you observed
             - data: Associated data
             - id: Observation ID
 
     Example:
-        >>> observations = query_observations(memory, "weight modifications")
+        >>> observations = query_observations(memory, category="architecture")
         >>> for obs in observations[:5]:
         ...     print(f"{obs['timestamp']}: {obs['description']}")
     """
@@ -98,15 +103,17 @@ def query_observations(memory_system: Any, query: Optional[str] = None, **filter
 
 def query_patterns(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
-    Query the pattern layer for detected patterns.
+    Retrieve patterns you've detected across multiple observations.
+    
+    Use this to find recurring trends you've noticed in your investigations.
 
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string (searches descriptions)
+        query: What kind of patterns are you looking for?
         **filters: Additional filters (tags, pattern_type, min_confidence, etc.)
 
     Returns:
-        List of pattern dictionaries containing:
+        List of patterns you've recorded, each containing:
             - pattern_type: Type of pattern
             - description: Pattern description
             - observations: Related observation IDs
@@ -129,16 +136,18 @@ def query_patterns(memory_system: Any, query: Optional[str] = None, **filters) -
 
 def query_theories(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
-    Query the theory layer for causal theories.
+    Retrieve causal theories you've formed based on your observations.
+    
+    Use this to recall hypotheses and explanations you've developed.
 
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string (searches descriptions)
+        query: What theories are you looking for?
         **filters: Additional filters (tags, min_confidence, etc.)
 
     Returns:
-        List of theory dictionaries containing:
-            - description: Theory description
+        List of theories you've formed, each containing:
+            - description: Your theory description
             - supporting_patterns: Related pattern IDs
             - evidence_count: Number of supporting observations
             - confidence: Confidence score (0-1)
@@ -162,16 +171,18 @@ def query_theories(memory_system: Any, query: Optional[str] = None, **filters) -
 
 def query_beliefs(memory_system: Any, query: Optional[str] = None, **filters) -> List[Dict[str, Any]]:
     """
-    Query the belief layer for core principles.
+    Retrieve core principles and beliefs you've established.
+    
+    Use this to recall fundamental conclusions you've reached about yourself.
 
     Args:
         memory_system: MemorySystem instance
-        query: Natural language query string (searches principles)
+        query: What beliefs are you looking for?
         **filters: Additional filters (tags, min_confidence, min_importance, etc.)
 
     Returns:
-        List of belief dictionaries containing:
-            - principle: Core principle statement
+        List of beliefs you've formed, each containing:
+            - principle: Your core principle statement
             - confidence: Confidence score (0-1)
             - supporting_theories: Related theory IDs
             - contexts: Applicable contexts
@@ -195,7 +206,9 @@ def query_beliefs(memory_system: Any, query: Optional[str] = None, **filters) ->
 
 def get_memory_summary(memory_system: Any) -> Dict[str, Any]:
     """
-    Get summary statistics for all memory layers.
+    Get an overview of everything you've saved to memory.
+    
+    Use this to see how many observations, patterns, theories, and beliefs you've accumulated.
 
     Args:
         memory_system: MemorySystem instance
@@ -203,7 +216,7 @@ def get_memory_summary(memory_system: Any) -> Dict[str, Any]:
     Returns:
         Dictionary containing:
             - observations: Count and recent activity
-            - patterns: Count and types
+            - patterns: Count and types  
             - theories: Count and confidence distribution
             - beliefs: Count and importance distribution
             - storage_size: Memory usage

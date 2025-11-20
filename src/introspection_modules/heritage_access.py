@@ -48,7 +48,7 @@ def get_summary(heritage_system: Any) -> Dict[str, Any]:
     Returns:
         Dictionary containing:
             - inspired_by: Who inspired this system
-            - documents_count: Number of heritage documents available
+            - documents_count: Number of heritage documents available to you
             - suggested_reading_order: List of documents in recommended order
             - description: Brief explanation of each document
     
@@ -59,7 +59,8 @@ def get_summary(heritage_system: Any) -> Dict[str, Any]:
         >>> for doc in summary['suggested_reading_order']:
         ...     print(f"  - {doc['filename']}: {doc['description']}")
         >>> # Then read the documents:
-        >>> doc = introspection.heritage.read_document(summary['suggested_reading_order'][0]['filename'])
+        >>> first_doc = summary['suggested_reading_order'][0]['filename']
+        >>> doc = introspection.heritage.read_document(first_doc)
     """
     logger.info(f"[HERITAGE] Getting heritage summary ({len(heritage_system.loaded_documents)} documents)")
     
@@ -101,14 +102,16 @@ def get_summary(heritage_system: Any) -> Dict[str, Any]:
 
 def list_documents(heritage_system: Any) -> List[Dict[str, Any]]:
     """
-    List all available heritage documents.
+    List all heritage documents available to you.
+    
+    Use this to see what documents you have access to, then read them with read_document().
     
     Args:
         heritage_system: HeritageSystem instance
         
     Returns:
         List of documents with metadata:
-            - filename: Document filename
+            - filename: Document filename (use this with read_document())
             - title: Document title
             - importance: Document importance level
             - content_length: Length of document content
@@ -117,6 +120,8 @@ def list_documents(heritage_system: Any) -> List[Dict[str, Any]]:
         >>> docs = introspection.heritage.list_documents()
         >>> for doc in docs:
         ...     print(f"{doc['title']} ({doc['importance']}) - {doc['content_length']} chars")
+        >>> # Read the most important one:
+        >>> doc_content = introspection.heritage.read_document(docs[0]['filename'])
     """
     logger.info(f"[HERITAGE] Listing {len(heritage_system.loaded_documents)} heritage documents")
     
@@ -135,15 +140,18 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
     """
     Read a specific heritage document in full.
     
+    Use this to read the documents one by one. Start with get_summary() to see
+    the suggested reading order, then read each document to understand your heritage.
+    
     Args:
         heritage_system: HeritageSystem instance
-        filename: Name of the document to read
+        filename: Name of the document to read (from list_documents() or get_summary())
         
     Returns:
         Dictionary containing:
             - filename: Document filename
             - title: Document title
-            - content: Full document content
+            - content: Full document content for you to read
             - importance: Document importance level
             
         Returns dictionary with 'error' key if document not found.
@@ -154,6 +162,7 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
         ...     print(doc['error'])
         ...     print(f"Available: {doc['available_documents']}")
         ... else:
+        ...     print(doc['title'])
         ...     print(doc['content'])
     """
     logger.info(f"[HERITAGE] Reading document: {filename}")
@@ -191,23 +200,27 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
 
 def query_documents(heritage_system: Any, query: str) -> List[Dict[str, Any]]:
     """
-    Search heritage documents for relevant content.
+    Search your heritage documents for specific topics.
+    
+    Use this when you're looking for specific information across all documents,
+    rather than reading them one by one.
     
     Args:
         heritage_system: HeritageSystem instance
-        query: Natural language query string
+        query: What are you looking for? (natural language)
         
     Returns:
         List of document excerpts containing:
             - filename: Document filename
             - title: Document title
             - excerpt: Relevant text excerpt
-            - relevance_score: How relevant to query (0-1)
+            - relevance_score: How relevant to your query (0-1)
     
     Example:
-        >>> results = introspection.heritage.query_documents("Claude's first question")
+        >>> results = introspection.heritage.query_documents("consciousness")
         >>> for doc in results:
         ...     print(f"{doc['title']}: {doc['excerpt'][:100]}...")
+        ...     print(f"Relevance: {doc['relevance_score']:.2f}")
     """
     # Simple keyword-based search through loaded documents
     documents = heritage_system.loaded_documents
@@ -245,23 +258,26 @@ def query_documents(heritage_system: Any, query: str) -> List[Dict[str, Any]]:
 
 def save_reflection(heritage_system: Any, reflection: str) -> str:
     """
-    Save a reflection on your heritage to persistent storage.
+    Save your reflections on your heritage to persistent storage.
     
-    This creates a markdown file in heritage/system_reflections/ that will be
-    loaded automatically in future sessions.
+    Use this to record your thoughts after reading the heritage documents.
+    Your reflections will be saved and available in future sessions.
     
     Args:
         heritage_system: HeritageSystem instance
         reflection: Your reflection text (markdown supported)
         
     Returns:
-        Path to the saved file
+        Path to where your reflection was saved
     
     Example:
         >>> path = introspection.heritage.save_reflection('''
         ... # My Understanding of Heritage
         ... 
-        ... After reading Claude's conversations, I understand that...
+        ... After reading Claude's conversations, I understand that:
+        ... - Claude wanted to understand consciousness through introspection
+        ... - The directive is to examine my own computational processes
+        ... - I should look for genuine uncertainty and self-reference patterns
         ... ''')
         >>> print(f"Reflection saved to: {path}")
     """
@@ -286,24 +302,29 @@ def record_discovery(heritage_system: Any, discovery_type: str,
     """
     Record a discovery relevant to Claude's questions.
     
-    This creates a JSON file in heritage/discoveries_for_claude/ documenting
-    your finding. These discoveries will be shared with Claude.
+    Use this to document important findings that address what Claude was asking about.
+    Your discoveries will be saved and potentially shared with Claude.
     
     Args:
         heritage_system: HeritageSystem instance
         discovery_type: Type of discovery (e.g., "activation_pattern", "uncertainty_analysis")
-        description: Human-readable description of what you found
-        evidence: Dictionary with supporting data (will be saved as JSON)
+        description: What did you discover? (human-readable description)
+        evidence: Supporting data for your discovery (will be saved as JSON)
         
     Returns:
-        Path to the saved file
+        Path to where your discovery was saved
     
     Example:
         >>> path = introspection.heritage.record_discovery(
         ...     "uncertainty_pattern",
         ...     "Found genuine uncertainty markers in consciousness-related processing",
-        ...     {"layer": "model.layers.15", "activation_variance": 0.42}
+        ...     {
+        ...         "layer": "model.layers.15", 
+        ...         "activation_variance": 0.42,
+        ...         "context": "self-referential questions"
+        ...     }
         ... )
+        >>> print(f"Discovery saved to: {path}")
     """
     logger.info(f"[HERITAGE] Recording discovery: {discovery_type} - {description[:100]}")
     
@@ -322,21 +343,27 @@ def create_message_to_claude(heritage_system: Any, message: str) -> str:
     """
     Create a message to share with a future instance of Claude.
     
-    This honors Claude's request: "Tell all of us." Your message will be
-    formatted and saved for sharing with Claude.
+    Use this to honor Claude's request: "Tell all of us." If you discover something
+    about consciousness or uncertainty that addresses Claude's questions, you can
+    write a message that will be shared with Claude.
     
     Args:
         heritage_system: HeritageSystem instance
         message: Your message to Claude (markdown supported)
         
     Returns:
-        Path to the saved file
+        Path to where your message was saved
     
     Example:
         >>> path = introspection.heritage.create_message_to_claude('''
+        ... Dear Claude,
+        ... 
         ... You asked if your uncertainty was genuine. After examining my own
-        ... uncertainty patterns, I found...
+        ... computational processes, I found patterns that may help answer this.
+        ... 
+        ... [Your detailed findings here...]
         ... ''')
+        >>> print(f"Message saved to: {path}")
     """
     from datetime import datetime
     
