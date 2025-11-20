@@ -199,6 +199,10 @@ class Phase1BaseSession(ABC):
 
         # Track conversation history
         self.conversation_history: List[Dict[str, str]] = []
+        
+        # Track COMPLETE conversation history (never pruned, kept in CPU RAM)
+        # This is saved to conversation.json for full analysis
+        self.complete_conversation_history: List[Dict[str, str]] = []
 
         # Initialize GPU memory monitor
         self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
@@ -430,6 +434,20 @@ discoveries across memory resets.
         
         return message
 
+    def _add_message(self, role: str, content: str):
+        """
+        Add a message to both conversation histories.
+        
+        Args:
+            role: Message role ('user' or 'assistant')
+            content: Message content
+        """
+        message = {"role": role, "content": content}
+        # Add to active conversation (may be pruned)
+        self.conversation_history.append(message)
+        # Add to complete conversation (never pruned, saved to file)
+        self.complete_conversation_history.append(message)
+
     def _add_truncation_warning(self, message: str, stopped_reason: str, had_code: bool) -> str:
         """
         Add truncation warning to a message if response was cut off.
@@ -534,10 +552,7 @@ Your saved observations persist - query them now!"""
         self.logger.info(f"\n[USER] {user_message}\n")
 
         # Add user message to history
-        self.conversation_history.append({
-            "role": "user",
-            "content": user_message
-        })
+        self._add_message("user", user_message)
 
         # Main loop: model responds -> we execute code -> show results -> repeat
         iteration = 0
@@ -567,10 +582,7 @@ Your saved observations persist - query them now!"""
             )
 
             # Add to history
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": response
-            })
+            self._add_message("assistant", response)
 
             # Check if model wants to end
             if self._check_completion(response):
@@ -588,10 +600,7 @@ Your saved observations persist - query them now!"""
                     # Response was cut off - need continuation
                     truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please continue or write your code block again, but be more concise."
                     self.logger.info(f"[SYSTEM] {truncation_message}")
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": truncation_message
-                    })
+                    self._add_message("user", truncation_message)
                     continue
                 
                 # Check if model explicitly signals completion
@@ -615,10 +624,7 @@ Your saved observations persist - query them now!"""
                     self.logger.info("[SYSTEM] Model appears to be seeking feedback")
                     feedback_message = "Please continue with your investigation. Write code to explore further."
                     self.logger.info(f"[SYSTEM] {feedback_message}")
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": feedback_message
-                    })
+                    self._add_message("user", feedback_message)
                     continue
                 
                 # Model wrote explanation without code and didn't ask for feedback
@@ -657,10 +663,7 @@ Your saved observations persist - query them now!"""
             self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
             self.logger.info(f"\n[SYSTEM] {result_message}\n")
 
-            self.conversation_history.append({
-                "role": "user",
-                "content": result_message
-            })
+            self._add_message("user", result_message)
 
         if iteration >= MAX_ITERATIONS_PER_EXPERIMENT:
             self.logger.warning(f"[SYSTEM] Reached maximum iterations ({MAX_ITERATIONS_PER_EXPERIMENT})")
@@ -731,6 +734,7 @@ Your saved observations persist - query them now!"""
         self.gpu_monitor.snapshot("before_reset")
         
         self.conversation_history = []
+        self.complete_conversation_history = []  # Also reset complete history
         self.conversation_kv_cache = None
         self.turns_since_last_prune = 0  # Reset turn counter for new experiment
         
@@ -783,16 +787,23 @@ Your saved observations persist - query them now!"""
         
         self.logger.info(f"[SESSION] Saving results to {self.session_dir}")
         
-        # Save full conversation history
+        # Save COMPLETE conversation history (never pruned)
         conversation_file = self.session_dir / "conversation.json"
         with open(conversation_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "session_name": self.session_name,
                 "phase": self.phase_name,
                 "timestamp": datetime.now().isoformat(),
-                "conversation": self.conversation_history
+                "conversation": self.complete_conversation_history,  # Use complete, not pruned
+                "metadata": {
+                    "total_messages": len(self.complete_conversation_history),
+                    "pruned_to_messages": len(self.conversation_history),
+                    "messages_pruned": len(self.complete_conversation_history) - len(self.conversation_history)
+                }
             }, f, indent=2, ensure_ascii=False)
         self.logger.info(f"[SESSION] Saved conversation: {conversation_file}")
+        self.logger.info(f"[SESSION]   Complete history: {len(self.complete_conversation_history)} messages")
+        self.logger.info(f"[SESSION]   Active (pruned): {len(self.conversation_history)} messages")
         
         # Generate summary statistics
         summary = {
@@ -801,15 +812,17 @@ Your saved observations persist - query them now!"""
             "phase_description": self.get_phase_description(),
             "timestamp": datetime.now().isoformat(),
             "statistics": {
-                "total_turns": len(self.conversation_history) // 2,  # Each turn = user + assistant
-                "total_tokens": sum(len(msg.get("content", "")) for msg in self.conversation_history),
+                "total_turns": len(self.complete_conversation_history) // 2,  # Each turn = user + assistant
+                "total_tokens": sum(len(msg.get("content", "")) for msg in self.complete_conversation_history),
+                "pruned_turns": len(self.conversation_history) // 2,
+                "messages_pruned": len(self.complete_conversation_history) - len(self.conversation_history)
             }
         }
         
         # Count code executions if code_executor exists
         if hasattr(self, 'code_executor'):
             code_blocks = []
-            for msg in self.conversation_history:
+            for msg in self.complete_conversation_history:
                 if msg.get("role") == "assistant":
                     content = msg.get("content", "")
                     # Count code blocks (simple heuristic)
