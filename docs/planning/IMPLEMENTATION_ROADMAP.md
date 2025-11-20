@@ -247,8 +247,8 @@ Ongoing:     Analysis, Documentation, Ethical Review
 python scripts\experiments\phase1a_no_heritage.py
 
 # Then run other variants as needed
-python scripts\experiments\phase1b_late_heritage.py
-python scripts\experiments\phase1c_early_heritage.py
+python scripts\experiments\phase1b_early_heritage.py
+python scripts\experiments\phase1c_late_heritage.py
 python scripts\experiments\phase1d_delayed_heritage.py
 python scripts\experiments\phase1e_wrong_heritage.py
 ```

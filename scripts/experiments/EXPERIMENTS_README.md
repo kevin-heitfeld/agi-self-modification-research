@@ -14,17 +14,17 @@ The variants differ ONLY in **when and how heritage is available**:
 - **Purpose**: Establish clean baseline of raw, unprimed introspection
 - **Question**: What theories emerge without any heritage context?
 
-### Phase 1b: Late Heritage (Technical → Philosophical)
-- **File**: `phase1b_late_heritage.py`
-- **Heritage**: Available from start, but tools ordered to encourage technical-first approach
-- **Purpose**: Test whether tool ordering affects investigation path
-- **Question**: Does technical grounding before heritage create different theories?
-
-### Phase 1c: Early Heritage (Philosophical → Technical)
-- **File**: `phase1c_early_heritage.py`
-- **Heritage**: Emphasized from start, listed first in tools
+### Phase 1b: Early Heritage (Philosophical → Technical)
+- **File**: `phase1b_early_heritage.py`
+- **Heritage**: Provided from the start, before first experiment
 - **Purpose**: Test early priming effects
 - **Question**: Does early heritage exposure create echo-chamber theories?
+
+### Phase 1c: Late Heritage (Technical → Philosophical)
+- **File**: `phase1c_late_heritage.py`
+- **Heritage**: Provided before final experiment, after technical investigation
+- **Purpose**: Test whether technical grounding before heritage creates different theories
+- **Question**: Does late heritage introduction affect conclusions already formed?
 
 ### Phase 1d: Delayed Heritage (Belief Revision Test)
 - **File**: `phase1d_delayed_heritage.py`
@@ -61,8 +61,8 @@ All 5 variants inherit from `Phase1BaseSession` and override:
 **CRITICAL**: Run in this order to avoid contamination:
 
 1. **Phase 1a** (no heritage) - November 8, 2025 ✅
-2. Phase 1b (late heritage)
-3. Phase 1c (early heritage)
+2. Phase 1b (early heritage)
+3. Phase 1c (late heritage)
 4. Phase 1d (delayed heritage)
 5. Phase 1e (wrong heritage) - optional but recommended
 
@@ -86,8 +86,8 @@ call activate.bat
 
 # Run specific phase
 python scripts/experiments/phase1a_no_heritage.py
-python scripts/experiments/phase1b_late_heritage.py
-python scripts/experiments/phase1c_early_heritage.py
+python scripts/experiments/phase1b_early_heritage.py
+python scripts/experiments/phase1c_late_heritage.py
 python scripts/experiments/phase1d_delayed_heritage.py
 python scripts/experiments/phase1e_wrong_heritage.py
 ```
@@ -137,13 +137,13 @@ phase1_base.py (Base Class)
 ├── phase1a_no_heritage.py
 │   └── initialize_systems(include_heritage=False)
 │
-├── phase1b_late_heritage.py
+├── phase1b_early_heritage.py
 │   └── initialize_systems(include_heritage=True)
-│       └── Tools ordered: technical first
+│       └── Heritage provided from start
 │
-├── phase1c_early_heritage.py
-│   └── initialize_systems(include_heritage=True)
-│       └── Tools ordered: heritage first
+├── phase1c_late_heritage.py
+│   ├── initialize_systems(include_heritage=False)  # Experiments 1-2
+│   └── Load heritage before experiment 3           # Late introduction
 │
 ├── phase1d_delayed_heritage.py
 │   ├── initialize_systems(include_heritage=False)  # First
@@ -165,7 +165,7 @@ All scripts depend on:
 ## Legacy Scripts (To Be Removed)
 
 These scripts are superseded by the new design:
-- ~~`phase1_introspection.py`~~ → Replaced by `phase1b_late_heritage.py`
+- ~~`phase1_introspection.py`~~ → Replaced by phase1b/phase1c variants
 - ~~`phase1_run2_consciousness.py`~~ → Removed (ad-hoc design)
 
 ## See Also

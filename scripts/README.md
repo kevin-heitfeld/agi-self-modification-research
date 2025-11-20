@@ -20,8 +20,8 @@ Demo scripts that showcase individual system components. These are for testing, 
 Research experiment scripts where the model examines itself. These are the core scientific investigations.
 
 - `phase1a_no_heritage.py` - **Baseline** - No heritage context (run this first)
-- `phase1b_late_heritage.py` - Heritage available, technical tools listed first
-- `phase1c_early_heritage.py` - Heritage emphasized early
+- `phase1b_early_heritage.py` - Heritage provided before experiments (early priming)
+- `phase1c_late_heritage.py` - Heritage provided before final experiment (late introduction)
 - `phase1d_delayed_heritage.py` - Heritage revealed after independent conclusions
 - `phase1e_wrong_heritage.py` - Mismatched heritage (control for echo effects)
 - `phase1_base.py` - Base class for all Phase 1 variants

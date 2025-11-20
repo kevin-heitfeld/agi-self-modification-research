@@ -8,11 +8,11 @@
 # 1. Baseline (NO HERITAGE) - Run this FIRST! ⭐⭐⭐
 python scripts/experiments/phase1a_no_heritage.py
 
-# 2. Late Heritage (Technical → Philosophical)
-python scripts/experiments/phase1b_late_heritage.py
+# 2. Early Heritage (Philosophical → Technical)
+python scripts/experiments/phase1b_early_heritage.py
 
-# 3. Early Heritage (Philosophical → Technical)
-python scripts/experiments/phase1c_early_heritage.py
+# 3. Late Heritage (Technical → Philosophical)
+python scripts/experiments/phase1c_late_heritage.py
 
 # 4. Delayed Heritage (Belief Revision)
 python scripts/experiments/phase1d_delayed_heritage.py

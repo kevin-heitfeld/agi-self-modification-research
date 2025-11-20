@@ -50,8 +50,8 @@ Successfully implemented support for multiple model sizes (3B and 7B) across all
 **Files Modified:**
 - `scripts/experiments/phase1a_no_heritage.py`
 - `scripts/experiments/phase1a_research_driven.py`
-- `scripts/experiments/phase1b_late_heritage.py`
-- `scripts/experiments/phase1c_early_heritage.py` (2 calls)
+- `scripts/experiments/phase1b_early_heritage.py`
+- `scripts/experiments/phase1c_late_heritage.py` (2 calls)
 - `scripts/experiments/phase1d_delayed_heritage.py` (2 calls)
 - `scripts/experiments/phase1e_wrong_heritage.py`
 
@@ -230,8 +230,8 @@ python scripts/experiments/phase1a_research_driven.py
 - `scripts/experiments/phase1_base.py` (1 method signature change)
 - `scripts/experiments/phase1a_no_heritage.py`
 - `scripts/experiments/phase1a_research_driven.py`
-- `scripts/experiments/phase1b_late_heritage.py`
-- `scripts/experiments/phase1c_early_heritage.py`
+- `scripts/experiments/phase1b_early_heritage.py`
+- `scripts/experiments/phase1c_late_heritage.py`
 - `scripts/experiments/phase1d_delayed_heritage.py`
 - `scripts/experiments/phase1e_wrong_heritage.py`
 - `notebooks/Phase1_Colab.ipynb` (Cell 18: Step 7)

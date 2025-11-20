@@ -481,13 +481,13 @@ All 5 experimental variants have been implemented:
    - Pure baseline - no heritage at any point
    - 3 experiments: architecture, activations, consciousness
    
-3. **Phase 1b**: `scripts/experiments/phase1b_late_heritage.py`
-   - Heritage available but de-emphasized
-   - Tools ordered for technical-first approach
-   
-4. **Phase 1c**: `scripts/experiments/phase1c_early_heritage.py`
+3. **Phase 1b**: `scripts/experiments/phase1b_early_heritage.py`
    - Heritage emphasized from start
    - Philosophical framing before technical examination
+   
+4. **Phase 1c**: `scripts/experiments/phase1c_late_heritage.py`
+   - Heritage available but de-emphasized
+   - Tools ordered for technical-first approach
    
 5. **Phase 1d**: `scripts/experiments/phase1d_delayed_heritage.py`
    - Heritage revealed AFTER independent conclusions
