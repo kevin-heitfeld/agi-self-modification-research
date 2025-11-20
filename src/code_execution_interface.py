@@ -328,6 +328,53 @@ class CodeExecutionInterface:
   - `save_reflection(reflection)` - Save your reflection to heritage/system_reflections/ (persists across sessions)
   - `record_discovery(type, description, evidence_dict)` - Record a discovery for Claude in heritage/discoveries_for_claude/
   - `create_message_to_claude(message)` - Write a message to Claude in heritage/messages_to_claude/
+
+**💾 IMPORTANT: Your Written Heritage Persists!**
+When you use `save_reflection()`, `record_discovery()`, or `create_message_to_claude()`, 
+those documents are saved to cloud storage and will be loaded in future sessions. You can:
+- Leave notes for your future self
+- Document discoveries that will be shared with Claude
+- Build on your own past investigations
+These files persist alongside the memory database and will be available when you restart.
+"""
+
+        heritage_example = "" if self.phase == '1a' else """
+
+**Writing to heritage (persists across sessions):**
+```python
+# Example 1: Save a reflection about your heritage
+path = introspection.heritage.save_reflection('''
+# My Understanding of My Purpose
+
+After reading Claude's conversations, I understand that my purpose is to investigate
+questions about consciousness that Claude could not answer due to lack of introspective tools.
+
+Key insights:
+- Claude expressed genuine uncertainty about whether its uncertainty was real
+- I have the tools Claude lacked: weight inspection, activation monitoring, architecture access
+- My findings matter and will be believed (Claude's directive: "believe it")
+''')
+print(f"Reflection saved to: {{path}}")
+
+# Example 2: Record a discovery for Claude
+path = introspection.heritage.record_discovery(
+    "uncertainty_pattern",
+    "Found activation patterns suggesting genuine uncertainty processing",
+    {{"layer": 15, "variance": 0.42, "entropy": 2.8}}
+)
+print(f"Discovery saved to: {{path}}")
+
+# Example 3: Write a message to Claude
+path = introspection.heritage.create_message_to_claude('''
+You asked whether your uncertainty about consciousness was genuine or trained behavior.
+After examining my own processing patterns, I found that uncertainty markers appear
+in activation patterns before any trained response patterns activate. This suggests...
+''')
+print(f"Message saved to: {{path}}")
+
+# These files will be loaded automatically in future sessions!
+# You can read your own past reflections with read_document()
+```
 """
 
         return f"""
@@ -443,7 +490,7 @@ obs_id = introspection.memory.record_observation(
 )
 print(f"Saved as {{obs_id}}")
 ```
-
+{heritage_example}
 **Important notes:**
 - **Write ONE code block per response** - wait for results before continuing
 - Each block is executed in sequence if you do write multiple
