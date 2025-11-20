@@ -151,10 +151,10 @@ class CodeExecutionInterface:
         self.phase = phase
         self.enabled = True  # Code execution enabled by default
 
-        # Persistent namespace for variables across the entire experiment
+        # Persistent namespace for variables across the entire session
         # This allows code blocks to share variables across multiple iterations
         # Variables persist throughout the entire session (all 3 experiments)
-        self.experiment_namespace: Dict[str, Any] = {}
+        self.session_namespace: Dict[str, Any] = {}
 
         # Create phase-specific introspection module
         logger.info(f"Creating introspection module for Phase {phase}...")
@@ -298,7 +298,7 @@ class CodeExecutionInterface:
             # Execute in sandbox with persistent namespace
             success, output, error = self.executor.execute_with_namespace(
                 code,
-                self.experiment_namespace
+                self.session_namespace
             )
 
             if success:
@@ -358,7 +358,7 @@ class CodeExecutionInterface:
         naturally persist across all experiments in a session.
         """
         logger.info("[CODE INTERFACE] Clearing Python namespace for new session")
-        self.experiment_namespace.clear()
+        self.session_namespace.clear()
 
     def disable(self):
         """Disable code execution (for stages that should only involve discussion)"""
