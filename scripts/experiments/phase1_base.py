@@ -706,7 +706,7 @@ Your permanent memory persists - use it!"""
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
 
             # Build result message with execution results and system notices
-            result_message = self._execute_code_and_build_message(response, stopped_reason, iteration)
+            result_message = self._build_result_message(result, error, stopped_reason, iteration)
 
             # Check for Colab timeout and save checkpoint if needed
             if self.check_colab_timeout():
@@ -859,30 +859,26 @@ Your permanent memory persists - use it!"""
         self.logger.info("[SYSTEM] No code written, assuming turn complete")
         return False  # Break loop
     
-    def _execute_code_and_build_message(
+    def _build_result_message(
         self, 
-        response: str, 
+        result: str,
+        error: bool,
         stopped_reason: str, 
         iteration: int
     ) -> str:
         """
-        Execute code from response and build result message.
+        Build result message from code execution results.
         
         Args:
-            response: The model's response containing code
+            result: The code execution result (already executed)
+            error: Whether there were any errors
             stopped_reason: Why generation stopped
             iteration: Current iteration number
             
         Returns:
             Message to send back to model with results
         """
-        # Extract and execute code
-        has_code, result, error = self.code_interface.execute_response(response)
-        
-        # Show results to model
-        self.logger.info(f"[CODE RESULTS]\n{result}\n")
-        
-        # Build result message
+        # Build result message (code already executed in main loop)
         result_message = f"**Code Execution Results:**\n\n{result}"
         if error:
             result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
