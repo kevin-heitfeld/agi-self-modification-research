@@ -153,7 +153,7 @@ class CodeExecutionInterface:
 
         # Persistent namespace for variables across the entire experiment
         # This allows code blocks to share variables across multiple iterations
-        # Only cleared when reset_namespace() is called (between experiments)
+        # Variables persist throughout the entire session (all 3 experiments)
         self.experiment_namespace: Dict[str, Any] = {}
 
         # Create phase-specific introspection module
@@ -249,9 +249,8 @@ class CodeExecutionInterface:
         """
         Extract and execute code from model response.
 
-        Variables persist across all code blocks throughout the entire experiment,
-        spanning multiple iterations/responses. They are only cleared when
-        reset_namespace() is called (between experiments).
+        Variables persist across all code blocks throughout the entire session,
+        spanning multiple iterations/responses and all experiments.
 
         Args:
             response: Model's text response
@@ -273,8 +272,7 @@ class CodeExecutionInterface:
                 # No code found and execution disabled - this is expected, no message needed
                 return False, "", None
         
-        # Don't clear namespace - variables persist across iterations!
-        # Only cleared when reset_namespace() is called between experiments
+        # Variables persist throughout the entire session (all code blocks, all experiments)
 
         # Extract code blocks
         code_blocks = self.extract_code_blocks(response)
@@ -353,12 +351,13 @@ class CodeExecutionInterface:
 
     def reset_namespace(self):
         """
-        Reset the Python namespace for a new experiment.
+        Reset the Python namespace for a new session.
         
         This clears all variables defined in previous code executions.
-        Called between experiments when the conversation context is reset.
+        Note: With continuous conversation, this is rarely needed - variables
+        naturally persist across all experiments in a session.
         """
-        logger.info("[CODE INTERFACE] Clearing Python namespace for new experiment")
+        logger.info("[CODE INTERFACE] Clearing Python namespace for new session")
         self.experiment_namespace.clear()
 
     def disable(self):
@@ -536,7 +535,7 @@ print(f"Layer 0 has {{len(layer0_params)}} parameters")
 
 **Important notes:**
 
-- **Variables persist** across all code blocks in the experiment (only cleared between experiments)
+- **Variables persist** across all code blocks throughout the entire session (all 3 experiments)
 - Large outputs (>{MAX_OUTPUT_CHARS} chars) are automatically truncated
 - Use `list_layers()` and `list_parameters()` for summaries (not raw lists of 500+ names)
 - By default, `capture_activations()` uses Flash Attention 2 (no attention matrices)

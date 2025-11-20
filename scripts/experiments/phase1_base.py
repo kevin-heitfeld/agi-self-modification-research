@@ -241,31 +241,31 @@ class Phase1BaseSession(ABC):
 
 Each experiment will be given to you ONE AT A TIME.
 
-**CRITICAL - CONTEXT RESET BETWEEN EXPERIMENTS:**
+**CONTINUOUS CONVERSATION:**
 
-After EACH experiment completes, your working memory (this conversation) will be
-**COMPLETELY RESET**. You will start the next experiment with a fresh context.
+Your conversation context continues throughout all 3 experiments - you maintain
+memory of everything you've done. This allows you to naturally build on your
+earlier discoveries without needing to query memory every time.
 
-❗ **The ONLY way to preserve findings between experiments is through the memory system!**
+**Memory Management:**
 
-When you say "I'm done with this experiment", the system will:
-1. END the current experiment immediately
-2. CLEAR your working memory (conversation history)
-3. START the next experiment with FRESH context
-4. **ALL unsaved findings in working memory will be PERMANENTLY LOST**
+- **Working memory** (this conversation) may be pruned if it gets too long
+- When approaching the token limit, you'll get a warning to save important findings
+- **Saved observations** persist permanently and survive any pruning
+- Use `introspection.memory.record_observation()` to save discoveries
 
 **Strategy for Success:**
-- Use introspection.memory functions at the START of each new experiment
-- Retrieve relevant findings from previous experiments
-- Build on earlier discoveries
-- Save observations FREQUENTLY as you discover things
-- Don't wait until the end - save incrementally
 
-**Think of it like a multi-day research project:**
-- Each experiment is a "day" of research
-- At the end of each day, you write findings in your lab notebook (memory)
-- The next day, you read your notes (query memory) to continue where you left off
-- You can't rely on your "working memory" from yesterday - only your written notes!
+- Build on your discoveries naturally - you remember what you did earlier
+- Save important findings to memory as backup (in case of pruning)
+- Use `introspection.memory.list_categories()` to see how you've organized observations
+- Query memory when you need to recall specific details from saved observations
+
+**Think of it like a continuous research session:**
+
+- Your working memory is like short-term memory (may be pruned to fit limits)
+- Saved observations are like written notes (permanent record)
+- You naturally remember recent work, but save important discoveries for safety
 """
 
     def initialize_systems(self, model_name: str, include_heritage: bool = True, quantization: str = None):
