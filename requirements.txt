@@ -16,8 +16,9 @@
 # torchaudio>=2.2.0+cu130
 
 # Transformers - Hugging Face library for LLMs
-# v4.45.0+ required for HQQQuantizedCache (4-bit KV cache quantization, 75% memory savings)
-transformers>=4.45.0
+# v4.57.0+ required for QuantizedCache (4-bit KV cache quantization, 75% memory savings)
+# Older versions (4.45-4.56) used deprecated HQQQuantizedCache API
+transformers>=4.57.0
 
 # HQQ - Half-Quadratic Quantization library
 # Required for HQQ quantized KV cache backend (transformers 4.57+)

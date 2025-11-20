@@ -61,27 +61,19 @@ class ManualGenerator:
         self.device = device
         self.quantize_kv_cache = quantize_kv_cache
 
-        # Try to import quantized cache for new API (transformers 4.45+)
+        # Import quantized cache (transformers 4.57+)
         self.QuantizedCache = None
         if quantize_kv_cache:
             try:
-                # Try new API first (transformers 4.57+)
                 from transformers.cache_utils import QuantizedCache
                 self.QuantizedCache = QuantizedCache
                 logger.info("✓ KV cache quantization enabled (HQQ 4-bit - 75% memory savings)")
                 logger.info("  Cache will use 4-bit quantization with dynamic range")
             except ImportError:
-                try:
-                    # Fallback to deprecated API (transformers 4.45-4.56)
-                    from transformers.cache_utils import HQQQuantizedCache
-                    self.QuantizedCache = HQQQuantizedCache
-                    logger.info("✓ KV cache quantization enabled (HQQ 4-bit - 75% memory savings)")
-                    logger.info("  Using deprecated HQQQuantizedCache (consider upgrading transformers)")
-                except ImportError:
-                    logger.warning("⚠ Quantized cache not available in this transformers version")
-                    logger.warning("  Falling back to standard FP16 cache")
-                    logger.warning("  Upgrade to transformers 4.45+ for quantization support")
-                    self.quantize_kv_cache = False
+                logger.warning("⚠ Quantized cache not available in this transformers version")
+                logger.warning("  Falling back to standard FP16 cache")
+                logger.warning("  Upgrade to transformers 4.57+ for quantization support")
+                self.quantize_kv_cache = False
         else:
             logger.info("KV cache quantization disabled (using standard FP16 cache)")
 
@@ -322,27 +314,15 @@ class ManualGenerator:
                 # No cache available, will create new one
                 # If quantization is enabled, initialize a quantized cache
                 if self.quantize_kv_cache and self.QuantizedCache is not None:
-                    try:
-                        # Try new API first (transformers 4.57+)
-                        current_cache = self.QuantizedCache(
-                            backend='hqq',
-                            config=self.model.config,
-                            nbits=4,
-                            axis_key=0,
-                            axis_value=0,
-                            q_group_size=64,
-                            residual_length=128
-                        )
-                    except (TypeError, ImportError):
-                        # Fallback to deprecated API (transformers 4.45-4.56)
-                        current_cache = self.QuantizedCache(
-                            config=self.model.config,
-                            nbits=4,
-                            axis_key=0,
-                            axis_value=0,
-                            q_group_size=64,
-                            residual_length=128
-                        )
+                    current_cache = self.QuantizedCache(
+                        backend='hqq',
+                        config=self.model.config,
+                        nbits=4,
+                        axis_key=0,
+                        axis_value=0,
+                        q_group_size=64,
+                        residual_length=128
+                    )
                     logger.debug("No cache available, initializing HQQ quantized cache")
                 else:
                     current_cache = None

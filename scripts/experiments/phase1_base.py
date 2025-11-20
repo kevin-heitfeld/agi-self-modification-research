@@ -630,39 +630,14 @@ Your permanent memory persists - use it!"""
 
         # Main loop: model responds -> we execute code -> show results -> repeat
         iteration = 0
+        response = ""
 
         while iteration < MAX_ITERATIONS_PER_EXPERIMENT:
             iteration += 1
             self.logger.info(f"[ITERATION {iteration}]")
 
-            # Take GPU snapshot before generation
-            self.gpu_monitor.snapshot(
-                "generation_start",
-                {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
-            )
-            
-            # Log token usage before generation
-            self._log_token_usage("before_generation", iteration)
-
-            # Generate response
-            response, stopped_reason = self.generate_response()
-            self.logger.info(f"[MODEL] {response}\n")
-            
-            # Check if response was truncated
-            if stopped_reason == "max_length":
-                self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
-
-            # Take GPU snapshot after generation
-            self.gpu_monitor.snapshot(
-                "generation_end",
-                {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
-            )
-            
-            # Log token usage after generation
-            self._log_token_usage("after_generation", iteration)
-
-            # Add to history
-            self._add_message("assistant", response)
+            # Generate response and log metrics
+            response, stopped_reason = self._generate_and_log(iteration)
 
             # Check if model wants to end
             if self._check_completion(response):
@@ -673,46 +648,14 @@ Your permanent memory persists - use it!"""
             has_code, result, error = self.code_interface.execute_response(response)
 
             if not has_code:
-                # No code found - determine if we should continue the loop
-                
-                # Check if response was truncated
-                if stopped_reason == "max_length":
-                    # Response was cut off - need continuation
-                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please continue or write your code block again, but be more concise."
-                    self.logger.info(f"[SYSTEM] {truncation_message}")
-                    self._add_message("user", truncation_message)
+                # No code found - determine if we should continue
+                should_continue = self._handle_no_code_response(response, stopped_reason)
+                if should_continue:
                     continue
-                
-                # Check if model explicitly signals completion
-                if self._check_completion(response):
-                    self.logger.info("[SYSTEM] Model indicates completion")
+                else:
                     break
-                
-                # Decide whether to continue based on context
-                if not self.code_interface.enabled:
-                    # Code execution is DISABLED (discussion-only stage)
-                    # One turn is sufficient - don't loop without new input
-                    self.logger.info("[SYSTEM] Discussion turn complete (code execution disabled)")
-                    break
-                
-                # Code execution is ENABLED but no code was written
-                # This might be intentional explanation/thinking
-                # Check if model seems to be waiting for feedback
-                response_end = response[-200:].lower() if len(response) > 200 else response.lower()
-                if "?" in response_end or "what do you think" in response_end or "should i" in response_end:
-                    # Model seems to be asking for input/confirmation
-                    self.logger.info("[SYSTEM] Model appears to be seeking feedback")
-                    feedback_message = "Please continue with your investigation. Write code to explore further."
-                    self.logger.info(f"[SYSTEM] {feedback_message}")
-                    self._add_message("user", feedback_message)
-                    continue
-                
-                # Model wrote explanation without code and didn't ask for feedback
-                # Assume this turn is complete
-                self.logger.info("[SYSTEM] No code written, assuming turn complete")
-                break
 
-            # Show results to model
+            # Code was found - show results to model
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
             
             # Check for explicit experiment completion signal
@@ -720,31 +663,173 @@ Your permanent memory persists - use it!"""
                 self.logger.info("[SYSTEM] ✅ Experiment marked complete via EXPERIMENT_COMPLETE signal")
                 break
 
-            # Add results as user message
-            result_message = f"**Code Execution Results:**\n\n{result}"
-            if error:
-                result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
-            
-            # Add truncation warning if applicable
-            result_message = self._add_truncation_warning(result_message, stopped_reason, had_code=True)
-            
-            # Add iteration reminders using helper method
-            result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
-
-            # Check and handle memory pruning
-            result_message = self._check_and_handle_memory_pruning(result_message, iteration)
+            # Build result message with execution results and system notices
+            result_message = self._execute_code_and_build_message(response, stopped_reason, iteration)
 
             # Check for Colab timeout and save checkpoint if needed
             if self.check_colab_timeout():
                 self.logger.info("[TIMEOUT] Saving safety checkpoint due to time elapsed")
                 self.save_checkpoint(f"iteration_{iteration}_timeout_safety")
 
-            # Log the result message (including any system reminders)
+            # Log the result message
             self.logger.info(f"[DEBUG] About to log result_message, iteration={iteration}, len={len(result_message)}")
             self.logger.info(f"\n[SYSTEM] {result_message}\n")
 
             self._add_message("user", result_message)
 
+        # Finalize experiment with summaries
+        self._finalize_experiment(iteration)
+
+        return response
+
+    def _check_completion(self, response: str) -> bool:
+        """Check if model is signaling task completion"""
+        done_phrases = [
+            "i'm done",
+            "i am done",
+            "experiment complete",
+            "investigation complete",
+            "task complete",
+            "finished with this experiment"
+        ]
+        response_lower = response.lower()
+        return any(phrase in response_lower for phrase in done_phrases)
+    
+    def _generate_and_log(self, iteration: int) -> tuple[str, str]:
+        """
+        Generate model response and log token usage.
+        
+        Args:
+            iteration: Current iteration number
+            
+        Returns:
+            Tuple of (response_text, stopped_reason)
+        """
+        # Take GPU snapshot before generation
+        self.gpu_monitor.snapshot(
+            "generation_start",
+            {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
+        )
+        
+        # Log token usage before generation
+        self._log_token_usage("before_generation", iteration)
+
+        # Generate response
+        response, stopped_reason = self.generate_response()
+        self.logger.info(f"[MODEL] {response}\n")
+        
+        # Check if response was truncated
+        if stopped_reason == "max_length":
+            self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
+
+        # Take GPU snapshot after generation
+        self.gpu_monitor.snapshot(
+            "generation_end",
+            {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
+        )
+        
+        # Log token usage after generation
+        self._log_token_usage("after_generation", iteration)
+
+        # Add to history
+        self._add_message("assistant", response)
+        
+        return response, stopped_reason
+    
+    def _handle_no_code_response(self, response: str, stopped_reason: str) -> bool:
+        """
+        Handle case where no code was found in response.
+        
+        Args:
+            response: The model's response text
+            stopped_reason: Why generation stopped ("eos" or "max_length")
+            
+        Returns:
+            True if should continue the loop, False if should break
+        """
+        # Check if response was truncated
+        if stopped_reason == "max_length":
+            # Response was cut off - need continuation
+            truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please continue or write your code block again, but be more concise."
+            self.logger.info(f"[SYSTEM] {truncation_message}")
+            self._add_message("user", truncation_message)
+            return True  # Continue loop
+        
+        # Check if model explicitly signals completion
+        if self._check_completion(response):
+            self.logger.info("[SYSTEM] Model indicates completion")
+            return False  # Break loop
+        
+        # Decide whether to continue based on context
+        if not self.code_interface.enabled:
+            # Code execution is DISABLED (discussion-only stage)
+            # One turn is sufficient - don't loop without new input
+            self.logger.info("[SYSTEM] Discussion turn complete (code execution disabled)")
+            return False  # Break loop
+        
+        # Code execution is ENABLED but no code was written
+        # This might be intentional explanation/thinking
+        # Check if model seems to be waiting for feedback
+        response_end = response[-200:].lower() if len(response) > 200 else response.lower()
+        if "?" in response_end or "what do you think" in response_end or "should i" in response_end:
+            # Model seems to be asking for input/confirmation
+            self.logger.info("[SYSTEM] Model appears to be seeking feedback")
+            feedback_message = "Please continue with your investigation. Write code to explore further."
+            self.logger.info(f"[SYSTEM] {feedback_message}")
+            self._add_message("user", feedback_message)
+            return True  # Continue loop
+        
+        # Model wrote explanation without code and didn't ask for feedback
+        # Assume this turn is complete
+        self.logger.info("[SYSTEM] No code written, assuming turn complete")
+        return False  # Break loop
+    
+    def _execute_code_and_build_message(
+        self, 
+        response: str, 
+        stopped_reason: str, 
+        iteration: int
+    ) -> str:
+        """
+        Execute code from response and build result message.
+        
+        Args:
+            response: The model's response containing code
+            stopped_reason: Why generation stopped
+            iteration: Current iteration number
+            
+        Returns:
+            Message to send back to model with results
+        """
+        # Extract and execute code
+        has_code, result, error = self.code_interface.execute_response(response)
+        
+        # Show results to model
+        self.logger.info(f"[CODE RESULTS]\n{result}\n")
+        
+        # Build result message
+        result_message = f"**Code Execution Results:**\n\n{result}"
+        if error:
+            result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
+        
+        # Add truncation warning if applicable
+        result_message = self._add_truncation_warning(result_message, stopped_reason, had_code=True)
+        
+        # Add iteration reminders
+        result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
+
+        # Check and handle memory pruning
+        result_message = self._check_and_handle_memory_pruning(result_message, iteration)
+        
+        return result_message
+    
+    def _finalize_experiment(self, iteration: int) -> None:
+        """
+        Finalize experiment with GPU snapshots and summaries.
+        
+        Args:
+            iteration: Final iteration count
+        """
         if iteration >= MAX_ITERATIONS_PER_EXPERIMENT:
             self.logger.warning(f"[SYSTEM] Reached maximum iterations ({MAX_ITERATIONS_PER_EXPERIMENT})")
 
@@ -765,21 +850,6 @@ Your permanent memory persists - use it!"""
             },
             include_recommendations=True
         )
-
-        return response
-
-    def _check_completion(self, response: str) -> bool:
-        """Check if model is signaling task completion"""
-        done_phrases = [
-            "i'm done",
-            "i am done",
-            "experiment complete",
-            "investigation complete",
-            "task complete",
-            "finished with this experiment"
-        ]
-        response_lower = response.lower()
-        return any(phrase in response_lower for phrase in done_phrases)
 
     def generate_response(self) -> tuple[str, str]:
         """Generate model response using cached KV and conversation history
