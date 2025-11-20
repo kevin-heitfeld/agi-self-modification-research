@@ -363,7 +363,6 @@ When you say "I'm done with this experiment", the system will:
         # Initialize conversation tracking
         self.conversation_kv_cache = None
         self.memory_manager = MemoryManager(logger=self.logger)
-        self.turns_since_last_prune = 0  # Track turns since last memory prune
 
         # Take GPU snapshot after system initialization
         self.gpu_monitor.snapshot("after_initialization")
@@ -473,8 +472,8 @@ discoveries across memory resets.
 
     def _check_and_handle_memory_pruning(self, message: str, iteration: int) -> str:
         """
-        Check if memory pruning is needed and handle it.
-        Warns model 2 turns before pruning, then prunes if threshold reached.
+        Check if memory pruning is needed based on generation headroom and handle it.
+        Warns model when approaching limit, then prunes to target ratio if not enough room for next generation.
         
         Args:
             message: The message to potentially add warnings/notices to
@@ -483,50 +482,98 @@ discoveries across memory resets.
         Returns:
             Message with pruning warnings/notices appended (if applicable)
         """
-        # Increment turns since last prune
-        self.turns_since_last_prune += 1
+        from src.memory_manager import MEMORY_PRUNE_TARGET_RATIO
         
-        # Check if memory pruning is needed
-        # Use turns_since_last_prune instead of iteration for turn-based pruning
+        # Get current limits
+        max_tokens = self.optimal_limits['max_conversation_tokens']
+        max_new = self.optimal_limits['max_new_tokens']
+        
+        # Check if memory pruning is needed (generation-aware)
         should_prune, prune_reasons = self.memory_manager.should_prune_memory(
             self.conversation_history,
-            self.optimal_limits['max_conversation_tokens'],
-            self.optimal_limits['max_turns_before_clear'],
-            current_session_turns=self.turns_since_last_prune
+            max_tokens,
+            max_new
         )
         
-        # Warn 2 turns before actual pruning
-        turns_until_limit = self.optimal_limits['max_turns_before_clear'] - self.turns_since_last_prune
-        if turns_until_limit == 2:
-            pruning_warning = f"\n\n⚠️ **MEMORY WARNING:** Context will be pruned in 2 turns! Save important findings NOW using `introspection.memory.record_observation()` or they will be lost."
-            message += pruning_warning
-            self.logger.warning(f"[MEMORY] Warning sent to model: pruning in 2 turns (iteration {iteration}, turns since last prune: {self.turns_since_last_prune})")
+        # Calculate current and needed token counts for warning
+        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
+        needed_tokens = current_tokens + max_new
+        warning_threshold = max_tokens - (max_new * 2)  # Warn when less than 2 generations of headroom
         
-        # Perform pruning if needed
+        # Warn when approaching limit (less than 2 generations of headroom but still 1 generation available)
+        if current_tokens >= warning_threshold and not should_prune:
+            headroom_tokens = max_tokens - current_tokens
+            generations_left = headroom_tokens // max_new
+            pruning_warning = (
+                f"\n\n⚠️ **MEMORY WARNING:** Context approaching limit (~{current_tokens} / {max_tokens} tokens, "
+                f"~{generations_left} generation(s) of headroom remaining)! "
+                f"Save important findings NOW using `introspection.memory.record_observation()` or they will be pruned soon."
+            )
+            message += pruning_warning
+            self.logger.warning(
+                f"[MEMORY] Warning sent to model: {current_tokens}/{max_tokens} tokens, "
+                f"~{generations_left} generations of headroom"
+            )
+        
+        # Perform pruning if not enough room for next generation
         if should_prune:
-            keep_turns = self.optimal_limits['keep_recent_turns']
-            self.memory_manager.log_memory_pruning(
-                prune_reasons,
-                keep_recent_turns=keep_turns
+            target_tokens = self.memory_manager.get_prune_target_tokens(
+                max_tokens,
+                max_new,
+                iteration,
+                MAX_ITERATIONS_PER_EXPERIMENT
             )
             
-            # Prune the conversation history
-            self.conversation_history = self.memory_manager.reset_conversation_with_sliding_window(
-                self.conversation_history,
-                keep_recent_turns=keep_turns
+            remaining_iterations = MAX_ITERATIONS_PER_EXPERIMENT - iteration
+            self.logger.info(f"[MEMORY] Pruning triggered: {', '.join(prune_reasons)}")
+            self.logger.info(
+                f"[MEMORY] Target: prune down to ~{target_tokens} tokens "
+                f"({remaining_iterations} iterations remaining)"
             )
+            
+            # Prune by removing old messages until we reach target token count
+            # Always keep system message (index 0) and recent messages
+            system_msg = self.conversation_history[0] if self.conversation_history else None
+            messages = self.conversation_history[1:] if len(self.conversation_history) > 1 else []
+            
+            # Count tokens backward from most recent until we hit target
+            pruned_messages = []
+            token_count = 0
+            for msg in reversed(messages):
+                msg_tokens = len(msg.get("content", "")) // 4  # Rough estimate
+                if token_count + msg_tokens <= target_tokens:
+                    pruned_messages.insert(0, msg)
+                    token_count += msg_tokens
+                else:
+                    # Hit target, stop adding more
+                    break
+            
+            # Rebuild conversation with system + pruned messages
+            old_count = len(self.conversation_history)
+            self.conversation_history = [system_msg] + pruned_messages if system_msg else pruned_messages
+            new_count = len(self.conversation_history)
+            messages_removed = old_count - new_count
+            
+            # Also prune complete_conversation_history to match
+            # Keep system + same number of recent messages
+            if len(self.complete_conversation_history) > 0:
+                system_msg_complete = self.complete_conversation_history[0]
+                messages_complete = self.complete_conversation_history[1:]
+                # Take same number of recent messages
+                keep_count = len(pruned_messages)
+                pruned_complete = messages_complete[-keep_count:] if keep_count > 0 else []
+                self.complete_conversation_history = [system_msg_complete] + pruned_complete
             
             # Clear KV cache (it's now invalid after pruning history)
             self.conversation_kv_cache = None
             
-            # Reset the turns counter after pruning
-            self.turns_since_last_prune = 0
-            self.logger.info(f"[MEMORY] Turn counter reset to 0 after pruning (iteration {iteration})")
+            self.logger.info(f"[MEMORY] Pruned {messages_removed} messages (kept {new_count}, ~{token_count} tokens)")
             
             # Add a system message explaining what happened
+            target_ratio = int((token_count / max_tokens) * 100) if max_tokens > 0 else 0
             pruning_notice = f"""⚠️ **MEMORY RESET:** Conversation context was pruned due to {' and '.join(prune_reasons)}.
 
-Only the last {keep_turns} turns are retained. Previous findings are cleared from your working memory.
+Pruned from {old_count} to {new_count} messages (~{token_count} tokens retained, {target_ratio}% of max, {remaining_iterations} iterations remaining).
 
 **To continue your investigation:**
 - Use `introspection.memory.query_observations()` to retrieve saved findings
@@ -736,7 +783,6 @@ Your saved observations persist - query them now!"""
         self.conversation_history = []
         self.complete_conversation_history = []  # Also reset complete history
         self.conversation_kv_cache = None
-        self.turns_since_last_prune = 0  # Reset turn counter for new experiment
         
         # Reset Python namespace for code execution
         self.code_interface.reset_namespace()
@@ -867,11 +913,14 @@ Your saved observations persist - query them now!"""
         import json
         from datetime import datetime
         
+        # Calculate current token count for checkpoint metadata
+        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
+        
         checkpoint_data = {
             "checkpoint_name": checkpoint_name,
             "timestamp": datetime.now().isoformat(),
             "conversation_length": len(self.conversation_history),
-            "turns_since_last_prune": self.turns_since_last_prune,
+            "conversation_tokens": current_tokens,
             "conversation": self.conversation_history
         }
         

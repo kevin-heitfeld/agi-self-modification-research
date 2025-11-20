@@ -6,9 +6,14 @@ history, KV cache, and preventing OOM errors during model generation.
 
 Key features:
 - Token estimation for conversation history
-- Sliding window context management
+- Generation-aware pruning (when not enough room for next generation)
 - Intelligent tool result pruning
 - KV cache reset with configurable retention
+
+Pruning Strategy:
+- Trigger: When current_tokens + max_new_tokens >= max_conversation_tokens (no room for generation)
+- Target: Prune down to MEMORY_PRUNE_TARGET_RATIO of max_conversation_tokens
+- Always keeps: System prompt + most recent messages until target is reached
 
 Author: AGI Self-Modification Research
 Date: November 10, 2025
@@ -17,6 +22,11 @@ Date: November 10, 2025
 import json
 import logging
 from typing import Any, Dict, List, Optional
+
+# Memory pruning threshold for post-prune target (used as fallback/minimum)
+# Trigger is generation-aware: prune when not enough room for next generation
+MEMORY_PRUNE_TARGET_RATIO = 0.25   # Minimum target: prune down to 25% (leaves 75% headroom)
+MEMORY_PRUNE_SAFETY_MARGIN = 1.2   # 20% safety margin on top of calculated needs
 
 
 class MemoryManager:
@@ -69,39 +79,89 @@ class MemoryManager:
         self,
         conversation_history: List[Dict[str, str]],
         max_conversation_tokens: int,
-        max_turns_before_clear: int,
-        current_session_turns: Optional[int] = None
+        max_new_tokens: int
     ) -> tuple[bool, List[str]]:
         """
-        Check if memory should be pruned based on token count or turn count.
+        Check if memory should be pruned based on generation headroom.
+        
+        Pruning is triggered when there isn't enough room for the next generation:
+        current_tokens + max_new_tokens >= max_conversation_tokens
+        
+        This ensures we always have space for a full generation without OOM.
         
         Args:
             conversation_history: Current conversation history
-            max_conversation_tokens: Maximum tokens before pruning
-            max_turns_before_clear: Maximum turns before pruning
-            current_session_turns: Number of turns in current session (if None, count all assistant turns)
+            max_conversation_tokens: Maximum tokens before OOM
+            max_new_tokens: Maximum tokens model will generate
         
         Returns:
             Tuple of (should_prune, reasons) where reasons is a list of why pruning is needed
         """
         estimated_tokens = self.estimate_conversation_tokens(conversation_history)
-        
-        # Use session-specific turn count if provided, otherwise count all assistant messages
-        if current_session_turns is not None:
-            num_exchanges = current_session_turns
-        else:
-            num_exchanges = len([m for m in conversation_history if m["role"] == "assistant"])
+        needed_tokens = estimated_tokens + max_new_tokens
         
         reasons = []
-        should_clear_by_tokens = estimated_tokens > max_conversation_tokens
-        should_clear_by_turns = num_exchanges >= max_turns_before_clear
+        should_prune = needed_tokens >= max_conversation_tokens
         
-        if should_clear_by_tokens:
-            reasons.append(f"token count (~{estimated_tokens} > {max_conversation_tokens})")
-        if should_clear_by_turns:
-            reasons.append(f"turn count ({num_exchanges} >= {max_turns_before_clear})")
+        if should_prune:
+            reasons.append(
+                f"insufficient headroom for generation (~{estimated_tokens} current + "
+                f"{max_new_tokens} generation = {needed_tokens} >= {max_conversation_tokens} max)"
+            )
         
-        return (should_clear_by_tokens or should_clear_by_turns), reasons
+        return should_prune, reasons
+    
+    def get_prune_target_tokens(
+        self, 
+        max_conversation_tokens: int,
+        max_new_tokens: int,
+        current_iteration: int,
+        max_iterations: int
+    ) -> int:
+        """
+        Get the adaptive target token count to prune down to.
+        
+        Strategy:
+        - If near end of experiment: only prune enough for remaining iterations
+        - If early/mid experiment: prune to MEMORY_PRUNE_TARGET_RATIO for maximum headroom
+        - Always applies MEMORY_PRUNE_SAFETY_MARGIN for unexpected long responses
+        
+        Args:
+            max_conversation_tokens: Maximum tokens before OOM
+            max_new_tokens: Maximum tokens per generation
+            current_iteration: Current iteration number (0-indexed)
+            max_iterations: Maximum iterations for this experiment
+        
+        Returns:
+            Target token count after pruning
+        """
+        # Calculate how many iterations remain (add 1 because we're still in current iteration)
+        remaining_iterations = max_iterations - current_iteration
+        
+        # Calculate tokens needed for remaining iterations with safety margin
+        # Each iteration: current conversation + new generation
+        # We need room for: remaining_iterations * max_new_tokens
+        tokens_needed_for_remaining = int(remaining_iterations * max_new_tokens * MEMORY_PRUNE_SAFETY_MARGIN)
+        
+        # Adaptive target: current tokens needed, but leave headroom up to max
+        # Target = max - tokens_needed_for_remaining
+        adaptive_target = max_conversation_tokens - tokens_needed_for_remaining
+        
+        # Minimum target: always prune to at least MEMORY_PRUNE_TARGET_RATIO
+        # This ensures we free up memory even near the end
+        minimum_target = int(max_conversation_tokens * MEMORY_PRUNE_TARGET_RATIO)
+        
+        # Use the larger of adaptive or minimum (don't over-prune near the end)
+        target = max(adaptive_target, minimum_target)
+        
+        # Log the decision
+        self.logger.debug(
+            f"Adaptive pruning: {remaining_iterations} iterations remaining, "
+            f"need ~{tokens_needed_for_remaining} tokens, target={target} "
+            f"(adaptive={adaptive_target}, minimum={minimum_target})"
+        )
+        
+        return target
     
     def prune_tool_result(self, result: Any, function_name: str) -> Any:
         """

@@ -65,8 +65,7 @@ class ModelManager:
         Get optimal token limits based on detected GPU capabilities AND model size.
         
         Returns:
-            Dict with recommended limits for max_new_tokens, max_conversation_tokens, 
-            max_turns_before_clear, keep_recent_turns
+            Dict with recommended limits for max_new_tokens, max_conversation_tokens
         """
         # Detect model size from name
         model_size_b = 7.0  # Default to 7B
@@ -94,8 +93,6 @@ class ModelManager:
         limits = {
             "max_new_tokens": int(400 * size_scale),
             "max_conversation_tokens": int(1500 * size_scale),
-            "max_turns_before_clear": 6,  # Prune after 6 turns
-            "keep_recent_turns": 2,
             "gpu_profile": "conservative",
             "model_size_b": model_size_b
         }
@@ -111,8 +108,6 @@ class ModelManager:
             limits = {
                 "max_new_tokens": int(1200 * size_scale),
                 "max_conversation_tokens": int(8000 * size_scale),
-                "max_turns_before_clear": 15,  # More generous - can handle longer contexts
-                "keep_recent_turns": 5,  # Balanced retention
                 "gpu_profile": "high_end_ampere",
                 "model_size_b": model_size_b
             }
@@ -125,8 +120,6 @@ class ModelManager:
             limits = {
                 "max_new_tokens": int(1500 * size_scale),
                 "max_conversation_tokens": int(6000 * size_scale),
-                "max_turns_before_clear": 12,  # Good balance for L4
-                "keep_recent_turns": 4,  # Keep 4 turns to maintain better context
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b
             }
@@ -138,8 +131,6 @@ class ModelManager:
             limits = {
                 "max_new_tokens": int(700 * size_scale),
                 "max_conversation_tokens": int(3500 * size_scale),
-                "max_turns_before_clear": 10,  # Moderate for T4
-                "keep_recent_turns": 3,  # Balanced retention
                 "gpu_profile": "t4_turing",
                 "model_size_b": model_size_b
             }
@@ -151,8 +142,6 @@ class ModelManager:
             limits = {
                 "max_new_tokens": int(700 * size_scale),
                 "max_conversation_tokens": int(3500 * size_scale),
-                "max_turns_before_clear": 10,  # Moderate for V100
-                "keep_recent_turns": 3,
                 "gpu_profile": "v100_volta",
                 "model_size_b": model_size_b
             }
@@ -163,8 +152,6 @@ class ModelManager:
             limits = {
                 "max_new_tokens": int(450 * size_scale),
                 "max_conversation_tokens": int(1800 * size_scale),
-                "max_turns_before_clear": 8,  # Conservative
-                "keep_recent_turns": 2,
                 "gpu_profile": "moderate",
                 "model_size_b": model_size_b
             }
@@ -175,8 +162,7 @@ class ModelManager:
             logger.warning(f"⚠ Small GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) + {model_size_b}B model - using conservative limits")
         
         logger.info(f"  Recommended limits: max_new_tokens={limits['max_new_tokens']}, "
-                   f"max_conversation_tokens={limits['max_conversation_tokens']}, "
-                   f"keep_recent_turns={limits['keep_recent_turns']}")
+                   f"max_conversation_tokens={limits['max_conversation_tokens']}")
         
         return limits
 
