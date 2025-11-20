@@ -32,15 +32,15 @@ class TestBeliefLayer(unittest.TestCase):
         self.test_dir = get_test_temp_dir()
 
         # Create full stack
-        obs_dir = Path(self.test_dir) / "observations"
-        pattern_dir = Path(self.test_dir) / "patterns"
-        theory_dir = Path(self.test_dir) / "theories"
-        belief_dir = Path(self.test_dir) / "beliefs"
+        obs_db = Path(self.test_dir) / "observations.db"
+        pattern_db = Path(self.test_dir) / "patterns.db"
+        theory_db = Path(self.test_dir) / "theories.db"
+        belief_db = Path(self.test_dir) / "beliefs.db"
 
-        self.obs_layer = ObservationLayer(str(obs_dir))
-        self.pattern_layer = PatternLayer(str(pattern_dir), self.obs_layer)
-        self.theory_layer = TheoryLayer(str(theory_dir), self.pattern_layer, self.obs_layer)
-        self.belief_layer = BeliefLayer(str(belief_dir), self.theory_layer)
+        self.obs_layer = ObservationLayer(str(obs_db))
+        self.pattern_layer = PatternLayer(str(pattern_db), self.obs_layer)
+        self.theory_layer = TheoryLayer(str(theory_db), self.pattern_layer, self.obs_layer)
+        self.belief_layer = BeliefLayer(str(belief_db), self.theory_layer)
 
         # Create test data
         self._create_test_data()
@@ -294,8 +294,8 @@ class TestBeliefLayer(unittest.TestCase):
         belief_count = len(self.belief_layer.get_beliefs())
 
         # Create new instance
-        belief_dir = Path(self.test_dir) / "beliefs"
-        new_layer = BeliefLayer(str(belief_dir), self.theory_layer)
+        belief_db = Path(self.test_dir) / "beliefs.db"
+        new_layer = BeliefLayer(str(belief_db), self.theory_layer)
 
         loaded_count = len(new_layer.get_beliefs())
         self.assertEqual(loaded_count, belief_count)

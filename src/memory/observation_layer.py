@@ -100,7 +100,7 @@ class ObservationLayer(SQLiteLayerBase):
     - Tag-based organization
 
     Usage:
-        >>> layer = ObservationLayer("data/memory/observations")
+        >>> layer = ObservationLayer("data/memory/observations.db")
         >>>
         >>> # Record an observation
         >>> layer.record(
@@ -121,29 +121,19 @@ class ObservationLayer(SQLiteLayerBase):
     # Column list for SELECT statements (including Phase 1 fields)
     SELECT_COLUMNS = "id, timestamp, type, category, description, data, tags, importance, status, version, replaced_by, corrects, obsolete_reason, updated_at"
 
-    def __init__(self, storage_dir: str):
+    def __init__(self, db_path: str):
         """
         Initialize observation layer.
 
         Args:
-            storage_dir: Directory for storing observations (legacy parameter)
+            db_path: Path to the observations database file
         """
-        # Create directory structure if needed
-        storage_path = Path(storage_dir)
-        storage_path.mkdir(parents=True, exist_ok=True)
-        
-        # Store for backward compatibility
-        self.storage_dir = storage_path
-        
-        # Database path
-        db_path = storage_path / "observations.db"
-
         # In-memory cache for recent observations (ID -> Observation)
         self.cache: Dict[str, Observation] = {}
         self.cache_size = 1000
         
         # Initialize base class (establishes DB connection)
-        super().__init__(str(db_path))
+        super().__init__(db_path)
 
     def _get_table_name(self) -> str:
         """Return the main table name for this layer."""

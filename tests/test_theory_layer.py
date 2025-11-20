@@ -31,13 +31,13 @@ class TestTheoryLayer(unittest.TestCase):
         self.test_dir = get_test_temp_dir()
 
         # Create layers
-        obs_dir = Path(self.test_dir) / "observations"
-        pattern_dir = Path(self.test_dir) / "patterns"
-        theory_dir = Path(self.test_dir) / "theories"
+        obs_db = Path(self.test_dir) / "observations.db"
+        pattern_db = Path(self.test_dir) / "patterns.db"
+        theory_db = Path(self.test_dir) / "theories.db"
 
-        self.obs_layer = ObservationLayer(str(obs_dir))
-        self.pattern_layer = PatternLayer(str(pattern_dir), self.obs_layer)
-        self.theory_layer = TheoryLayer(str(theory_dir), self.pattern_layer, self.obs_layer)
+        self.obs_layer = ObservationLayer(str(obs_db))
+        self.pattern_layer = PatternLayer(str(pattern_db), self.obs_layer)
+        self.theory_layer = TheoryLayer(str(theory_db), self.pattern_layer, self.obs_layer)
 
         # Create test data
         self._create_test_data()
@@ -298,8 +298,8 @@ class TestTheoryLayer(unittest.TestCase):
 
         if theory_count > 0:
             # Create new instance
-            theory_dir = Path(self.test_dir) / "theories"
-            new_layer = TheoryLayer(str(theory_dir), self.pattern_layer, self.obs_layer)
+            theory_db = Path(self.test_dir) / "theories.db"
+            new_layer = TheoryLayer(str(theory_db), self.pattern_layer, self.obs_layer)
 
             loaded_count = len(new_layer.get_theories())
             self.assertEqual(loaded_count, theory_count)

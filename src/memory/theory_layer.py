@@ -284,7 +284,7 @@ class TheoryLayer(SQLiteLayerBase):
     - Theory evolution over time
 
     Usage:
-        >>> layer = TheoryLayer("data/memory/theories", pattern_layer)
+        >>> layer = TheoryLayer("data/memory/theories.db", pattern_layer, observation_layer)
         >>>
         >>> # Build theories from patterns
         >>> layer.build_theories()
@@ -298,25 +298,17 @@ class TheoryLayer(SQLiteLayerBase):
         >>> prediction = layer.predict(theory, context)
     """
 
-    def __init__(self, storage_dir: str, pattern_layer: Any, observation_layer: Any):
+    def __init__(self, db_path: str, pattern_layer: Any, observation_layer: Any):
         """
         Initialize theory layer.
 
         Args:
-            storage_dir: Directory for storing theories
+            db_path: Path to the theories database file
             pattern_layer: Reference to pattern layer
             observation_layer: Reference to observation layer
         """
-        # Create directory structure if needed
-        storage_path = Path(storage_dir)
-        storage_path.mkdir(parents=True, exist_ok=True)
-        self.storage_dir = storage_path
-
         self.pattern_layer = pattern_layer
         self.observation_layer = observation_layer
-
-        # Database path
-        db_path = storage_path / "theories.db"
 
         # Theory builders
         self.builders = [
@@ -328,7 +320,7 @@ class TheoryLayer(SQLiteLayerBase):
         self.last_build_time = 0.0
         
         # Initialize base class (establishes DB connection)
-        super().__init__(str(db_path))
+        super().__init__(db_path)
 
     def _get_table_name(self) -> str:
         """Return the main table name for this layer."""

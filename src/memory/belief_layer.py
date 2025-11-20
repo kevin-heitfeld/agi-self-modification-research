@@ -184,7 +184,7 @@ class BeliefLayer(SQLiteLayerBase):
     - Belief importance ranking
 
     Usage:
-        >>> layer = BeliefLayer("data/memory/beliefs", theory_layer)
+        >>> layer = BeliefLayer("data/memory/beliefs.db", theory_layer)
         >>>
         >>> # Form beliefs from theories
         >>> layer.form_beliefs()
@@ -197,29 +197,21 @@ class BeliefLayer(SQLiteLayerBase):
         >>> relevant = layer.query_for_decision(context)
     """
 
-    def __init__(self, storage_dir: str, theory_layer: Any):
+    def __init__(self, db_path: str, theory_layer: Any):
         """
         Initialize belief layer.
 
         Args:
-            storage_dir: Directory for storing beliefs
+            db_path: Path to the beliefs database file
             theory_layer: Reference to theory layer
         """
-        # Create directory structure if needed
-        storage_path = Path(storage_dir)
-        storage_path.mkdir(parents=True, exist_ok=True)
-        self.storage_dir = storage_path
-
         self.theory_layer = theory_layer
-
-        # Database path
-        db_path = storage_path / "beliefs.db"
 
         # Track when beliefs were last formed
         self.last_formation_time = 0.0
         
         # Initialize base class (establishes DB connection)
-        super().__init__(str(db_path))
+        super().__init__(db_path)
 
         # Initialize core safety beliefs (hardcoded foundational beliefs)
         self._initialize_core_beliefs()

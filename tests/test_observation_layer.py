@@ -31,7 +31,8 @@ class TestObservationLayer(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.test_dir = get_test_temp_dir()
-        self.layer = ObservationLayer(self.test_dir)
+        self.db_path = str(Path(self.test_dir) / "observations.db")
+        self.layer = ObservationLayer(self.db_path)
     
     def tearDown(self):
         """Clean up test environment."""
@@ -45,7 +46,7 @@ class TestObservationLayer(unittest.TestCase):
         """Test layer initialization."""
         self.assertIsNotNone(self.layer.conn)
         self.assertEqual(len(self.layer.cache), 0)
-        self.assertTrue(Path(self.test_dir).exists())
+        self.assertTrue(Path(self.db_path).exists())
     
     def test_record_observation(self):
         """Test recording an observation."""

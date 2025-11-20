@@ -30,12 +30,12 @@ class TestPatternLayer(unittest.TestCase):
         self.test_dir = get_test_temp_dir()
         
         # Create observation layer with test data
-        obs_dir = Path(self.test_dir) / "observations"
-        self.obs_layer = ObservationLayer(str(obs_dir))
+        obs_db = Path(self.test_dir) / "observations.db"
+        self.obs_layer = ObservationLayer(str(obs_db))
         
         # Create pattern layer
-        pattern_dir = Path(self.test_dir) / "patterns"
-        self.pattern_layer = PatternLayer(str(pattern_dir), self.obs_layer)
+        pattern_db = Path(self.test_dir) / "patterns.db"
+        self.pattern_layer = PatternLayer(str(pattern_db), self.obs_layer)
     
     def tearDown(self):
         """Clean up test environment."""
@@ -353,8 +353,8 @@ class TestPatternLayer(unittest.TestCase):
         
         if pattern_count > 0:
             # Create new layer instance (should load existing patterns)
-            pattern_dir = Path(self.test_dir) / "patterns"
-            new_layer = PatternLayer(str(pattern_dir), self.obs_layer)
+            pattern_db = Path(self.test_dir) / "patterns.db"
+            new_layer = PatternLayer(str(pattern_db), self.obs_layer)
             
             loaded_count = len(new_layer.get_patterns())
             self.assertEqual(loaded_count, pattern_count)
