@@ -12,6 +12,7 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
+import ast
 import re
 import sys
 from typing import Dict, Any, Tuple, List, Optional
@@ -220,6 +221,30 @@ class CodeExecutionInterface:
 
         return code_blocks
 
+    def _has_print_statement(self, code: str) -> bool:
+        """
+        Check if code contains any print statements.
+        
+        Args:
+            code: Python code string
+            
+        Returns:
+            True if code contains print(), False otherwise
+        """
+        # Remove comments and strings to avoid false positives
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                # Check for print() calls
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id == 'print':
+                        return True
+        except SyntaxError:
+            # If we can't parse, just do simple string search
+            return 'print(' in code
+        
+        return False
+
     def execute_response(self, response: str) -> Tuple[bool, str, Optional[str]]:
         """
         Extract and execute code from model response.
@@ -261,10 +286,16 @@ class CodeExecutionInterface:
         # Execute all code blocks in sequence with shared namespace
         all_outputs = []
         all_errors = []
+        has_any_print = False
+        has_empty_output = False
 
         for idx, code in enumerate(code_blocks, 1):
             logger.info(f"\n[CODE BLOCK {idx}/{len(code_blocks)}]")
             logger.info(f"Code:\n{code}\n")
+            
+            # Track if any code block has print statements
+            if self._has_print_statement(code):
+                has_any_print = True
 
             # Execute in sandbox with persistent namespace
             success, output, error = self.executor.execute_with_namespace(
@@ -277,6 +308,10 @@ class CodeExecutionInterface:
                 # Truncate output to prevent token explosion
                 truncated_output = truncate_output(output)
                 all_outputs.append(f"## Code Block {idx} Output:\n{truncated_output}")
+                
+                # Track if we got empty output
+                if not output.strip():
+                    has_empty_output = True
             else:
                 logger.error(f"[ERROR] {error}")
                 # Never truncate errors - they're usually short and important
@@ -296,6 +331,24 @@ class CodeExecutionInterface:
         else:
             # All succeeded
             output_msg = "\n\n".join(all_outputs)
+            
+            # Add hint if code ran but produced no output AND none of the code blocks had print statements
+            # (Only hint if model seems to not know about print, not if they just forgot it once)
+            if has_empty_output and not has_any_print:
+                hint = (
+                    "\n\n**💡 Hint:** Your code executed successfully but produced no output. "
+                    "If you're calling functions that return values, "
+                    "remember to `print()` the result to see it:\n\n"
+                    "```python\n"
+                    "# ❌ This returns a value but you won't see it:\n"
+                    "summary = introspection.architecture.get_architecture_summary()\n\n"
+                    "# ✅ This prints the result so you can read it:\n"
+                    "summary = introspection.architecture.get_architecture_summary()\n"
+                    "print(summary)\n"
+                    "```"
+                )
+                output_msg += hint
+            
             return True, output_msg, None
 
     def reset_namespace(self):
