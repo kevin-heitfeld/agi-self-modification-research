@@ -101,6 +101,9 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
                 "generation_start",
                 {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
             )
+            
+            # Log token usage before generation
+            self._log_token_usage("before_generation", iteration)
 
             # Generate response
             response, stopped_reason = self.generate_response()
@@ -115,6 +118,9 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
                 "generation_end",
                 {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
             )
+            
+            # Log token usage after generation
+            self._log_token_usage("after_generation", iteration)
 
             # Add to history
             self.conversation_history.append({
@@ -207,6 +213,9 @@ Continue your investigation by writing more code, or explain your findings so fa
 
         # Take GPU snapshot at section end
         self.gpu_monitor.snapshot("section_end", {"total_iterations": iteration})
+        
+        # Log final token usage for this section
+        self._log_token_usage("section_end")
 
         # Print GPU memory summary with recommendations
         self.logger.info("\n" + "="*80)

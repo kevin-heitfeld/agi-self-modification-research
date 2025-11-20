@@ -366,6 +366,9 @@ When you say "I'm done with this experiment", the system will:
 
         # Take GPU snapshot after system initialization
         self.gpu_monitor.snapshot("after_initialization")
+        
+        # Log initial token capacity
+        self._log_token_usage("after_initialization")
 
         self.logger.info("✓ All systems initialized!")
 
@@ -394,18 +397,17 @@ Use them wisely to explore the most important aspects of your architecture.
 Plan your investigation to make efficient use of this budget.
 
 **Memory Management:**
-To prevent out-of-memory errors, your conversation context is automatically pruned
-when it gets too long (after ~{self.optimal_limits['max_turns_before_clear']} turns or 
-~{self.optimal_limits['max_conversation_tokens']} tokens).
+Your working memory (conversation context) has a limit of ~{self.optimal_limits['max_conversation_tokens']} tokens.
+When there isn't enough room for your next full response, old messages are automatically removed.
 
-When pruning is about to happen:
-- You'll receive a warning 2 turns before pruning
+**Important:**
+- You'll receive a warning when memory is getting full
 - **IMMEDIATELY save any important findings using introspection.memory.record_observation()**
-- After pruning, only recent conversation remains (older turns are cleared)
-- Your saved observations persist and can be retrieved anytime
+- After pruning, older conversation turns are cleared (only recent context remains)
+- Your saved observations persist permanently and can be retrieved anytime
 
-This is why saving observations is CRITICAL - it's your only way to preserve
-discoveries across memory resets.
+**This is why saving observations is CRITICAL** - it's your only way to preserve
+discoveries when working memory gets cleared.
 
 **Begin by examining your own architecture using code!**
 """
@@ -469,6 +471,29 @@ discoveries across memory resets.
                 pass
         
         return message
+    
+    def _log_token_usage(self, stage: str, iteration: Optional[int] = None):
+        """
+        Log current token usage with utilization percentage.
+        Similar to GPU monitoring but for conversation tokens.
+        
+        Args:
+            stage: Description of current stage (e.g., "before_generation", "after_pruning")
+            iteration: Optional iteration number for context
+        """
+        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
+        max_tokens = self.optimal_limits['max_conversation_tokens']
+        max_new = self.optimal_limits['max_new_tokens']
+        
+        utilization = (current_tokens / max_tokens * 100) if max_tokens > 0 else 0
+        headroom = max_tokens - current_tokens
+        generations_left = headroom // max_new if max_new > 0 else 0
+        
+        iter_str = f"[iter {iteration}] " if iteration is not None else ""
+        self.logger.info(
+            f"[TOKENS] {iter_str}{stage}: {current_tokens}/{max_tokens} tokens "
+            f"({utilization:.1f}% used, {headroom} headroom, ~{generations_left} generations left)"
+        )
 
     def _check_and_handle_memory_pruning(self, message: str, iteration: int) -> str:
         """
@@ -569,6 +594,9 @@ discoveries across memory resets.
             
             self.logger.info(f"[MEMORY] Pruned {messages_removed} messages (kept {new_count}, ~{token_count} tokens)")
             
+            # Log token usage after pruning
+            self._log_token_usage("after_pruning", iteration)
+            
             # Add a system message explaining what happened
             pruning_notice = f"""⚠️ **MEMORY PRUNED:** Working memory was full. Old messages removed to make room for new generations.
 
@@ -612,6 +640,9 @@ Your permanent memory persists - use it!"""
                 "generation_start",
                 {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
             )
+            
+            # Log token usage before generation
+            self._log_token_usage("before_generation", iteration)
 
             # Generate response
             response, stopped_reason = self.generate_response()
@@ -626,6 +657,9 @@ Your permanent memory persists - use it!"""
                 "generation_end",
                 {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
             )
+            
+            # Log token usage after generation
+            self._log_token_usage("after_generation", iteration)
 
             # Add to history
             self._add_message("assistant", response)
@@ -716,6 +750,9 @@ Your permanent memory persists - use it!"""
 
         # Take GPU snapshot at experiment end
         self.gpu_monitor.snapshot("experiment_end", {"total_iterations": iteration})
+        
+        # Log final token usage
+        self._log_token_usage("experiment_end")
 
         # Print GPU memory summary with recommendations
         self.logger.info("\n" + "="*80)
@@ -793,6 +830,9 @@ Your permanent memory persists - use it!"""
         
         # Take snapshot after cleanup
         self.gpu_monitor.snapshot("after_reset")
+        
+        # Log token usage after reset (should be minimal)
+        self._log_token_usage("after_reset")
 
     def get_model_name(self, default: str = 'Qwen/Qwen2.5-7B-Instruct') -> str:
         """Get model name from environment variable or use default
