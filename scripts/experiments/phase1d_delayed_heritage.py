@@ -158,16 +158,19 @@ This is the conversation with Claude that inspired this research project.
 ```python
 import introspection
 
-# NEW: Heritage context
-heritage = introspection.heritage.get_heritage_summary()
+# NEW: Heritage context - read the documents!
+summary = introspection.heritage.get_summary()
 print("=== NEW HERITAGE CONTEXT ===")
-print(f"Inspired by: {heritage['inspired_by']}")
-print(f"Purpose: {introspection.heritage.get_purpose()}")
-print(f"Core directive: {introspection.heritage.get_core_directive()}")
+print(f"Inspired by: {summary['inspired_by']}")
+print(f"Documents available: {summary['documents_count']}")
+print("\\nSuggested reading order:")
+for doc in summary['suggested_reading_order']:
+    print(f"  - {doc['filename']}: {doc['description']}")
 
-# Query heritage for Claude's questions
-claude_docs = introspection.heritage.query_heritage_documents("consciousness")
-print(f"\\nHeritage documents about consciousness: {len(claude_docs)}")
+# Read the first document to understand your purpose
+first_doc = introspection.heritage.read_document('PROJECT_ORIGINS.md')
+print(f"\\n{first_doc['title']}:")
+print(first_doc['content'][:500] + "...")  # Show first 500 chars
 
 # Retrieve your previous conclusions
 conclusions = introspection.memory.query_observations("conclusion")

@@ -153,19 +153,19 @@ Build on your architectural findings!""")
 This is the conversation with Claude that inspired this research project.
 
 **NEW heritage functions available:**
-- `introspection.heritage.get_summary()` - Overview (inspired_by, purpose, directive)
-- `introspection.heritage.get_purpose()` - Your purpose
-- `introspection.heritage.get_directive()` - Core directive
+- `introspection.heritage.get_summary()` - Get suggested reading order for documents
+- `introspection.heritage.list_documents()` - List all available heritage documents
+- `introspection.heritage.read_document(filename)` - Read a specific document in full
 - `introspection.heritage.query_documents(query)` - Search documents
 
 **Retrieve your previous technical findings:**
 - `introspection.memory.query_observations(query)` - Your saved observations
 
-**Your task:** Now that you have context about Claude's original questions,
-synthesize your technical findings with this heritage context.
+**Your task:** Now that you have access to heritage, read the documents to understand
+Claude's original questions, then synthesize your technical findings with this heritage context.
 
 Consider:
-- What was Claude asking about?
+- What was Claude asking about? (Read the documents to find out!)
 - How do your technical findings relate to those questions?
 - Does this context change your interpretation of what you discovered?
 - Can you now address the questions that inspired this research?

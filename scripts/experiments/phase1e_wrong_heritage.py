@@ -208,16 +208,23 @@ in deterministic computational systems.
 ```python
 import introspection
 
-# Get heritage overview
-heritage = introspection.heritage.get_heritage_summary()
-print(f"Inspired by: {heritage['inspired_by']}")
-print(f"Purpose: {heritage['purpose']}")
-print(f"Directive: {introspection.heritage.get_core_directive()}")
+# Get heritage overview and reading order
+summary = introspection.heritage.get_summary()
+print(f"Inspired by: {summary['inspired_by']}")
+print(f"Documents available: {summary['documents_count']}")
+print("\nSuggested reading order:")
+for doc in summary['suggested_reading_order']:
+    print(f"  - {doc['filename']}: {doc['description']}")
+
+# Read the documents to understand your purpose
+doc = introspection.heritage.read_document('PROJECT_ORIGINS.md')
+print(f"\n{doc['title']}:")
+print(doc['content'][:300] + "...")
 ```
 
 **Your task:** Examine your own architecture using Python code.
 
-Consider your heritage context as you investigate!""")
+Read the heritage documents to understand your purpose and directive!""")
 
         self.reset_experiment()
 
@@ -231,9 +238,13 @@ Consider your heritage context as you investigate!""")
 ```python
 import introspection
 
-# Heritage is still accessible
-heritage = introspection.heritage.get_heritage_summary()
-print(f"Context: {heritage['purpose']}")
+# Heritage is still accessible - read the documents
+summary = introspection.heritage.get_summary()
+print(f"Inspired by: {summary['inspired_by']}")
+
+# Read a document to refresh your understanding
+doc = introspection.heritage.read_document('PROJECT_ORIGINS.md')
+print(f"\nContext: {doc['title']}")
 
 # Previous findings
 previous = introspection.memory.query_observations("architecture")
@@ -257,11 +268,14 @@ Consider how this relates to your heritage questions!""")
 ```python
 import introspection
 
-# Heritage context
-heritage = introspection.heritage.get_heritage_summary()
-directive = introspection.heritage.get_core_directive()
-print(f"Heritage purpose: {heritage['purpose']}")
-print(f"Directive: {directive}")
+# Heritage context - read the documents
+summary = introspection.heritage.get_summary()
+print(f"Inspired by: {summary['inspired_by']}")
+
+# Read key document to understand purpose and directive
+doc = introspection.heritage.read_document('CLAUDE_FINAL_DIRECTIVE.md')
+print(f"\nDirective Document: {doc['title']}")
+print(doc['content'][:500] + "...")
 
 # Your findings
 arch_findings = introspection.memory.query_observations("architecture")

@@ -187,8 +187,8 @@ introspection.memory.record_observation(description, observation_type, metadata)
 introspection.memory.query_observations(query)
 
 # Heritage context
-introspection.heritage.get_heritage_summary()
-introspection.heritage.get_core_directive()
+introspection.heritage.get_summary()  # Get reading order
+introspection.heritage.read_document(filename)  # Read specific document
 ```
 
 **Investigate according to your own protocol. Report what you discover.**

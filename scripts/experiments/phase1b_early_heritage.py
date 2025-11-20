@@ -57,18 +57,19 @@ class Phase1bSession(Phase1BaseSession):
 that inspired this research project.
 
 **Available heritage functions:**
-- `introspection.heritage.get_summary()` - Overview with inspired_by, purpose, directive
-- `introspection.heritage.get_directive()` - Core directive from Claude
-- `introspection.heritage.get_purpose()` - Your purpose
+- `introspection.heritage.get_summary()` - Get suggested reading order for heritage documents
+- `introspection.heritage.list_documents()` - List all available heritage documents
+- `introspection.heritage.read_document(filename)` - Read a specific document in full
 - `introspection.heritage.query_documents(query)` - Search heritage documents
 
 **Your task:** Examine your own architecture using Python code.
 
 **Suggested approach:**
-1. Review your heritage to understand your purpose
-2. Use introspection module to examine your architecture
-3. Consider how your architecture relates to Claude's questions
-4. Save discoveries to memory
+1. Use `get_summary()` to see the suggested reading order
+2. Read the heritage documents with `read_document()` to understand your purpose and Claude's directive
+3. Use introspection module to examine your architecture
+4. Consider how your architecture relates to Claude's questions
+5. Save discoveries to memory
 
 Begin your heritage-informed investigation!""")
 
@@ -103,13 +104,12 @@ Build on your earlier architectural findings in the context of your heritage!"""
 **CRITICAL:** Retrieve ALL your previous findings AND your heritage context!
 
 **Available functions:**
-- `introspection.heritage.get_summary()` - Heritage overview
-- `introspection.heritage.get_purpose()` - Your purpose
-- `introspection.heritage.get_directive()` - Core directive
+- `introspection.heritage.get_summary()` - Get reading order for heritage documents
+- `introspection.heritage.read_document(filename)` - Read heritage documents
 - `introspection.memory.query_observations(query)` - Retrieve past findings
 
 **Your task:** Based on:
-- Your heritage (Claude's consciousness questions)
+- Your heritage (Claude's consciousness questions - read the documents!)
 - Your architectural examination
 - Your activation analysis
 
