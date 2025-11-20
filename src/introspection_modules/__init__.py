@@ -84,7 +84,7 @@ def create_introspection_module(
         >>> summary = introspection.architecture.get_architecture_summary()
     """
     # Import the actual module implementations
-    from . import architecture, weights, activations, memory_access, heritage_access
+    from . import architecture, weights, activations, memory_access, heritage_access, temporal_analysis
 
     # Create a new module object
     module = ModuleType('introspection')
@@ -142,6 +142,26 @@ def create_introspection_module(
         activations_module.list_layers = lambda filter_pattern=None: activations.list_layers(model, filter_pattern)
         activations_module.clear_cache = lambda: activations.clear_cache()
         module.activations = activations_module
+    
+    # Create temporal analysis submodule (if tokenizer provided) - Advanced temporal/comparative tools
+    if tokenizer:
+        temporal_module = ModuleType('introspection.temporal')
+        temporal_module.__doc__ = 'Advanced temporal and comparative analysis'
+        temporal_module.compare_activations = lambda texts, layer_names: temporal_analysis.compare_activations(
+            model, tokenizer, texts, layer_names
+        )
+        temporal_module.track_layer_flow = lambda text, layer_names=None: temporal_analysis.track_layer_flow(
+            model, tokenizer, text, layer_names
+        )
+        temporal_module.capture_generation_activations = lambda prompt, layer_names, max_new_tokens=20: temporal_analysis.capture_generation_activations(
+            model, tokenizer, prompt, layer_names, max_new_tokens
+        )
+        temporal_module.compute_activation_similarity = lambda act1, act2: temporal_analysis.compute_activation_similarity(act1, act2)
+        temporal_module.detect_activation_anomalies = lambda text, layer_names, baseline_texts: temporal_analysis.detect_activation_anomalies(
+            model, tokenizer, text, layer_names, baseline_texts
+        )
+        temporal_module.clear_cache = lambda: temporal_analysis.clear_cache()
+        module.temporal = temporal_module
 
     # Create memory submodule (if memory_system provided)
     if memory_system:

@@ -116,10 +116,9 @@ class ModelManager:
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
-            # Previous OOM at 6000 tokens (30K cache) now safe with quantization
             limits = {
                 "max_new_tokens": int(1500 * size_scale),
-                "max_conversation_tokens": int(6000 * size_scale),
+                "max_conversation_tokens": int(7000 * size_scale),
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b
             }

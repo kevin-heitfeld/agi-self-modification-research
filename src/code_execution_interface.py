@@ -173,6 +173,8 @@ class CodeExecutionInterface:
             sys.modules['introspection.weights'] = self.introspection.weights
         if hasattr(self.introspection, 'activations'):
             sys.modules['introspection.activations'] = self.introspection.activations
+        if hasattr(self.introspection, 'temporal'):
+            sys.modules['introspection.temporal'] = self.introspection.temporal
         if hasattr(self.introspection, 'memory'):
             sys.modules['introspection.memory'] = self.introspection.memory
         if hasattr(self.introspection, 'heritage'):
@@ -489,6 +491,27 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
   - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
   - `list_layers(filter_pattern=None)` - List available layers
   - `clear_cache()` - Clear activation cache
+
+- `introspection.temporal` - Advanced temporal & comparative analysis
+  - `compare_activations(texts, layer_names)` - Compare activations across multiple inputs
+    - Helps detect patterns: Do different inputs cause different processing?
+    - Returns per-input stats + comparison metrics (variation, similarity)
+    - Example: Compare uncertain vs certain statements
+  - `track_layer_flow(text, layer_names=None)` - Track information flow through layers
+    - Shows how activations transform from early to late layers
+    - Identifies where biggest changes occur
+    - Example: Where does uncertainty information emerge?
+  - `capture_generation_activations(prompt, layer_names, max_new_tokens=20)` - Monitor self-generation
+    - Watch your activations while YOU generate text
+    - Different from capture_activations() which processes existing text
+    - Helps answer: "Do I show different patterns when generating confident vs uncertain text?"
+    - Returns: per-step activations for each generated token
+  - `compute_activation_similarity(activations1, activations2)` - Compare two activation captures
+    - Compute similarity metrics between different inputs
+  - `detect_activation_anomalies(text, layer_names, baseline_texts)` - Find unusual patterns
+    - Compare to baseline inputs to detect anomalous processing
+    - Returns z-scores showing how many std deviations from normal
+  - `clear_cache()` - Clear temporal analysis cache
 
 - `introspection.memory` - Memory system access
   - `record_observation(description, category="general", importance=0.5, tags=None, data=None)` - Save observations
