@@ -474,7 +474,7 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
 - `introspection.architecture` - Model structure inspection
   - `get_architecture_summary()` - Get high-level overview
   - `describe_layer(layer_name)` - Describe a specific layer
-  - `list_layers(filter_pattern=None)` - List all layers
+  - `list_layers(filter_pattern=None)` - List all layers (returns summary with patterns)
   - `get_layer_info(layer_name)` - Get layer metadata
   - `find_similar_layers(layer_name)` - Find similar layers
 
@@ -495,7 +495,7 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
     - Pass string or list → always returns dict mapping layer_name to stats
   - `get_activation_statistics(layer_name)` - Get activation stats
   - `get_input_shape(sample_text)` - Get input dimensions and tokenization info
-  - `list_layers(filter_pattern=None)` - List available layers
+  - `list_layers(filter_pattern=None)` - List available layers (returns summary with patterns)
   - `clear_cache()` - Clear activation cache
 
 - `introspection.temporal` - Advanced temporal & comparative analysis
@@ -595,10 +595,10 @@ print(f"Saved as {{obs_id}}")
 - Large outputs (>{MAX_OUTPUT_CHARS} chars) are automatically truncated to prevent memory issues
 - Lists/dicts with many items show first {MAX_LIST_ITEMS} items + last {MAX_TAIL_ITEMS} items + count
 - For long outputs, you'll see beginning and end with "[... Output truncated ...]" notice
-- **Strategy:** Check size first (e.g., `len(layers)`) before printing large collections
-- **Better approach:** Print counts/summaries rather than full lists
-  - ❌ Bad: `print(introspection.architecture.list_layers())` (500+ items!)
-  - ✅ Good: `layers = introspection.architecture.list_layers(); print(f"Found {{len(layers)}} layers"); print(layers[:5])`
+- **Strategy:** `list_layers()` and `list_parameters()` return structured summaries (not raw lists)
+- **Better approach:** Print the summary dict to see patterns, not raw lists
+  - ✅ Good: `summary = introspection.architecture.list_layers(); print(summary)`
+  - Shows patterns like `model.layers.{{N}}.self_attn.q_proj: 36 layers` instead of all 500+ names
 
 **About attention weights:**
 - By default, `capture_activations()` returns EMPTY attention_weights dict

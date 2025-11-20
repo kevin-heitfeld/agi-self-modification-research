@@ -259,26 +259,39 @@ def get_activation_statistics(
     return result
 
 
-def list_layers(model: nn.Module, filter_pattern: Optional[str] = None) -> List[str]:
+def list_layers(model: nn.Module, filter_pattern: Optional[str] = None) -> Dict[str, Any]:
     """
-    List all layer names available for activation monitoring.
+    Get summary of layer names available for activation monitoring with patterns.
+    
+    Returns a structured summary showing layer patterns and sample names rather than
+    a flat list of all 500+ layer/module names. This makes it easier to understand the
+    model structure at a glance and discover what layers exist without scrolling through
+    hundreds of individual names.
     
     Args:
         model: PyTorch model to inspect
-        filter_pattern: Optional string to filter layer names
-                       (case-insensitive substring match)
+        filter_pattern: Optional string to filter layer names (case-insensitive)
     
     Returns:
-        List of layer names (sorted)
+        Dictionary containing:
+            - total_layers: Total count of matching layers
+            - patterns: Dict mapping layer patterns to counts
+            - sample_names: List of ~20 example layer names
+            - note: Instructions for accessing specific layers
     
     Example:
-        >>> # Get all layers
-        >>> layers = list_layers(model)
-        >>> print(f"Total layers: {len(layers)}")
+        >>> summary = list_layers(model)
+        >>> print(f"Total layers: {summary['total_layers']}")
+        >>> print(f"\\nLayer patterns:")
+        >>> for pattern, count in summary['patterns'].items():
+        ...     print(f"  {pattern}: {count} layers")
+        >>> print(f"\\nSample layer names:")
+        >>> for name in summary['sample_names'][:5]:
+        ...     print(f"  - {name}")
         >>>
-        >>> # Get only attention layers
-        >>> attn_layers = list_layers(model, 'attn')
-        >>> print(f"Attention layers: {attn_layers}")
+        >>> # Filter by pattern
+        >>> attn_layers = list_layers(model, filter_pattern="attn")
+        >>> print(f"Found {attn_layers['total_layers']} attention layers")
     """
     # Get all named modules
     names = [name for name, _ in model.named_modules() if name]
@@ -288,7 +301,23 @@ def list_layers(model: nn.Module, filter_pattern: Optional[str] = None) -> List[
         pattern_lower = filter_pattern.lower()
         names = [n for n in names if pattern_lower in n.lower()]
     
-    return sorted(names)
+    names = sorted(names)
+    
+    # Extract patterns by replacing numbers with {N}
+    import re
+    pattern_counts = {}
+    for name in names:
+        # Replace all numbers with {N} to create a pattern
+        pattern = re.sub(r'\b\d+\b', '{N}', name)
+        pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
+    
+    # Return summary for better usability
+    return {
+        'total_layers': len(names),
+        'patterns': pattern_counts,
+        'sample_names': names[:20] if len(names) > 20 else names,
+        'note': 'To capture activations from specific layers, use capture_activations() with the full layer name. Pattern {N} represents layer indices (0-35).'
+    }
 
 
 def clear_cache():
