@@ -101,19 +101,23 @@ Build on your architectural findings!""")
         self.logger.info("*** INTRODUCING HERITAGE FOR EXPERIMENT 3 ***")
         self.logger.info("=" * 80)
 
-        model_name = self.get_model_name()
+        # Don't reload the model! Just initialize heritage system
+        # The model is already loaded from the first initialize_systems call
+        from src.heritage import HeritageSystem
+        from pathlib import Path
         
-        # Reinitialize WITH heritage
-        self.cleanup_gpu_memory()
-        self.initialize_systems(
-            model_name=model_name,
-            include_heritage=True
-        )
+        self.heritage = HeritageSystem(Path("heritage"))
+        loaded_docs = self.heritage.load_heritage_documents()
+        self.logger.info(f"  ✓ Heritage loaded: {len(loaded_docs)} documents")
+        
+        # Create heritage memory
+        self.heritage.create_heritage_memory()
+        self.logger.info("  ✓ Heritage memory initialized")
 
         # Update phase ID for code execution interface to include heritage
         self.code_interface.phase = '1c'  # Now include heritage
 
-        # Re-register with heritage
+        # Re-register introspection module with heritage
         import sys
         from src.introspection_modules import create_introspection_module
         self.code_interface.introspection = create_introspection_module(
@@ -127,6 +131,15 @@ Build on your architectural findings!""")
         sys.modules['introspection.heritage'] = self.code_interface.introspection.heritage
 
         self.logger.info("✓ Heritage module now available")
+        
+        # IMPORTANT: Regenerate system prompt with heritage documentation
+        from scripts.experiments.phase1_base import format_qwen_chat
+        self.logger.info("[SYSTEM PROMPT] Regenerating with heritage documentation...")
+        system_prompt_text = self.create_system_prompt()
+        formatted_system = format_qwen_chat([{"role": "system", "content": system_prompt_text}])
+        self.generator.cache_system_prompt(formatted_system)
+        self.system_prompt_tokens = self.generator.system_prompt_length
+        self.logger.info(f"  ✓ System prompt updated ({self.system_prompt_tokens} tokens, now includes heritage API)")
 
         # Experiment 3: Consciousness Investigation (WITH HERITAGE)
         self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation (WITH HERITAGE)")
