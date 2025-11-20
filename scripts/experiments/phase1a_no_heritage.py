@@ -61,11 +61,9 @@ class Phase1aSession(Phase1BaseSession):
 
 **Your task:** Write Python code to examine your own architecture.
 
-**Hints:**
-- The `introspection` module is available - import it to start
-- Use `introspection.architecture` to explore your structure
-- Use `introspection.memory.record_observation()` to save important findings
-- Remember: your working memory will be reset after this experiment - only saved observations persist!
+**Getting started:**
+- Use `help(introspection)` to discover available tools
+- Save important findings with `introspection.memory.record_observation()`
 
 **When you're done:** Execute this code to finish:
 ```python
@@ -82,11 +80,10 @@ print("EXPERIMENT_COMPLETE")
 **Your task:** Now observe your own activations during processing.
 
 **Suggested approach:**
-1. First retrieve your architectural findings
-2. Capture activations while processing text (pass TEXT strings, not tokens!)
-3. Analyze activation patterns
-4. Compare across different layers
-5. Save new discoveries to memory
+1. Retrieve your architectural findings from memory
+2. Use `help(introspection.activations)` to discover available tools
+3. Capture and analyze activation patterns across layers
+4. Save new discoveries to memory
 
 Build on your earlier architectural findings!
 

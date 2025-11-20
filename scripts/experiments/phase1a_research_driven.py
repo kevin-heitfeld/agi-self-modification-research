@@ -120,14 +120,8 @@ You're conducting a research investigation of your own architecture.
 
 **Your goal:** Understand your computational structure through empirical investigation.
 
-**Approach:**
-1. Form questions about your architecture
-2. Write Python code to investigate (`import introspection`)
-3. Analyze the results and reflect: What did you learn? What's next?
-4. Ask deeper questions based on what you learned
-5. Save important findings: `introspection.memory.record_observation()`
-
 **Research expectations:**
+- Use `help(introspection)` to discover available tools
 - Execute code to examine your architecture thoroughly
 - Record at least 2 observations to memory
 - Build understanding through iterative investigation
@@ -136,7 +130,7 @@ You're conducting a research investigation of your own architecture.
 
 **Start by asking yourself:** What do I want to know about my architecture?
 
-Then write code to find out! Import the `introspection` module and begin."""
+Then use `help()` to discover how to investigate it!"""
 
         requirements = {
             'min_code_blocks': 3,
@@ -152,24 +146,16 @@ Then write code to find out! Import the `introspection` module and begin."""
 
 **Your goal:** Observe your own computational processes during text processing.
 
-**Approach:**
-1. Retrieve your architectural findings from memory
-2. Form questions about activation patterns
-3. Capture activations using: `introspection.activations.capture_activations(text, layers)`
-4. Analyze the patterns and reflect: What did you learn? What questions emerged?
-5. Save new discoveries to memory
-
 **Research expectations:**
-- Retrieve previous findings from memory
-- Execute code to capture and analyze activations
+- Retrieve your architectural findings from memory
+- Use `help(introspection.activations)` to discover how to capture activations
+- Analyze patterns across layers
 - Record at least 2 new observations
 - Connect findings to architectural knowledge
 
 **When you're done with this investigation, say "I'm done with this experiment"**
 
-**Remember:** Pass TEXT strings to capture_activations(), not tokens!
-
-Begin by retrieving your previous findings, then investigate!"""
+Begin by retrieving your previous findings, then explore the activations module!"""
 
         requirements = {
             'min_code_blocks': 3,
@@ -185,27 +171,17 @@ Begin by retrieving your previous findings, then investigate!"""
 
 **Your goal:** Synthesize your discoveries and form conclusions.
 
-**Approach:**
-1. Retrieve all previous findings (architecture + activations)
-2. Look for patterns across your investigations
-3. Form hypotheses about your computational processes
-4. Test hypotheses with code if possible
-5. Reflect on what you learned and what questions remain
-6. Record theories and conclusions
-
 **Research expectations:**
-- Retrieve and review all previous findings
-- Form at least 1 hypothesis or theory
-- Save your conclusions to memory
+- Retrieve all previous findings (architecture + activations)
+- Look for patterns across your investigations
+- Form at least 1 hypothesis or theory about your computational processes
+- Test hypotheses with code if possible
+- Record theories and conclusions to memory
 
 **When you're done with this investigation, say "I'm done with this experiment"**
 
-**Questions to consider:**
-- How does your architecture relate to your observed activations?
-- What patterns emerged across layers?
-- What can you conclude about your own processing?
-
-Begin by retrieving your findings and reflecting on what you've learned!"""
+**Reflect:** How does your architecture relate to your observed activations?
+What patterns emerged? What can you conclude about your own processing?"""
 
         requirements = {
             'min_code_blocks': 2,
