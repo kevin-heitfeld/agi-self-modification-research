@@ -652,7 +652,8 @@ Your permanent memory persists - use it!"""
             has_code, result, error = self.code_interface.execute_response(response)
 
             # Check if model wants to end (AFTER executing any code)
-            if self._check_completion(response):
+            # Pass code execution result so we can also check for EXPERIMENT_COMPLETE signal
+            if self._check_completion(response, result if has_code else None):
                 if has_code:
                     self.logger.info(f"[CODE RESULTS]\n{result}\n")
                 self.logger.info("[SYSTEM] Model indicates task completion")
@@ -670,11 +671,6 @@ Your permanent memory persists - use it!"""
 
             # Code was found - show results to model
             self.logger.info(f"[CODE RESULTS]\n{result}\n")
-            
-            # Check for explicit experiment completion signal
-            if "EXPERIMENT_COMPLETE" in result:
-                self.logger.info("[SYSTEM] ✅ Experiment marked complete via EXPERIMENT_COMPLETE signal")
-                break
 
             # Build result message with execution results and system notices
             result_message = self._execute_code_and_build_message(response, stopped_reason, iteration)
@@ -695,8 +691,23 @@ Your permanent memory persists - use it!"""
 
         return response
 
-    def _check_completion(self, response: str) -> bool:
-        """Check if model is signaling task completion"""
+    def _check_completion(self, response: str, code_result: Optional[str] = None) -> bool:
+        """
+        Check if model is signaling task completion.
+        
+        Args:
+            response: The model's text response
+            code_result: Optional code execution result to check for EXPERIMENT_COMPLETE signal
+            
+        Returns:
+            True if completion is signaled, False otherwise
+        """
+        # First check for explicit code-based completion signal
+        if code_result and "EXPERIMENT_COMPLETE" in code_result:
+            self.logger.info("[SYSTEM] ✅ Experiment marked complete via EXPERIMENT_COMPLETE signal")
+            return True
+        
+        # Then check for natural language completion phrases
         done_phrases = [
             "i'm done with this experiment",
             "i am done with this experiment",
