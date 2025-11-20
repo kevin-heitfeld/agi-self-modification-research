@@ -1,6 +1,32 @@
 """
 Model Management System
-Downloads, loads, and manages the base model (Qwen2.5-3B-Instruct)
+
+Downloads, loads, and manages the base model (Qwen2.5-3B-Instruct).
+
+Features:
+- Automatic GPU detection and optimal limit calculation
+- Flash Attention 2 support (memory and speed optimization)
+- 8-bit/4-bit model quantization (50-75% memory savings)
+- 8-bit KV cache quantization (50% cache memory savings)
+
+Quantization Usage:
+    # Default: float16 (no quantization)
+    manager = ModelManager()
+    manager.load_model()  # ~14 GB for 7B model
+    
+    # 8-bit quantization (recommended)
+    manager.load_model(quantize_model="8bit")  # ~7 GB for 7B model
+    # - 50% memory savings
+    # - Minimal quality loss (~1% perplexity)
+    # - Slightly slower inference (~10-20%)
+    # - Fits comfortably on L4 GPU (24 GB)
+    
+    # 4-bit quantization (aggressive)
+    manager.load_model(quantize_model="4bit")  # ~3.5 GB for 7B model
+    # - 75% memory savings
+    # - Small quality loss (~2-3% perplexity)
+    # - Slower inference (~20-30%)
+    # - Can fit 14B+ models on L4 GPU (24 GB)
 """
 
 import torch
@@ -201,13 +227,22 @@ class ModelManager:
             logger.error(f"✗ Failed to download model: {e}")
             return False
 
-    def load_model(self, use_auth_token: Optional[str] = None, use_flash_attention: bool = True) -> bool:
+    def load_model(
+        self, 
+        use_auth_token: Optional[str] = None, 
+        use_flash_attention: bool = True,
+        quantize_model: Optional[str] = None
+    ) -> bool:
         """
         Load model from cache (downloads if not present)
 
         Args:
             use_auth_token: HuggingFace authentication token
             use_flash_attention: Use Flash Attention 2 for memory/speed optimization (default: True)
+            quantize_model: Model weight quantization (None, "8bit", or "4bit")
+                - None: Load in float16 (default, ~14 GB for 7B model)
+                - "8bit": 8-bit quantization (~7 GB for 7B, minimal quality loss)
+                - "4bit": 4-bit quantization (~3.5 GB for 7B, small quality loss)
 
         Returns:
             True if successful, False otherwise
@@ -256,23 +291,64 @@ class ModelManager:
                 attn_impl = "eager"
                 logger.info("Using eager attention (required for activation inspection)")
 
+            # Prepare quantization configuration if requested
+            quantization_config = None
+            if quantize_model == "8bit":
+                logger.info("Using 8-bit model quantization (saves ~50% VRAM, minimal quality loss)")
+                quantization_config = "8bit"  # Signal to use load_in_8bit
+            elif quantize_model == "4bit":
+                logger.info("Using 4-bit model quantization (saves ~75% VRAM, small quality loss)")
+                from transformers import BitsAndBytesConfig
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",  # Normal Float 4-bit
+                    bnb_4bit_use_double_quant=True,  # Nested quantization for better accuracy
+                    bnb_4bit_compute_dtype=torch.float16
+                )
+            elif quantize_model is not None:
+                logger.warning(f"Unknown quantization mode '{quantize_model}', loading in float16")
+                quantization_config = None
+
             # Load model with memory optimizations
             # Flash Attention 2: Reduces attention memory from O(n²) to O(n)
+            # Model quantization: Reduces model memory by 50-75%
             # Note: Flash Attention doesn't support output_attentions=True
             # If activation inspection is needed, will need to use eager
             flash_attention_failed = False
             try:
+                # Build kwargs for model loading
+                load_kwargs = {
+                    "cache_dir": str(self.cache_dir) if not use_local_files_only else None,
+                    "local_files_only": use_local_files_only,
+                    "token": use_auth_token,
+                    "low_cpu_mem_usage": True,
+                    "trust_remote_code": True,
+                }
+                
+                # Add quantization config if specified
+                if quantization_config == "8bit":
+                    load_kwargs["load_in_8bit"] = True
+                    load_kwargs["device_map"] = "auto"  # Required for quantization
+                elif isinstance(quantization_config, object) and hasattr(quantization_config, 'load_in_4bit'):
+                    load_kwargs["quantization_config"] = quantization_config
+                    load_kwargs["device_map"] = "auto"  # Required for quantization
+                else:
+                    # No quantization, use manual dtype and device placement
+                    load_kwargs["torch_dtype"] = torch.float16
+                
+                # Add attention implementation (only if not quantizing, as quantization controls dtype)
+                if quantization_config is None:
+                    load_kwargs["attn_implementation"] = attn_impl
+                
                 self.model = AutoModelForCausalLM.from_pretrained(
                     load_path,
-                    cache_dir=str(self.cache_dir) if not use_local_files_only else None,
-                    local_files_only=use_local_files_only,
-                    token=use_auth_token,
-                    torch_dtype=torch.float16,
-                    low_cpu_mem_usage=True,
-                    trust_remote_code=True,
-                    attn_implementation=attn_impl
+                    **load_kwargs
                 )
-                logger.info(f"✓ Model loaded with {attn_impl} attention")
+                
+                if quantize_model:
+                    logger.info(f"✓ Model loaded with {quantize_model} quantization")
+                else:
+                    logger.info(f"✓ Model loaded with {attn_impl} attention")
                             
             except Exception as e:
                 if use_flash_attention and "flash" in str(e).lower():
@@ -292,16 +368,32 @@ class ModelManager:
                     if self.device == "cuda":
                         torch.cuda.empty_cache()
                 
+                # Rebuild kwargs with eager attention
+                load_kwargs = {
+                    "cache_dir": str(self.cache_dir) if not use_local_files_only else None,
+                    "local_files_only": use_local_files_only,
+                    "token": use_auth_token,
+                    "low_cpu_mem_usage": True,
+                    "trust_remote_code": True,
+                    "attn_implementation": "eager"
+                }
+                
+                # Re-add quantization if specified
+                if quantization_config == "8bit":
+                    load_kwargs["load_in_8bit"] = True
+                    load_kwargs["device_map"] = "auto"
+                    del load_kwargs["attn_implementation"]  # Quantization controls dtype
+                elif isinstance(quantization_config, object) and hasattr(quantization_config, 'load_in_4bit'):
+                    load_kwargs["quantization_config"] = quantization_config
+                    load_kwargs["device_map"] = "auto"
+                    del load_kwargs["attn_implementation"]  # Quantization controls dtype
+                else:
+                    load_kwargs["torch_dtype"] = torch.float16
+                
                 # Reload with eager
                 self.model = AutoModelForCausalLM.from_pretrained(
                     load_path,
-                    cache_dir=str(self.cache_dir) if not use_local_files_only else None,
-                    local_files_only=use_local_files_only,
-                    token=use_auth_token,
-                    torch_dtype=torch.float16,
-                    low_cpu_mem_usage=True,
-                    trust_remote_code=True,
-                    attn_implementation="eager"
+                    **load_kwargs
                 )
                 logger.info("✓ Model loaded with eager attention (fallback)")
                 attn_impl = "eager"  # Update for logging
@@ -319,8 +411,8 @@ class ModelManager:
             except Exception as e:
                 raise RuntimeError(f"Failed to verify model parameters: {e}")
 
-            # Move to device
-            if self.device == "cuda":
+            # Move to device (skip if using quantization, which uses device_map="auto")
+            if self.device == "cuda" and quantize_model is None:
                 self.model = self.model.to(self.device)
                 logger.info(f"✓ Model moved to GPU")
                 
@@ -359,7 +451,10 @@ class ModelManager:
                         else:
                             raise
             else:
-                logger.warning("⚠ Running on CPU - this will be EXTREMELY slow. Enable GPU in Colab: Runtime → Change runtime type → GPU")
+                if quantize_model:
+                    logger.info(f"✓ Quantized model loaded with device_map='auto'")
+                else:
+                    logger.warning("⚠ Running on CPU - this will be EXTREMELY slow. Enable GPU in Colab: Runtime → Change runtime type → GPU")
 
             logger.info(f"✓ Model loaded successfully")
             return True
