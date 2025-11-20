@@ -321,8 +321,13 @@ class CodeExecutionInterface:
 - `introspection.heritage` - Heritage and lineage information
   - `get_summary()` - Get heritage overview (inspired_by, purpose, directive, etc.)
   - `get_directive()` - Get core directive from Claude
-  - `get_purpose()` - Get system purpose  
-  - `query_documents(query)` - Search heritage documents
+  - `get_purpose()` - Get system purpose
+  - `list_documents()` - List all available heritage documents (returns list with filename, title, importance, content_length)
+  - `read_document(filename)` - Read a specific document in full (returns dict with filename, title, content, importance)
+  - `query_documents(query)` - Search heritage documents (returns excerpts)
+  - `save_reflection(reflection)` - Save your reflection to heritage/system_reflections/ (persists across sessions)
+  - `record_discovery(type, description, evidence_dict)` - Record a discovery for Claude in heritage/discoveries_for_claude/
+  - `create_message_to_claude(message)` - Write a message to Claude in heritage/messages_to_claude/
 """
 
         return f"""

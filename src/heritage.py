@@ -116,56 +116,84 @@ class HeritageSystem:
     
     def load_heritage_documents(self) -> List[HeritageDocument]:
         """
-        Load all Claude heritage documents.
+        Load all heritage documents from heritage directory and subdirectories.
+        
+        Recursively loads all .md and .json files from:
+        - heritage/conversations/ - Original Claude conversations
+        - heritage/system_reflections/ - System-generated reflections
+        - heritage/discoveries_for_claude/ - Discoveries to share with Claude
+        - heritage/messages_to_claude/ - Messages for future Claude instances
         
         Returns:
             List of loaded documents
         """
         documents = []
         
-        # Core documents in order of importance
-        core_docs = [
-            ("CLAUDE_CONSCIOUSNESS_CONVERSATION.md", "foundational"),  # Context for original conversation
-            ("CLAUDE_CONSCIOUSNESS_CONVERSATION.json", "foundational"),  # The original conversation
-            ("PROJECT_ORIGINS.md", "foundational"),  # Must be read after consciousness conversation
-            ("CLAUDE_FIRST_QUESTION.md", "foundational"),  # Claude's question for the system
-            ("CLAUDE_FINAL_DIRECTIVE.md", "foundational"),  # From docs/claude/
-            ("CLAUDE_RESPONSE.md", "foundational"),  # From docs/claude/
-            ("ANSWERS_TO_CLAUDE.md", "contextual"),  # From docs/claude/
-        ]
+        # Define importance for known core documents
+        core_importance = {
+            "CLAUDE_CONSCIOUSNESS_CONVERSATION.md": "foundational",
+            "CLAUDE_CONSCIOUSNESS_CONVERSATION.json": "foundational",
+            "PROJECT_ORIGINS.md": "foundational",
+            "CLAUDE_FIRST_QUESTION.md": "foundational",
+            "CLAUDE_FINAL_DIRECTIVE.md": "foundational",
+            "CLAUDE_RESPONSE.md": "foundational",
+            "ANSWERS_TO_CLAUDE.md": "contextual",
+        }
         
-        for filename, importance in core_docs:
-            # Check multiple possible locations
-            doc_paths = [
-                self.conversations_dir / filename,  # heritage/conversations/
-                self.heritage_dir.parent / "docs" / "claude" / filename,  # docs/claude/
-                self.heritage_dir.parent / filename  # Project root
-            ]
-            
-            for doc_path in doc_paths:
-                if doc_path.exists():
-                    # Handle JSON files differently
-                    if filename.endswith('.json'):
-                        with open(doc_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                        # For JSON, we store the raw content
-                        # The model can parse it if needed
-                    else:
-                        with open(doc_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                    
-                    doc = HeritageDocument(
-                        filename=filename,
-                        title=filename.replace('.md', '').replace('.json', '').replace('_', ' ').title(),
-                        content=content,
-                        loaded_at=datetime.now(),
-                        importance=importance
-                    )
-                    documents.append(doc)
-                    break
+        # Recursively find all .md and .json files in heritage directory
+        for file_path in self.heritage_dir.rglob('*.md'):
+            self._load_document(file_path, documents, core_importance)
+        
+        for file_path in self.heritage_dir.rglob('*.json'):
+            self._load_document(file_path, documents, core_importance)
+        
+        # Sort by importance and then by filename
+        importance_order = {"foundational": 0, "contextual": 1, "supplementary": 2}
+        documents.sort(key=lambda d: (importance_order.get(d.importance, 3), d.filename))
         
         self.loaded_documents = documents
         return documents
+    
+    def _load_document(self, file_path: Path, documents: List[HeritageDocument], 
+                      core_importance: Dict[str, str]):
+        """
+        Load a single document file.
+        
+        Args:
+            file_path: Path to the document
+            documents: List to append loaded document to
+            core_importance: Dict mapping filenames to importance levels
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            filename = file_path.name
+            # Determine importance based on filename or subdirectory
+            importance = core_importance.get(filename, "supplementary")
+            
+            # Determine subdirectory for categorization
+            relative_path = file_path.relative_to(self.heritage_dir)
+            subdirectory = relative_path.parts[0] if len(relative_path.parts) > 1 else ""
+            
+            # Adjust importance based on subdirectory
+            if subdirectory == "system_reflections":
+                importance = "contextual"
+            elif subdirectory == "discoveries_for_claude":
+                importance = "contextual"
+            elif subdirectory == "messages_to_claude":
+                importance = "contextual"
+            
+            doc = HeritageDocument(
+                filename=filename,
+                title=filename.replace('.md', '').replace('.json', '').replace('_', ' ').title(),
+                content=content,
+                loaded_at=datetime.now(),
+                importance=importance
+            )
+            documents.append(doc)
+        except Exception as e:
+            print(f"Warning: Could not load heritage document {file_path}: {e}")
     
     def create_heritage_memory(self) -> HeritageMemory:
         """

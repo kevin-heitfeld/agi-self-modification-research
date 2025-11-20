@@ -161,12 +161,24 @@ def create_introspection_module(
     if heritage_system and phase != '1a':
         heritage_module = ModuleType('introspection.heritage')
         heritage_module.__doc__ = 'Heritage and lineage information'
+        
+        # Read functions
         heritage_module.get_summary = lambda: heritage_access.get_summary(heritage_system)
         heritage_module.get_directive = lambda: heritage_access.get_directive(heritage_system)
         heritage_module.get_purpose = lambda: heritage_access.get_purpose(heritage_system)
+        heritage_module.list_documents = lambda: heritage_access.list_documents(heritage_system)
+        heritage_module.read_document = lambda filename: heritage_access.read_document(heritage_system, filename)
         heritage_module.query_documents = lambda query: heritage_access.query_documents(
             heritage_system, query
         )
+        
+        # Write functions
+        heritage_module.save_reflection = lambda reflection: heritage_access.save_reflection(heritage_system, reflection)
+        heritage_module.record_discovery = lambda discovery_type, description, evidence: heritage_access.record_discovery(
+            heritage_system, discovery_type, description, evidence
+        )
+        heritage_module.create_message_to_claude = lambda message: heritage_access.create_message_to_claude(heritage_system, message)
+        
         module.heritage = heritage_module
 
     return module
