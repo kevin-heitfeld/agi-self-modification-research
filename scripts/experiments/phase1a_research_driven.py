@@ -236,11 +236,13 @@ Continue your investigation by writing more code, or explain your findings so fa
         self.logger.info("\n[PHASE 1a RESEARCH] Running research-driven investigation (no heritage)")
 
         model_name = self.get_model_name()
+        quantization = self.get_quantization()
         
         # Initialize WITHOUT heritage
         self.initialize_systems(
             model_name=model_name,
-            include_heritage=False
+            include_heritage=False,
+            quantization=quantization
         )
 
         # ========== EXPERIMENT 1: Architecture Investigation ==========

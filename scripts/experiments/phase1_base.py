@@ -268,19 +268,20 @@ When you say "I'm done with this experiment", the system will:
 - You can't rely on your "working memory" from yesterday - only your written notes!
 """
 
-    def initialize_systems(self, model_name: str, include_heritage: bool = True):
+    def initialize_systems(self, model_name: str, include_heritage: bool = True, quantization: str = None):
         """
         Initialize model and code execution interface.
         
         Args:
-            model_name: Model to load (e.g., "Qwen/Qwen2.5-3B-Instruct" or "Qwen/Qwen2.5-7B-Instruct")
+            model_name: Model to load (e.g., "Qwen/Qwen2.5-3B-Instruct" or "Qwen/Qwen2.5-14B-Instruct")
             include_heritage: Whether to load heritage documents
+            quantization: Quantization mode ('4bit', '8bit', or None for fp16)
         """
         self.logger.info("[INITIALIZATION] Loading systems...")
 
-        # Load model
+        # Load model with quantization
         self.model_mgr = ModelManager(model_name=model_name)
-        model_loaded = self.model_mgr.load_model()
+        model_loaded = self.model_mgr.load_model(quantize_model=quantization)
 
         if not model_loaded:
             raise RuntimeError("Failed to load model")
@@ -288,10 +289,13 @@ When you say "I'm done with this experiment", the system will:
         self.model = self.model_mgr.model
         self.tokenizer = self.model_mgr.tokenizer
 
-        # Get optimal limits
-        self.optimal_limits = self.model_mgr.get_optimal_limits()
+        # Get optimal limits (pass quantization so it can adjust conversation token limits)
+        self.optimal_limits = self.model_mgr.get_optimal_limits(quantization=quantization)
         self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
+        self.logger.info(f"  max_conversation_tokens: {self.optimal_limits['max_conversation_tokens']}")
+        if quantization:
+            self.logger.info(f"  quantization: {quantization} (extra memory headroom for longer conversations)")
 
         # Update GPU monitor
         if self.model_mgr.device == "cuda":
@@ -925,7 +929,7 @@ Your permanent memory persists - use it!"""
         # Log token usage after reset (should be minimal)
         self._log_token_usage("after_reset")
 
-    def get_model_name(self, default: str = 'Qwen/Qwen2.5-7B-Instruct') -> str:
+    def get_model_name(self, default: str = 'Qwen/Qwen2.5-14B-Instruct') -> str:
         """Get model name from environment variable or use default
         
         Args:
@@ -936,6 +940,22 @@ Your permanent memory persists - use it!"""
         """
         import os
         return os.environ.get('AGI_MODEL_NAME', default)
+    
+    def get_quantization(self, default: str = None) -> str:
+        """Get quantization mode from environment variable or use default
+        
+        Args:
+            default: Default quantization mode if AGI_QUANTIZATION not set
+            
+        Returns:
+            Quantization mode string ('4bit', '8bit', or None)
+        """
+        import os
+        quantization = os.environ.get('AGI_QUANTIZATION', default)
+        # Normalize None/empty string
+        if quantization in [None, '', 'none', 'None']:
+            return None
+        return quantization
 
     def log_experiment_header(self, experiment_name: str):
         """Log standardized experiment header

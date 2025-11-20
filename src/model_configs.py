@@ -77,6 +77,23 @@ MODEL_PRESETS: Dict[str, ModelPreset] = {
         good_for_coding=True,
     ),
     
+    "qwen2.5-14b": ModelPreset(
+        name="Qwen 2.5 14B Instruct",
+        huggingface_id="Qwen/Qwen2.5-14B-Instruct",
+        parameters=14_770_000_000,
+        context_length=128_000,  # 128K with YARN scaling!
+        description="Best reasoning model for L4 GPU - 2x parameters vs 7B, excellent performance",
+        vram_fp16=29.0,
+        vram_4bit=7.5,
+        vram_8bit=14.0,
+        recommended_batch_size=2,
+        recommended_max_tokens=2000,
+        supports_flash_attention=True,
+        supports_long_context=True,  # 128K context!
+        good_for_reasoning=True,
+        good_for_coding=True,
+    ),
+    
     "qwen2.5-1.5b": ModelPreset(
         name="Qwen 2.5 1.5B Instruct",
         huggingface_id="Qwen/Qwen2.5-1.5B-Instruct",
@@ -235,7 +252,7 @@ HARDWARE_PROFILES: Dict[str, HardwareProfile] = {
         recommended_quantization="8bit",
         max_batch_size=4,
         supports_flash_attention=True,
-        recommended_models=["qwen2.5-7b", "mistral-7b", "phi-3.5-mini"],
+        recommended_models=["qwen2.5-14b", "qwen2.5-7b", "mistral-7b", "phi-3.5-mini"],
     ),
     
     "local_4090": HardwareProfile(

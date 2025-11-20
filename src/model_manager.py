@@ -86,9 +86,12 @@ class ModelManager:
         logger.info(f"ModelManager initialized for {model_name}")
         logger.info(f"Device: {self.device}")
 
-    def get_optimal_limits(self) -> Dict[str, int]:
+    def get_optimal_limits(self, quantization: Optional[str] = None) -> Dict[str, int]:
         """
-        Get optimal token limits based on detected GPU capabilities AND model size.
+        Get optimal token limits based on detected GPU capabilities, model size, and quantization.
+        
+        Args:
+            quantization: Quantization mode ('4bit', '8bit', or None)
         
         Returns:
             Dict with recommended limits for max_new_tokens, max_conversation_tokens
@@ -113,14 +116,26 @@ class ModelManager:
         # Larger models get tighter limits: 14B = 0.5x, 32B = 0.22x, 70B = 0.1x
         size_scale = 7.0 / model_size_b
         
-        logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x")
+        # Quantization gives us more VRAM headroom for KV cache
+        # 8-bit: ~50% model memory savings → 1.5x more conversation tokens
+        # 4-bit: ~75% model memory savings → 2.0x more conversation tokens
+        quant_scale = 1.0
+        if quantization == "8bit":
+            quant_scale = 1.5
+            logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x, quantization: 8-bit (1.5x memory headroom)")
+        elif quantization == "4bit":
+            quant_scale = 2.0
+            logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x, quantization: 4-bit (2.0x memory headroom)")
+        else:
+            logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x")
         
         # Default conservative limits (CPU or unknown GPU)
         limits = {
-            "max_new_tokens": int(400 * size_scale),
-            "max_conversation_tokens": int(1500 * size_scale),
+            "max_new_tokens": int(400 * size_scale * quant_scale),
+            "max_conversation_tokens": int(1500 * size_scale * quant_scale),
             "gpu_profile": "conservative",
-            "model_size_b": model_size_b
+            "model_size_b": model_size_b,
+            "quantization": quantization
         }
         
         if self.device != "cuda":
@@ -132,10 +147,11 @@ class ModelManager:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
             # With 8-bit KV cache quantization: 50% memory savings
             limits = {
-                "max_new_tokens": int(1200 * size_scale),
-                "max_conversation_tokens": int(8000 * size_scale),
+                "max_new_tokens": int(1200 * size_scale * quant_scale),
+                "max_conversation_tokens": int(8000 * size_scale * quant_scale),
                 "gpu_profile": "high_end_ampere",
-                "model_size_b": model_size_b
+                "model_size_b": model_size_b,
+                "quantization": quantization
             }
             logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with 8-bit KV cache quantization")
             
@@ -143,10 +159,11 @@ class ModelManager:
             # L4 (24 GB) - Ada Lovelace
             # With 8-bit KV cache quantization: 50% memory savings
             limits = {
-                "max_new_tokens": int(1500 * size_scale),
-                "max_conversation_tokens": int(10000 * size_scale),
+                "max_new_tokens": int(1500 * size_scale * quant_scale),
+                "max_conversation_tokens": int(10000 * size_scale * quant_scale),
                 "gpu_profile": "l4_ada",
-                "model_size_b": model_size_b
+                "model_size_b": model_size_b,
+                "quantization": quantization
             }
             logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with 8-bit KV cache + Flash Attention")
             
@@ -154,10 +171,11 @@ class ModelManager:
             # T4 (16 GB) - Turing
             # With 8-bit KV cache quantization: 50% memory savings
             limits = {
-                "max_new_tokens": int(700 * size_scale),
-                "max_conversation_tokens": int(3500 * size_scale),
+                "max_new_tokens": int(700 * size_scale * quant_scale),
+                "max_conversation_tokens": int(3500 * size_scale * quant_scale),
                 "gpu_profile": "t4_turing",
-                "model_size_b": model_size_b
+                "model_size_b": model_size_b,
+                "quantization": quantization
             }
             logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with 8-bit KV cache quantization")
             
@@ -165,20 +183,22 @@ class ModelManager:
             # V100 (16-32 GB) - Volta
             # With 8-bit KV cache quantization: 50% memory savings
             limits = {
-                "max_new_tokens": int(700 * size_scale),
-                "max_conversation_tokens": int(3500 * size_scale),
+                "max_new_tokens": int(700 * size_scale * quant_scale),
+                "max_conversation_tokens": int(3500 * size_scale * quant_scale),
                 "gpu_profile": "v100_volta",
-                "model_size_b": model_size_b
+                "model_size_b": model_size_b,
+                "quantization": quantization
             }
             logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with 8-bit KV cache quantization")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
             limits = {
-                "max_new_tokens": int(450 * size_scale),
-                "max_conversation_tokens": int(1800 * size_scale),
+                "max_new_tokens": int(450 * size_scale * quant_scale),
+                "max_conversation_tokens": int(1800 * size_scale * quant_scale),
                 "gpu_profile": "moderate",
-                "model_size_b": model_size_b
+                "model_size_b": model_size_b,
+                "quantization": quantization
             }
             logger.info(f"✓ GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) + {model_size_b}B model - using moderate limits")
             

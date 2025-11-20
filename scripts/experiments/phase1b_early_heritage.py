@@ -41,11 +41,13 @@ class Phase1bSession(Phase1BaseSession):
         self.logger.info("\n[PHASE 1b] Running experiments with early heritage (code execution)")
 
         model_name = self.get_model_name()
+        quantization = self.get_quantization()
         
         # Initialize WITH heritage
         self.initialize_systems(
             model_name=model_name,
-            include_heritage=True
+            include_heritage=True,
+            quantization=quantization
         )
 
         # Experiment 1: Architecture Examination WITH HERITAGE CONTEXT

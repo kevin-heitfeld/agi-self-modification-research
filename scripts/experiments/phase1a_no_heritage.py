@@ -45,11 +45,13 @@ class Phase1aSession(Phase1BaseSession):
         self.logger.info("\n[PHASE 1a] Running baseline experiments (no heritage, code execution)")
 
         model_name = self.get_model_name()
+        quantization = self.get_quantization()
         
         # Initialize WITHOUT heritage
         self.initialize_systems(
             model_name=model_name,
-            include_heritage=False
+            include_heritage=False,
+            quantization=quantization
         )
 
         # Experiment 1: Architecture Examination
