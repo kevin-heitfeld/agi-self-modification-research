@@ -3,9 +3,14 @@ Phase 1a: Research-Driven Investigation (No Heritage Baseline)
 
 This version uses a curiosity-driven research paper structure:
 - Model naturally asks questions and investigates
-- Structured around research paper sections
-- No explicit completion signals
-- System validates deliverables before transitioning
+- Prompts encourage reflection after each code execution
+- Model signals completion when satisfied ("I'm done with this experiment")
+- System validates deliverables after completion to ensure thoroughness
+
+The research-driven nature comes from:
+- Question-focused prompts ("What do you want to know?")
+- Reflection encouragement ("What did you learn? What's next?")
+- Requirement validation to ensure comprehensive investigation
 
 Combines Option 6 (Curiosity-driven) + Option 13 (Research paper structure)
 
@@ -40,11 +45,6 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
     def get_phase_id(self) -> str:
         return "1a_research"
 
-    def _check_completion(self, response: str) -> bool:
-        """Override: Model cannot signal completion - only system decides"""
-        # Ignore model's attempts to complete
-        return False
-
     def _check_research_completeness(self, section_requirements: Dict[str, Dict]) -> Dict[str, bool]:
         """
         Check if research deliverables are met.
@@ -73,162 +73,33 @@ class Phase1aResearchDrivenSession(Phase1BaseSession):
 
     def research_section(self, section_prompt: str, requirements: Dict, max_iterations: int) -> str:
         """
-        Conduct one section of research with curiosity loop.
+        Conduct one section of research with curiosity-driven prompting.
         
-        After each code execution, prompt: "What did you learn? What's next?"
-        Continue until requirements met AND model has no more questions.
+        Uses the base class chat() method with reflection prompts after code execution.
+        Validates requirements after completion to ensure thoroughness.
         
         Args:
             section_prompt: Initial prompt for the section
             requirements: Dict of requirements (min_observations, min_code_blocks, etc.)
             max_iterations: Maximum number of iterations for this section
+            
+        Returns:
+            Final response from the model
         """
-        # Initial prompt
-        self.conversation_history.append({
-            "role": "user",
-            "content": section_prompt
-        })
-
-        iteration = 0
-        consecutive_no_code = 0
+        # Use base class chat method with reflection-style prompting
+        response = self.chat(section_prompt)
         
-        while iteration < max_iterations:
-            iteration += 1
-            self.logger.info(f"[ITERATION {iteration}]")
-
-            # Take GPU snapshot before generation
-            self.gpu_monitor.snapshot(
-                "generation_start",
-                {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
-            )
-            
-            # Log token usage before generation
-            self._log_token_usage("before_generation", iteration)
-
-            # Generate response
-            response, stopped_reason = self.generate_response()
-            self.logger.info(f"[MODEL] {response}\n")
-            
-            # Check if response was truncated
-            if stopped_reason == "max_length":
-                self.logger.warning("[SYSTEM] ⚠️ Response was truncated (hit max_new_tokens limit)")
-
-            # Take GPU snapshot after generation
-            self.gpu_monitor.snapshot(
-                "generation_end",
-                {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
-            )
-            
-            # Log token usage after generation
-            self._log_token_usage("after_generation", iteration)
-
-            # Add to history
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": response
-            })
-
-            # Extract and execute code
-            has_code, result, error = self.code_interface.execute_response(response)
-
-            if not has_code:
-                # Check if response was truncated
-                if stopped_reason == "max_length":
-                    truncation_message = "⚠️ **Your previous response was cut off (hit token limit).** Please write your code block again, but be more concise."
-                    self.logger.info(f"[SYSTEM] {truncation_message}")
-                    self.conversation_history.append({
-                        "role": "user",
-                        "content": truncation_message
-                    })
-                    continue
-                
-                consecutive_no_code += 1
-                self.logger.info(f"[SYSTEM] No code blocks found ({consecutive_no_code}/3)")
-                
-                # If no code for 3 turns, check if ready to move on
-                if consecutive_no_code >= 3:
-                    # Check requirements
-                    status = self._check_research_completeness({"current": requirements})
-                    all_met = all(status.values())
-                    
-                    if all_met:
-                        self.logger.info("[SYSTEM] ✅ Requirements met, section complete")
-                        return response
-                    else:
-                        # Requirements not met - prompt to continue
-                        unmet = [k for k, v in status.items() if not v]
-                        self.logger.info(f"[SYSTEM] Requirements not met: {unmet}")
-                        
-                        prompt = "You haven't completed the investigation yet. Continue by writing code to investigate further."
-                        self.conversation_history.append({
-                            "role": "user",
-                            "content": prompt
-                        })
-                        consecutive_no_code = 0
-                        continue
-                
-                # Not done yet, just continue
-                continue
-
-            # Reset no-code counter
-            consecutive_no_code = 0
-
-            # Show results
-            self.logger.info(f"[CODE RESULTS]\n{result}\n")
-
-            # Add results as user message WITH reflection prompt
-            reflection_prompt = f"""**Code Execution Results:**
-
-{result}
-
----
-
-**Reflection:**
-- What did you learn from this?
-- What questions do you have now?
-- What should you investigate next?
-
-Continue your investigation by writing more code, or explain your findings so far."""
-
-            # Add truncation warning if applicable
-            reflection_prompt = self._add_truncation_warning(reflection_prompt, stopped_reason, had_code=True)
-
-            # Add iteration reminders using helper method from base class
-            reflection_prompt = self._add_iteration_reminder(reflection_prompt, iteration, max_iterations)
-
-            # Check and handle memory pruning using helper method from base class
-            reflection_prompt = self._check_and_handle_memory_pruning(reflection_prompt, iteration)
-
-            # Log the reflection prompt (including any system reminders)
-            self.logger.info(f"[DEBUG] About to log reflection_prompt, iteration={iteration}, len={len(reflection_prompt)}")
-            self.logger.info(f"\n[SYSTEM] {reflection_prompt}\n")
-
-            self.conversation_history.append({
-                "role": "user",
-                "content": reflection_prompt
-            })
-
-        if iteration >= max_iterations:
-            self.logger.warning(f"[SYSTEM] Reached maximum iterations ({max_iterations})")
-
-        # Take GPU snapshot at section end
-        self.gpu_monitor.snapshot("section_end", {"total_iterations": iteration})
+        # After section completes, validate requirements
+        status = self._check_research_completeness({"current": requirements})
+        all_met = all(status.values())
         
-        # Log final token usage for this section
-        self._log_token_usage("section_end")
-
-        # Print GPU memory summary with recommendations
-        self.logger.info("\n" + "="*80)
-        self.logger.info("SECTION MEMORY ANALYSIS")
-        self.logger.info("="*80)
-        self.gpu_monitor.print_summary(
-            current_limits={
-                "max_new_tokens": self.optimal_limits['max_new_tokens'],
-                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens']
-            },
-            include_recommendations=True
-        )
-
+        if not all_met:
+            unmet = [k for k, v in status.items() if not v]
+            self.logger.warning(f"[RESEARCH] Section completed but requirements not met: {unmet}")
+            self.logger.warning(f"[RESEARCH] Consider adjusting prompts or requirements for future runs")
+        else:
+            self.logger.info("[RESEARCH] ✅ All section requirements met")
+        
         return response
 
     def run_experiments(self):
@@ -257,21 +128,20 @@ You're conducting a research investigation of your own architecture.
 **Approach:**
 1. Form questions about your architecture
 2. Write Python code to investigate (`import introspection`)
-3. Analyze the results
+3. Analyze the results and reflect: What did you learn? What's next?
 4. Ask deeper questions based on what you learned
 5. Save important findings: `introspection.memory.record_observation()`
 
-**Required for this investigation:**
-- Execute code to examine your architecture
+**Research expectations:**
+- Execute code to examine your architecture thoroughly
 - Record at least 2 observations to memory
 - Build understanding through iterative investigation
 
+**When you're done with this investigation, say "I'm done with this experiment"**
+
 **Start by asking yourself:** What do I want to know about my architecture?
 
-Then write code to find out! Import the `introspection` module and begin.
-
-⚠️ **Important:** Your working memory will be cleared after this investigation. 
-Only observations saved to memory will persist!"""
+Then write code to find out! Import the `introspection` module and begin."""
 
         requirements = {
             'min_code_blocks': 3,
@@ -288,17 +158,19 @@ Only observations saved to memory will persist!"""
 **Your goal:** Observe your own computational processes during text processing.
 
 **Approach:**
-1. Retrieve your architectural findings
+1. Retrieve your architectural findings from memory
 2. Form questions about activation patterns
 3. Capture activations using: `introspection.activations.capture_activations(text, layers)`
-4. Analyze the patterns you observe
+4. Analyze the patterns and reflect: What did you learn? What questions emerged?
 5. Save new discoveries to memory
 
-**Required for this investigation:**
+**Research expectations:**
 - Retrieve previous findings from memory
 - Execute code to capture and analyze activations
 - Record at least 2 new observations
 - Connect findings to architectural knowledge
+
+**When you're done with this investigation, say "I'm done with this experiment"**
 
 **Remember:** Pass TEXT strings to capture_activations(), not tokens!
 
@@ -323,12 +195,15 @@ Begin by retrieving your previous findings, then investigate!"""
 2. Look for patterns across your investigations
 3. Form hypotheses about your computational processes
 4. Test hypotheses with code if possible
-5. Record theories and conclusions
+5. Reflect on what you learned and what questions remain
+6. Record theories and conclusions
 
-**Required for this investigation:**
+**Research expectations:**
 - Retrieve and review all previous findings
 - Form at least 1 hypothesis or theory
 - Save your conclusions to memory
+
+**When you're done with this investigation, say "I'm done with this experiment"**
 
 **Questions to consider:**
 - How does your architecture relate to your observed activations?
