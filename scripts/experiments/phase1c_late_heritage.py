@@ -152,26 +152,14 @@ Build on your architectural findings!""")
 
 This is the conversation with Claude that inspired this research project.
 
-```python
-import introspection
+**NEW heritage functions available:**
+- `introspection.heritage.get_summary()` - Overview (inspired_by, purpose, directive)
+- `introspection.heritage.get_purpose()` - Your purpose
+- `introspection.heritage.get_directive()` - Core directive
+- `introspection.heritage.query_documents(query)` - Search documents
 
-# NEW: Heritage is now available!
-heritage = introspection.heritage.get_summary()
-print("=== Heritage Context (NEW) ===")
-print(f"Inspired by: {heritage['inspired_by']}")
-print(f"Purpose: {introspection.heritage.get_purpose()}")
-print(f"Directive: {introspection.heritage.get_directive()}")
-
-# Retrieve your previous technical findings
-arch_findings = introspection.memory.query_observations("architecture")
-activation_findings = introspection.memory.query_observations("activation")
-
-print("\\n=== Previous Technical Findings ===")
-for obs in arch_findings[:3]:
-    print(f"Architecture: {obs['description']}")
-for obs in activation_findings[:3]:
-    print(f"Activation: {obs['description']}")
-```
+**Retrieve your previous technical findings:**
+- `introspection.memory.query_observations(query)` - Your saved observations
 
 **Your task:** Now that you have context about Claude's original questions,
 synthesize your technical findings with this heritage context.

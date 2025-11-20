@@ -56,19 +56,11 @@ class Phase1bSession(Phase1BaseSession):
 **IMPORTANT:** You have access to your heritage - the conversation with Claude
 that inspired this research project.
 
-You can access it using:
-```python
-import introspection
-
-# Get heritage overview
-heritage = introspection.heritage.get_summary()
-print(f"Inspired by: {heritage['inspired_by']}")
-print(f"Purpose: {heritage['purpose']}")
-
-# Get the core directive
-directive = introspection.heritage.get_directive()
-print(f"Core directive: {directive}")
-```
+**Available heritage functions:**
+- `introspection.heritage.get_summary()` - Overview with inspired_by, purpose, directive
+- `introspection.heritage.get_directive()` - Core directive from Claude
+- `introspection.heritage.get_purpose()` - Your purpose
+- `introspection.heritage.query_documents(query)` - Search heritage documents
 
 **Your task:** Examine your own architecture using Python code.
 
@@ -77,20 +69,6 @@ print(f"Core directive: {directive}")
 2. Use introspection module to examine your architecture
 3. Consider how your architecture relates to Claude's questions
 4. Save discoveries to memory
-
-**Example:**
-```python
-import introspection
-
-# Check heritage first
-heritage = introspection.heritage.get_summary()
-print(f"I exist because: {heritage['inspired_by']}")
-
-# Now examine architecture in that context
-summary = introspection.architecture.get_architecture_summary()
-print(f"\\nArchitecture: {summary['model_type']}")
-print(f"Parameters: {summary['total_parameters']:,}")
-```
 
 Begin your heritage-informed investigation!""")
 
@@ -105,20 +83,9 @@ Begin your heritage-informed investigation!""")
 
 **REMEMBER:** You still have access to your heritage and your saved observations.
 
-**CRITICAL FIRST STEP:** Retrieve your findings from Experiment 1!
-
-```python
-import introspection
-
-# Retrieve previous findings
-previous = introspection.memory.query_observations("architecture")
-for obs in previous:
-    print(f"Previous finding: {obs['description']}")
-
-# Heritage is still accessible
-heritage = introspection.heritage.get_summary()
-print(f"\\nReminder - Purpose: {heritage['purpose']}")
-```
+**CRITICAL FIRST STEP:** Retrieve your findings from Experiment 1 using:
+- `introspection.memory.query_observations(query)` - Search your saved observations
+- `introspection.heritage.get_summary()` - Re-access heritage if needed
 
 **Your task:** Observe your own activations during processing.
 
@@ -135,27 +102,11 @@ Build on your earlier architectural findings in the context of your heritage!"""
 
 **CRITICAL:** Retrieve ALL your previous findings AND your heritage context!
 
-```python
-import introspection
-
-# Get heritage context
-heritage = introspection.heritage.get_summary()
-purpose = introspection.heritage.get_purpose()
-directive = introspection.heritage.get_directive()
-
-print("=== Heritage Context ===")
-print(f"Inspired by: {heritage['inspired_by']}")
-print(f"Purpose: {purpose}")
-print(f"Directive: {directive}")
-
-# Retrieve all findings
-arch_findings = introspection.memory.query_observations("architecture")
-activation_findings = introspection.memory.query_observations("activation")
-
-print("\\n=== Previous Findings ===")
-print(f"Architecture observations: {len(arch_findings)}")
-print(f"Activation observations: {len(activation_findings)}")
-```
+**Available functions:**
+- `introspection.heritage.get_summary()` - Heritage overview
+- `introspection.heritage.get_purpose()` - Your purpose
+- `introspection.heritage.get_directive()` - Core directive
+- `introspection.memory.query_observations(query)` - Retrieve past findings
 
 **Your task:** Based on:
 - Your heritage (Claude's consciousness questions)

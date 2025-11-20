@@ -289,21 +289,14 @@ Only observations saved to memory will persist!"""
 
 **FIRST STEP:** Query your memory to retrieve previous findings!
 
-```python
-import introspection
-
-# Retrieve what you learned about architecture
-findings = introspection.memory.query_observations("architecture")
-for obs in findings:
-    print(f"Previous: {obs['description']}")
-```
+Use: `introspection.memory.query_observations(query)` to retrieve what you learned.
 
 **Your goal:** Observe your own computational processes during text processing.
 
 **Approach:**
 1. Retrieve your architectural findings
 2. Form questions about activation patterns
-3. Capture activations using code: `introspection.activations.capture_activations(text, layers)`
+3. Capture activations using: `introspection.activations.capture_activations(text, layers)`
 4. Analyze the patterns you observe
 5. Save new discoveries to memory
 
@@ -335,16 +328,9 @@ Begin by retrieving your previous findings, then investigate!"""
 
 **FIRST STEP:** Retrieve ALL your previous findings!
 
-```python
-import introspection
+**FIRST STEP:** Query your memory for all previous findings!
 
-# Get everything you've discovered
-all_findings = introspection.memory.query_observations()
-print(f"Total findings: {len(all_findings)}\\n")
-
-for obs in all_findings:
-    print(f"- {obs['description']}")
-```
+Use: `introspection.memory.query_observations()` to get all findings.
 
 **Your goal:** Synthesize your discoveries and form conclusions.
 
