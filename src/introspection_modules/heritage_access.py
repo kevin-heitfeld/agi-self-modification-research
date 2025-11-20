@@ -139,11 +139,14 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
             - content: Full document content
             - importance: Document importance level
             
-        Returns None if document not found.
+        Returns dictionary with 'error' key if document not found.
     
     Example:
         >>> doc = introspection.heritage.read_document("CLAUDE_FIRST_QUESTION.md")
-        >>> if doc:
+        >>> if 'error' in doc:
+        ...     print(doc['error'])
+        ...     print(f"Available: {doc['available_documents']}")
+        ... else:
         ...     print(doc['content'])
     """
     for doc in heritage_system.loaded_documents:
@@ -154,7 +157,23 @@ def read_document(heritage_system: Any, filename: str) -> Optional[Dict[str, Any
                 'content': doc.content,
                 'importance': doc.importance
             }
-    return None
+    
+    # Document not found - provide helpful error with suggestions
+    available = [doc.filename for doc in heritage_system.loaded_documents]
+    
+    # Find similar filenames (simple case-insensitive substring match)
+    similar = [name for name in available if filename.lower() in name.lower() or name.lower() in filename.lower()]
+    
+    error_msg = f"Document '{filename}' not found."
+    if similar:
+        error_msg += f" Did you mean: {', '.join(similar)}?"
+    
+    return {
+        'error': error_msg,
+        'requested': filename,
+        'available_documents': available,
+        'suggestions': similar if similar else None
+    }
 
 
 def query_documents(heritage_system: Any, query: str) -> List[Dict[str, Any]]:
