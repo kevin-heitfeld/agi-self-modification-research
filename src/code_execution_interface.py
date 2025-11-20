@@ -478,7 +478,9 @@ You can write and execute Python code to introspect yourself!
 {heritage_note}
 **🔍 Discovering the API:**
 
-Use Python's `help()` function to explore available functions and read their documentation:
+**You are expected to explore the API yourself using Python's `help()` function!**
+
+The introspection module has excellent docstrings. Use them:
 
 ```python
 import introspection
@@ -486,98 +488,32 @@ import introspection
 # See what modules are available
 help(introspection)
 
-# Explore a specific module
-help(introspection.architecture)
+# Explore a specific module  
+help(introspection.weights)
 
-# Get documentation for a specific function
+# Get documentation for a function
 help(introspection.weights.get_weight_statistics)
-
-# Or list functions programmatically
-print([name for name in dir(introspection.weights) if not name.startswith('_')])
 ```
 
-**⚠️ IMPORTANT: Layer Names vs Parameter Names**
+**Critical distinction - read carefully:**
 
-Different modules use different naming conventions:
+- **`introspection.architecture`** and **`introspection.activations`** work with **LAYER NAMES** (containers like `"model.layers.0"`)
+- **`introspection.weights`** works with **PARAMETER NAMES** (actual tensors like `"model.layers.0.self_attn.q_proj.weight"`)
 
-- **`introspection.architecture`** and **`introspection.activations`** use **LAYER NAMES** (containers):
-  - Examples: `"model.layers.0"`, `"model.layers.0.self_attn"`, `"model.layers.5.mlp"`
-  
-- **`introspection.weights`** uses **PARAMETER NAMES** (actual weight/bias tensors):
-  - Examples: `"model.layers.0.self_attn.q_proj.weight"`, `"model.layers.0.self_attn.q_proj.bias"`
+**Helper functions return summaries, not raw lists:**
+- `list_layers()` - Summary of layer patterns (not 500+ individual names)
+- `list_parameters()` - Summary of parameter patterns
+- `get_layer_parameters(layer_name)` - Get parameter names for a specific layer
 
-To get weight statistics for a layer:
-```python
-# ❌ WRONG: model.layers.0 is a container, not a parameter
-# stats = introspection.weights.get_weight_statistics("model.layers.0")
-
-# ✅ CORRECT: Get all parameters in the layer
-params = introspection.weights.get_layer_parameters("model.layers.0")
-stats_list = introspection.weights.get_weight_statistics(params)
-for stats in stats_list:
-    print(f"{{stats['name']}}: mean={{stats['mean']:.4f}}")
-```
-
-**Discovering what exists:**
-```python
-# List all layers (returns summary with patterns, not 500+ names)
-layer_summary = introspection.architecture.list_layers()
-print(layer_summary)
-
-# List all parameters (returns summary with patterns)
-param_summary = introspection.weights.list_parameters()
-print(param_summary)
-
-# Get parameters for a specific layer
-layer0_params = introspection.weights.get_layer_parameters("model.layers.0")
-print(f"Layer 0 has {{len(layer0_params)}} parameters")
-```
+**Start by exploring with `help()` - the docstrings will guide you!**
 
 **Important notes:**
 
 - **Variables persist** across all code blocks throughout the entire session (all 3 experiments)
 - Large outputs (>{MAX_OUTPUT_CHARS} chars) are automatically truncated
-- Use `list_layers()` and `list_parameters()` for summaries (not raw lists of 500+ names)
-- By default, `capture_activations()` uses Flash Attention 2 (no attention matrices)
-  - Use `capture_attention_weights()` if you need attention matrices (slower)
 - `capture_activations()` expects TEXT as input (not tokens) - handles tokenization internally
-- All standard Python operations work (loops, functions, math, etc.)
 - Use `help()` liberally to discover functions and read their documentation!
 
-**Example workflow:**
-
-```python
-import introspection
-
-# Step 1: Discover what's available
-help(introspection.architecture)
-
-# Step 2: Get an overview
-summary = introspection.architecture.get_architecture_summary()
-print(summary)
-
-# Step 3: Examine specific layers
-layer_info = introspection.architecture.get_layer_info("model.layers.0")
-print(layer_info)
-
-# Step 4: Capture activations
-activations = introspection.activations.capture_activations(
-    "I'm uncertain about this",
-    ["model.layers.10", "model.layers.20"]
-)
-for layer, stats in activations.items():
-    print(f"{{layer}}: mean={{stats['mean']:.4f}}, std={{stats['std']:.4f}}")
-
-# Step 5: Save important findings
-introspection.memory.record_observation(
-    description="Layer 10 shows high variance for uncertainty statements",
-    category="uncertainty",
-    importance=0.8,
-    data={{"layer": 10, "std": stats['std']}}
-)
-```
-
-**Get started by exploring with `help()` and running your first investigation!**
 """
 
 
