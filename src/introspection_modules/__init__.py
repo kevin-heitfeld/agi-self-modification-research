@@ -84,7 +84,8 @@ def create_introspection_module(
         >>> summary = introspection.architecture.get_architecture_summary()
     """
     # Import the actual module implementations
-    from . import architecture, weights, activations, memory_access, heritage_access, temporal_analysis
+    from . import (architecture, weights, activations, memory_access, heritage_access, 
+                   temporal_analysis, attention_analysis, gradient_analysis, history_analysis)
 
     # Create a new module object
     module = ModuleType('introspection')
@@ -162,6 +163,57 @@ def create_introspection_module(
         )
         temporal_module.clear_cache = lambda: temporal_analysis.clear_cache()
         module.temporal = temporal_module
+    
+    # Create attention analysis submodule (if tokenizer provided)
+    if tokenizer:
+        attention_module = ModuleType('introspection.attention')
+        attention_module.__doc__ = 'Attention pattern analysis'
+        attention_module.analyze_attention_patterns = lambda text, layer_names: attention_analysis.analyze_attention_patterns(
+            model, tokenizer, text, layer_names
+        )
+        attention_module.compute_attention_entropy = lambda text, layer_names: attention_analysis.compute_attention_entropy(
+            model, tokenizer, text, layer_names
+        )
+        attention_module.find_head_specialization = lambda texts, layer_names: attention_analysis.find_head_specialization(
+            model, tokenizer, texts, layer_names
+        )
+        attention_module.get_token_attention_summary = lambda text, layer_names, target_token_idx=None: attention_analysis.get_token_attention_summary(
+            model, tokenizer, text, layer_names, target_token_idx
+        )
+        attention_module.clear_cache = lambda: attention_analysis.clear_cache()
+        module.attention = attention_module
+    
+    # Create gradient analysis submodule (always available)
+    gradient_module = ModuleType('introspection.gradient')
+    gradient_module.__doc__ = 'Gradient-based sensitivity and attribution analysis'
+    gradient_module.compute_input_sensitivity = lambda text, layer_names: gradient_analysis.compute_input_sensitivity(
+        model, tokenizer, text, layer_names
+    )
+    gradient_module.compare_inputs_gradient = lambda original_text, modified_text, layer_names: gradient_analysis.compare_inputs_gradient(
+        model, tokenizer, original_text, modified_text, layer_names
+    )
+    gradient_module.find_influential_tokens = lambda text, layer_names, top_k=5: gradient_analysis.find_influential_tokens(
+        model, tokenizer, text, layer_names, top_k
+    )
+    gradient_module.compute_layer_gradients = lambda text, target_layer, source_layer: gradient_analysis.compute_layer_gradients(
+        model, tokenizer, text, target_layer, source_layer
+    )
+    module.gradient = gradient_module
+    
+    # Create history analysis submodule (always available)
+    history_module = ModuleType('introspection.history')
+    history_module.__doc__ = 'Activation history and drift tracking'
+    history_module.start_tracking = lambda layer_names: history_analysis.start_tracking(
+        model, tokenizer, layer_names
+    )
+    history_module.record_turn = lambda text: history_analysis.record_turn(text)
+    history_module.get_activation_history = lambda layer_names=None: history_analysis.get_activation_history(layer_names)
+    history_module.compare_to_previous = lambda text, layer_names=None: history_analysis.compare_to_previous(text, layer_names)
+    history_module.analyze_drift = lambda layer_names=None: history_analysis.analyze_drift(layer_names)
+    history_module.get_tracking_status = lambda: history_analysis.get_tracking_status()
+    history_module.clear_history = lambda: history_analysis.clear_history()
+    history_module.stop_tracking = lambda: history_analysis.stop_tracking()
+    module.history = history_module
 
     # Create memory submodule (if memory_system provided)
     if memory_system:

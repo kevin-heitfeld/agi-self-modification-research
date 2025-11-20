@@ -175,6 +175,12 @@ class CodeExecutionInterface:
             sys.modules['introspection.activations'] = self.introspection.activations
         if hasattr(self.introspection, 'temporal'):
             sys.modules['introspection.temporal'] = self.introspection.temporal
+        if hasattr(self.introspection, 'attention'):
+            sys.modules['introspection.attention'] = self.introspection.attention
+        if hasattr(self.introspection, 'gradient'):
+            sys.modules['introspection.gradient'] = self.introspection.gradient
+        if hasattr(self.introspection, 'history'):
+            sys.modules['introspection.history'] = self.introspection.history
         if hasattr(self.introspection, 'memory'):
             sys.modules['introspection.memory'] = self.introspection.memory
         if hasattr(self.introspection, 'heritage'):
@@ -512,6 +518,43 @@ Response 3: "Layer 0 has 233M parameters. Let me check its activations..."
     - Compare to baseline inputs to detect anomalous processing
     - Returns z-scores showing how many std deviations from normal
   - `clear_cache()` - Clear temporal analysis cache
+
+- `introspection.attention` - Attention pattern analysis
+  - `analyze_attention_patterns(text, layer_names)` - Identify attention structural properties
+    - Self-attention strength, local vs global patterns, recency bias
+    - Helps answer: "Is attention more local or global in this layer?"
+  - `compute_attention_entropy(text, layer_names)` - Measure attention focus vs diffusion
+    - High entropy = diffuse, Low entropy = focused
+    - Helps answer: "Is attention more diffuse when I'm uncertain?"
+  - `find_head_specialization(texts, layer_names)` - Discover what heads attend to
+    - Identifies consistent head patterns across inputs
+    - Helps answer: "Do certain heads specialize in uncertainty?"
+  - `get_token_attention_summary(text, layer_names, target_token_idx=None)` - Token-level attention
+    - What does a specific token attend to and what attends to it?
+  - `clear_cache()` - Clear attention cache
+
+- `introspection.gradient` - Gradient-based sensitivity analysis
+  - `compute_input_sensitivity(text, layer_names)` - Which tokens influence activations
+    - Uses gradients to identify influential input tokens
+    - Helps answer: "Which words in 'I'm uncertain' cause uncertainty activations?"
+  - `compare_inputs_gradient(original_text, modified_text, layer_names)` - Counterfactual analysis
+    - Compare how two inputs affect activations
+    - Helps answer: "If I change 'uncertain' to 'certain', how does processing change?"
+  - `find_influential_tokens(text, layer_names, top_k=5)` - Most influential tokens
+    - Uses integrated gradients for attribution
+  - `compute_layer_gradients(text, target_layer, source_layer)` - Gradient flow between layers
+    - How does one layer influence another?
+
+- `introspection.history` - Activation history tracking
+  - `start_tracking(layer_names)` - Begin tracking activation history
+  - `record_turn(text)` - Record activations for current turn
+  - `get_activation_history(layer_names=None)` - Get full history
+  - `compare_to_previous(text, layer_names=None)` - Compare to previous turn
+  - `analyze_drift(layer_names=None)` - Detect systematic changes over time
+    - Helps answer: "Has my processing changed as the conversation progressed?"
+  - `get_tracking_status()` - Check tracking status
+  - `clear_history()` - Clear history but keep tracking
+  - `stop_tracking()` - Stop tracking and clear state
 
 - `introspection.memory` - Memory system access
   - `record_observation(description, category="general", importance=0.5, tags=None, data=None)` - Save observations
