@@ -224,8 +224,7 @@ Continue your investigation by writing more code, or explain your findings so fa
         self.gpu_monitor.print_summary(
             current_limits={
                 "max_new_tokens": self.optimal_limits['max_new_tokens'],
-                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens'],
-                "keep_recent_turns": self.optimal_limits['keep_recent_turns']
+                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens']
             },
             include_recommendations=True
         )
