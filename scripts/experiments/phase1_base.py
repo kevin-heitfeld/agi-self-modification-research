@@ -647,13 +647,18 @@ Your permanent memory persists - use it!"""
             # Generate response and log metrics
             response, stopped_reason = self._generate_and_log(iteration)
 
-            # Check if model wants to end
+            # Extract and execute code FIRST (before checking completion)
+            # This ensures any final code blocks are executed even if model says "I'm done"
+            has_code, result, error = self.code_interface.execute_response(response)
+
+            # Check if model wants to end (AFTER executing any code)
             if self._check_completion(response):
+                if has_code:
+                    self.logger.info(f"[CODE RESULTS]\n{result}\n")
                 self.logger.info("[SYSTEM] Model indicates task completion")
                 break
 
-            # Extract and execute code
-            has_code, result, error = self.code_interface.execute_response(response)
+            # Continue processing code results...
 
             if not has_code:
                 # No code found - determine if we should continue
