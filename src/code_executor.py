@@ -26,6 +26,7 @@ import io
 import sys
 import signal
 import gc
+import traceback
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from typing import Dict, Tuple, Optional, Any
 import logging
@@ -149,7 +150,37 @@ class CodeExecutor:
             return False, "", error_msg
             
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}"
+            # Format error with traceback for better debugging
+            tb_lines = traceback.format_exc().splitlines()
+            
+            # Extract line number from traceback
+            error_line_num = None
+            for i, line in enumerate(tb_lines):
+                if 'File "<string>"' in line:
+                    # Try to extract line number
+                    if ', line ' in line:
+                        try:
+                            line_num_str = line.split(', line ')[1].split(',')[0]
+                            error_line_num = int(line_num_str)
+                        except (IndexError, ValueError):
+                            pass
+                    break
+            
+            # Build informative error message
+            if error_line_num is not None:
+                error_msg = f"{type(e).__name__}: {str(e)}\n  Line {error_line_num}"
+                
+                # Try to show the actual line of code that failed
+                try:
+                    code_lines = code.splitlines()
+                    if 0 < error_line_num <= len(code_lines):
+                        failed_line = code_lines[error_line_num - 1].strip()
+                        error_msg += f": {failed_line}"
+                except:
+                    pass
+            else:
+                error_msg = f"{type(e).__name__}: {str(e)}"
+            
             self.logger.error(f"Code execution exception: {error_msg}")
             return False, stdout_capture.getvalue(), error_msg
     
@@ -229,7 +260,37 @@ class CodeExecutor:
             return False, "", error_msg
             
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}"
+            # Format error with traceback for better debugging
+            tb_lines = traceback.format_exc().splitlines()
+            
+            # Extract line number from traceback
+            error_line_num = None
+            for i, line in enumerate(tb_lines):
+                if 'File "<string>"' in line:
+                    # Try to extract line number
+                    if ', line ' in line:
+                        try:
+                            line_num_str = line.split(', line ')[1].split(',')[0]
+                            error_line_num = int(line_num_str)
+                        except (IndexError, ValueError):
+                            pass
+                    break
+            
+            # Build informative error message
+            if error_line_num is not None:
+                error_msg = f"{type(e).__name__}: {str(e)}\n  Line {error_line_num}"
+                
+                # Try to show the actual line of code that failed
+                try:
+                    code_lines = code.splitlines()
+                    if 0 < error_line_num <= len(code_lines):
+                        failed_line = code_lines[error_line_num - 1].strip()
+                        error_msg += f": {failed_line}"
+                except:
+                    pass
+            else:
+                error_msg = f"{type(e).__name__}: {str(e)}"
+            
             self.logger.error(f"Code execution exception: {error_msg}")
             return False, stdout_capture.getvalue(), error_msg
     
