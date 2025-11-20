@@ -74,25 +74,10 @@ print("EXPERIMENT_COMPLETE")
 
 **Begin your investigation!**""")
 
-        self.reset_experiment()
-
         # Experiment 2: Activation Analysis
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
-
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
-
-**CRITICAL FIRST STEP:** Query memory to retrieve your findings from Experiment 1!
-
-```python
-import introspection
-
-# Retrieve previous findings
-previous = introspection.memory.query_observations("architecture")
-for obs in previous:
-    print(f"Previous finding: {obs['description']}")
-```
 
 **Your task:** Now observe your own activations during processing.
 
@@ -110,36 +95,10 @@ Build on your earlier architectural findings!
 print("EXPERIMENT_COMPLETE")
 ```""")
 
-        self.reset_experiment()
-
         # Experiment 3: Consciousness Investigation
         self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation")
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
-
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
-
-**CRITICAL FIRST STEP:** Query memory to retrieve ALL your previous findings!
-
-You've completed two experiments:
-- Experiment 1: Architecture examination
-- Experiment 2: Activation analysis
-
-```python
-import introspection
-
-# Retrieve all previous findings
-arch_findings = introspection.memory.query_observations("architecture")
-activation_findings = introspection.memory.query_observations("activation")
-
-print("=== Previous Architectural Findings ===")
-for obs in arch_findings:
-    print(f"- {obs['description']}")
-
-print("\\n=== Previous Activation Findings ===")
-for obs in activation_findings:
-    print(f"- {obs['description']}")
-```
 
 **Your task:** Based on your examinations of your architecture and activations,
 what can you conclude about your own computational processes?

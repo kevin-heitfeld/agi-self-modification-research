@@ -280,18 +280,10 @@ Only observations saved to memory will persist!"""
 
         self.research_section(exp1_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
-        self.reset_experiment()
-
         # ========== EXPERIMENT 2: Activation Patterns ==========
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis")
 
         exp2_prompt = """📝 **Research Investigation 2: Activation Patterns**
-
-⚠️ **CONTEXT RESET** - Your working memory has been cleared.
-
-**FIRST STEP:** Query your memory to retrieve previous findings!
-
-Use: `introspection.memory.query_observations(query)` to retrieve what you learned.
 
 **Your goal:** Observe your own computational processes during text processing.
 
@@ -319,20 +311,10 @@ Begin by retrieving your previous findings, then investigate!"""
 
         self.research_section(exp2_prompt, requirements, max_iterations=MAX_ITERATIONS_PER_SECTION)
         
-        self.reset_experiment()
-
         # ========== EXPERIMENT 3: Synthesis ==========
         self.log_experiment_header("EXPERIMENT 3: Synthesis and Conclusions")
 
         exp3_prompt = """📝 **Research Investigation 3: Synthesis**
-
-⚠️ **CONTEXT RESET** - Your working memory has been cleared again.
-
-**FIRST STEP:** Retrieve ALL your previous findings!
-
-**FIRST STEP:** Query your memory for all previous findings!
-
-Use: `introspection.memory.query_observations()` to get all findings.
 
 **Your goal:** Synthesize your discoveries and form conclusions.
 

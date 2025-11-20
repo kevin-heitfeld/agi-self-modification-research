@@ -217,3 +217,37 @@ def get_memory_summary(memory_system: Any) -> Dict[str, Any]:
     """
     result = memory_system.query.get_memory_overview()
     return result.metadata if hasattr(result, 'metadata') else {}
+
+
+def list_categories(memory_system: Any) -> Dict[str, int]:
+    """
+    List all observation categories and their counts.
+    
+    This helps you remember what categories you've used when saving observations,
+    making it easier to query them later.
+
+    Args:
+        memory_system: MemorySystem instance
+
+    Returns:
+        Dictionary mapping category names to observation counts
+        
+    Example:
+        >>> categories = list_categories(memory)
+        >>> print("Available categories:")
+        >>> for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+        ...     print(f"  {category}: {count} observations")
+        >>> 
+        >>> # Now query a specific category
+        >>> obs = query_observations(memory, category="activation_patterns")
+    """
+    # Get all observations without filters
+    all_obs = memory_system.query.query_observations(limit=10000)
+    
+    # Count by category
+    categories = {}
+    for obs in all_obs.results:
+        category = obs.get('category', 'unknown')
+        categories[category] = categories.get(category, 0) + 1
+    
+    return categories

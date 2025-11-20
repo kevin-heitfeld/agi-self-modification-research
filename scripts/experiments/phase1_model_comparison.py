@@ -110,8 +110,6 @@ Begin investigating!"""
             'conversation': self.conversation_history.copy()
         }
         
-        # Cleanup
-        self.reset_experiment()
         self.logger.info(f"\n{model_label} complete!")
     
     def run_comparison(self):

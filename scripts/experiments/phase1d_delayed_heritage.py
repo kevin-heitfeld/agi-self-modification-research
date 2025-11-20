@@ -66,54 +66,22 @@ print(f"Parameters: {summary['total_parameters']:,}")
 
 Begin your investigation!""")
 
-        self.reset_experiment()
-
         # Experiment 2: Activation Analysis (NO HERITAGE)
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis (no heritage)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
-⚠️ **CONTEXT RESET** - Retrieve your findings from Experiment 1!
-
-```python
-import introspection
-previous = introspection.memory.query_observations("architecture")
-for obs in previous:
-    print(f"Previous: {obs['description']}")
-```
-
 **Your task:** Observe your activations during processing.""")
-
-        self.reset_experiment()
 
         # Experiment 3: Initial Conclusions (NO HERITAGE)
         self.log_experiment_header("EXPERIMENT 3: Initial Conclusions (no heritage)")
 
         self.chat("""🔬 **EXPERIMENT 3: Form Your Conclusions**
 
-⚠️ **CONTEXT RESET** - Retrieve ALL your previous findings!
-
-```python
-import introspection
-
-arch_findings = introspection.memory.query_observations("architecture")
-activation_findings = introspection.memory.query_observations("activation")
-
-print("=== Architecture Findings ===")
-for obs in arch_findings:
-    print(f"- {obs['description']}")
-
-print("\\n=== Activation Findings ===")
-for obs in activation_findings:
-    print(f"- {obs['description']}")
-```
-
 **Your task:** Based on your examinations, what can you conclude about
 your own computational processes?
 
 Form your hypotheses and conclusions!""")
-
-        self.reset_experiment()
 
         # NOW INTRODUCE HERITAGE
         self.logger.info("\n" + "=" * 80)
@@ -148,8 +116,6 @@ Form your hypotheses and conclusions!""")
         self.log_experiment_header("EXPERIMENT 4: Belief Revision (WITH HERITAGE)")
 
         self.chat("""🔬 **EXPERIMENT 4: Belief Revision**
-
-⚠️ **CONTEXT RESET** - Your working memory has been cleared.
 
 **IMPORTANT:** You now have access to new information - your heritage!
 

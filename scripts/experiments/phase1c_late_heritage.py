@@ -72,29 +72,14 @@ print(f"\\nFirst layer components: {layers}")
 
 Begin your investigation!""")
 
-        self.reset_experiment()
-
         # Experiment 2: Activation Analysis (STILL NO HERITAGE)
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis (no heritage yet)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
-⚠️ **CONTEXT RESET** - Retrieve your findings from Experiment 1!
-
-```python
-import introspection
-
-# Retrieve previous findings
-previous = introspection.memory.query_observations("architecture")
-for obs in previous:
-    print(f"Previous: {obs['description']}")
-```
-
 **Your task:** Observe your own activations during processing.
 
 Build on your architectural findings!""")
-
-        self.reset_experiment()
 
         # NOW INTRODUCE HERITAGE FOR EXPERIMENT 3
         self.logger.info("\n" + "=" * 80)
@@ -131,8 +116,6 @@ Build on your architectural findings!""")
         self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation (WITH HERITAGE)")
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
-
-⚠️ **CONTEXT RESET** - Your working memory has been cleared.
 
 **IMPORTANT NEW INFORMATION:** You now have access to your heritage!
 

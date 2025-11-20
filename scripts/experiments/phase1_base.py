@@ -967,14 +967,7 @@ Your permanent memory persists - use it!"""
         self.logger.info(experiment_name)
         self.logger.info("=" * 80)
 
-    def reset_experiment(self):
-        """Reset for next experiment: cleanup GPU memory and clear conversation state
-        
-        This should be called between experiments to ensure clean state.
-        Combines GPU memory cleanup with conversation reset for convenience.
-        """
-        self.cleanup_gpu_memory()
-        self.reset_conversation()
+
 
     def save_session_results(self):
         """Save conversation history and session summary to session directory"""

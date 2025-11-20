@@ -263,6 +263,7 @@ def create_introspection_module(
         memory_module.query_theories = lambda query=None, **filters: memory_access.query_theories(memory_system, query, **filters)
         memory_module.query_beliefs = lambda query=None, **filters: memory_access.query_beliefs(memory_system, query, **filters)
         memory_module.get_memory_summary = lambda: memory_access.get_memory_summary(memory_system)
+        memory_module.list_categories = lambda: memory_access.list_categories(memory_system)
         module.memory = memory_module
 
     # Create heritage submodule (if heritage_system provided AND not Phase 1a)

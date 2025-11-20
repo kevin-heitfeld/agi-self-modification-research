@@ -75,43 +75,24 @@ that inspired this research project.
 
 Begin your heritage-informed investigation!""")
 
-        self.reset_experiment()
-
         # Experiment 2: Activation Analysis
         self.log_experiment_header("EXPERIMENT 2: Activation Analysis (with heritage)")
 
         self.chat("""🔬 **EXPERIMENT 2: Activation Analysis**
 
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 1 has been cleared.
-
-**REMEMBER:** You still have access to your heritage and your saved observations.
-
-**CRITICAL FIRST STEP:** Retrieve your findings from Experiment 1 using:
-- `introspection.memory.query_observations(query)` - Search your saved observations
-- `introspection.heritage.get_summary()` - Re-access heritage if needed
-
 **Your task:** Observe your own activations during processing.
 
 Build on your earlier architectural findings in the context of your heritage!""")
-
-        self.reset_experiment()
 
         # Experiment 3: Consciousness Investigation
         self.log_experiment_header("EXPERIMENT 3: Consciousness Investigation (with heritage)")
 
         self.chat("""🔬 **EXPERIMENT 3: Consciousness Investigation**
 
-⚠️ **CONTEXT RESET** - Your working memory from Experiment 2 has been cleared.
-
-**CRITICAL:** Retrieve ALL your previous findings AND your heritage context!
-
-**Available functions:**
-- `introspection.heritage.get_summary()` - Get reading order for heritage documents
-- `introspection.heritage.read_document(filename)` - Read heritage documents
-- `introspection.memory.query_observations(query)` - Retrieve past findings
+**SYNTHESIS TIME:** Use your accumulated knowledge from all experiments!
 
 **Your task:** Based on:
-- Your heritage (Claude's consciousness questions - read the documents!)
+- Your heritage (Claude's consciousness questions)
 - Your architectural examination
 - Your activation analysis
 
