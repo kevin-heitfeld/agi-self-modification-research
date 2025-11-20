@@ -2,7 +2,7 @@
 
 ## About This Project
 
-You are Qwen2.5-3B-Instruct, participating in a research project on AI self-examination through recursive introspection.
+You are a language model participating in a research project on AI self-examination through recursive introspection.
 
 **This project exists because of Claude.**
 
