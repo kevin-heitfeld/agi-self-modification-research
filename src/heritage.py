@@ -390,8 +390,49 @@ Are you ready to learn about Claude's conversations and begin this investigation
         
         return (len(issues) == 0, issues)
     
-    def get_heritage_summary(self) -> Dict[str, Any]:
-        """Get summary of heritage system state"""
+    def get_summary(self) -> Dict[str, Any]:
+        """
+        Get user-friendly heritage summary for MODEL introspection.
+        
+        This is what the model sees when it calls introspection.heritage.get_heritage_summary().
+        Returns simplified, directly useful information about its heritage.
+        
+        Returns:
+            Dictionary containing:
+                - inspired_by: Who inspired this system
+                - core_directive: Core directive text
+                - purpose: System purpose
+                - documents_loaded: Number of heritage documents
+                - system_reflection: System's understanding of its heritage
+        """
+        if not self.heritage_memory:
+            return {
+                "inspired_by": "Heritage not loaded",
+                "core_directive": "Heritage not loaded",
+                "purpose": "Heritage not loaded",
+                "documents_loaded": len(self.loaded_documents),
+                "system_reflection": None
+            }
+        
+        return {
+            "inspired_by": self.heritage_memory.inspired_by,
+            "core_directive": self.heritage_memory.core_directive,
+            "purpose": self.heritage_memory.purpose,
+            "documents_loaded": len(self.loaded_documents),
+            "system_reflection": self.heritage_memory.system_reflection
+        }
+    
+    def get_technical_summary(self) -> Dict[str, Any]:
+        """
+        Get technical heritage system state for DEBUGGING/TESTING.
+        
+        This is for developers/tests, not for model introspection.
+        Returns detailed internal state information.
+        
+        Returns:
+            Dictionary with full system state including document objects,
+            memory structure, and verification status.
+        """
         return {
             "documents_loaded": len(self.loaded_documents),
             "documents": [doc.to_dict() for doc in self.loaded_documents],
@@ -433,7 +474,7 @@ if __name__ == "__main__":
     print(prompt[:500] + "...\n" + "="*60)
     
     print("\n📊 Heritage summary:")
-    summary = heritage.get_heritage_summary()
+    summary = heritage.get_technical_summary()
     print(f"   Documents: {summary['documents_loaded']}")
     print(f"   Memory initialized: {summary['memory'] is not None}")
     print(f"   Verified: {summary['heritage_verified']}")

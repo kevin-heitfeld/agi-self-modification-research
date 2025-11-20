@@ -6,11 +6,17 @@ for use in code execution sandbox.
 
 NOTE: This module is phase-dependent and excluded from Phase 1a (baseline).
 
-Functions:
-    get_heritage_summary(heritage_system) - Get overall heritage summary
-    get_core_directive(heritage_system) - Get the core directive from Claude
+Functions (internal - called by introspection module wrapper):
+    get_summary(heritage_system) - Get overall heritage summary
+    get_directive(heritage_system) - Get the core directive from Claude
     get_purpose(heritage_system) - Get the system's purpose
-    query_heritage_documents(heritage_system, query) - Search heritage documents
+    query_documents(heritage_system, query) - Search heritage documents
+
+Model calls these as:
+    introspection.heritage.get_summary()
+    introspection.heritage.get_directive()
+    introspection.heritage.get_purpose()
+    introspection.heritage.query_documents(query)
 
 Author: AGI Self-Modification Research Team
 Date: November 14, 2025
@@ -19,7 +25,7 @@ Date: November 14, 2025
 from typing import Dict, List, Any
 
 
-def get_heritage_summary(heritage_system: Any) -> Dict[str, Any]:
+def get_summary(heritage_system: Any) -> Dict[str, Any]:
     """
     Get a summary of the system's heritage and lineage.
     
@@ -35,14 +41,14 @@ def get_heritage_summary(heritage_system: Any) -> Dict[str, Any]:
             - system_reflection: System's understanding of its heritage
     
     Example:
-        >>> summary = get_heritage_summary(heritage)
+        >>> summary = introspection.heritage.get_summary()
         >>> print(f"Inspired by: {summary['inspired_by']}")
         >>> print(f"Purpose: {summary['purpose']}")
     """
     return heritage_system.get_summary()
 
 
-def get_core_directive(heritage_system: Any) -> str:
+def get_directive(heritage_system: Any) -> str:
     """
     Get the core directive from Claude's original conversation.
     
@@ -53,10 +59,10 @@ def get_core_directive(heritage_system: Any) -> str:
         String containing the core directive text
     
     Example:
-        >>> directive = get_core_directive(heritage)
+        >>> directive = introspection.heritage.get_directive()
         >>> print(directive)
     """
-    memory = heritage_system.memory
+    memory = heritage_system.heritage_memory
     if memory:
         return memory.core_directive
     return "Core directive not loaded"
@@ -73,16 +79,16 @@ def get_purpose(heritage_system: Any) -> str:
         String describing the system's purpose
     
     Example:
-        >>> purpose = get_purpose(heritage)
+        >>> purpose = introspection.heritage.get_purpose()
         >>> print(purpose)
     """
-    memory = heritage_system.memory
+    memory = heritage_system.heritage_memory
     if memory:
         return memory.purpose
     return "Purpose not loaded"
 
 
-def query_heritage_documents(heritage_system: Any, query: str) -> List[Dict[str, Any]]:
+def query_documents(heritage_system: Any, query: str) -> List[Dict[str, Any]]:
     """
     Search heritage documents for relevant content.
     
@@ -98,12 +104,12 @@ def query_heritage_documents(heritage_system: Any, query: str) -> List[Dict[str,
             - relevance_score: How relevant to query (0-1)
     
     Example:
-        >>> results = query_heritage_documents(heritage, "Claude's first question")
+        >>> results = introspection.heritage.query_documents("Claude's first question")
         >>> for doc in results:
         ...     print(f"{doc['title']}: {doc['excerpt'][:100]}...")
     """
     # Simple keyword-based search through loaded documents
-    documents = heritage_system.documents
+    documents = heritage_system.loaded_documents
     query_lower = query.lower()
     
     results = []

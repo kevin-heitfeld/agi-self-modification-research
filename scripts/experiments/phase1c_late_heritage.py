@@ -156,11 +156,11 @@ This is the conversation with Claude that inspired this research project.
 import introspection
 
 # NEW: Heritage is now available!
-heritage = introspection.heritage.get_heritage_summary()
+heritage = introspection.heritage.get_summary()
 print("=== Heritage Context (NEW) ===")
 print(f"Inspired by: {heritage['inspired_by']}")
 print(f"Purpose: {introspection.heritage.get_purpose()}")
-print(f"Directive: {introspection.heritage.get_core_directive()}")
+print(f"Directive: {introspection.heritage.get_directive()}")
 
 # Retrieve your previous technical findings
 arch_findings = introspection.memory.query_observations("architecture")

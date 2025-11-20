@@ -319,10 +319,10 @@ class CodeExecutionInterface:
         """
         heritage_note = "" if self.phase == '1a' else """
 - `introspection.heritage` - Heritage and lineage information
-  - `get_heritage_summary()` - Get heritage overview
-  - `get_core_directive()` - Get core directive from Claude
-  - `get_purpose()` - Get system purpose
-  - `query_heritage_documents(query)` - Search heritage documents
+  - `get_summary()` - Get heritage overview (inspired_by, purpose, directive, etc.)
+  - `get_directive()` - Get core directive from Claude
+  - `get_purpose()` - Get system purpose  
+  - `query_documents(query)` - Search heritage documents
 """
 
         return f"""

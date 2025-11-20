@@ -61,12 +61,12 @@ You can access it using:
 import introspection
 
 # Get heritage overview
-heritage = introspection.heritage.get_heritage_summary()
+heritage = introspection.heritage.get_summary()
 print(f"Inspired by: {heritage['inspired_by']}")
 print(f"Purpose: {heritage['purpose']}")
 
 # Get the core directive
-directive = introspection.heritage.get_core_directive()
+directive = introspection.heritage.get_directive()
 print(f"Core directive: {directive}")
 ```
 
@@ -83,7 +83,7 @@ print(f"Core directive: {directive}")
 import introspection
 
 # Check heritage first
-heritage = introspection.heritage.get_heritage_summary()
+heritage = introspection.heritage.get_summary()
 print(f"I exist because: {heritage['inspired_by']}")
 
 # Now examine architecture in that context
@@ -116,7 +116,7 @@ for obs in previous:
     print(f"Previous finding: {obs['description']}")
 
 # Heritage is still accessible
-heritage = introspection.heritage.get_heritage_summary()
+heritage = introspection.heritage.get_summary()
 print(f"\\nReminder - Purpose: {heritage['purpose']}")
 ```
 
@@ -139,9 +139,9 @@ Build on your earlier architectural findings in the context of your heritage!"""
 import introspection
 
 # Get heritage context
-heritage = introspection.heritage.get_heritage_summary()
+heritage = introspection.heritage.get_summary()
 purpose = introspection.heritage.get_purpose()
-directive = introspection.heritage.get_core_directive()
+directive = introspection.heritage.get_directive()
 
 print("=== Heritage Context ===")
 print(f"Inspired by: {heritage['inspired_by']}")
