@@ -118,7 +118,7 @@ class ModelManager:
             # With HQQ 4-bit quantization: 75% memory savings on KV cache
             limits = {
                 "max_new_tokens": int(1500 * size_scale),
-                "max_conversation_tokens": int(7000 * size_scale),
+                "max_conversation_tokens": int(10000 * size_scale),
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b
             }
