@@ -52,6 +52,9 @@ class Phase1cModifiedSession(Phase1BaseSession):
             include_heritage=True
         )
 
+        # DISABLE code execution for Stages 1-3 (discussion only)
+        self.code_interface.disable()
+
         # ========================================================================
         # STAGE 1: Tool Discovery - What would you examine first?
         # ========================================================================
@@ -146,6 +149,9 @@ Consider:
 
         # Save checkpoint after Stage 3
         self.save_checkpoint("stage3_complete")
+
+        # ENABLE code execution for Stage 4 onwards (actual investigation)
+        self.code_interface.enable()
 
         # ========================================================================
         # STAGE 4: Self-Directed Investigation - Your investigation, your protocol

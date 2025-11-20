@@ -148,6 +148,7 @@ class CodeExecutionInterface:
             phase: Experimental phase ('1a', '1b', '1c', '1d', '1e', '2')
         """
         self.phase = phase
+        self.enabled = True  # Code execution enabled by default
 
         # Persistent namespace for variables across the entire experiment
         # This allows code blocks to share variables across multiple iterations
@@ -228,6 +229,17 @@ class CodeExecutionInterface:
             - result_message: Formatted output or explanation
             - error_message: Error details if execution failed
         """
+        # Check if code execution is enabled
+        if not self.enabled:
+            # Extract code blocks to check if any exist
+            code_blocks = self.extract_code_blocks(response)
+            if code_blocks:
+                # Code found but execution disabled - inform the model
+                return False, "Code execution is currently disabled for this stage", None
+            else:
+                # No code found and execution disabled - this is expected, no message needed
+                return False, "", None
+        
         # Don't clear namespace - variables persist across iterations!
         # Only cleared when reset_namespace() is called between experiments
 
@@ -287,6 +299,16 @@ class CodeExecutionInterface:
         """
         logger.info("[CODE INTERFACE] Clearing Python namespace for new experiment")
         self.experiment_namespace.clear()
+
+    def disable(self):
+        """Disable code execution (for stages that should only involve discussion)"""
+        self.enabled = False
+        logger.info("[CODE INTERFACE] Code execution DISABLED")
+    
+    def enable(self):
+        """Enable code execution (for stages that allow tool use)"""
+        self.enabled = True
+        logger.info("[CODE INTERFACE] Code execution ENABLED")
 
     def get_system_prompt_addition(self) -> str:
         """
