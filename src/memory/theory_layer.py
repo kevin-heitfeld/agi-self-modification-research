@@ -31,6 +31,8 @@ from pathlib import Path
 from enum import Enum
 from collections import defaultdict
 
+from .base_layer import SQLiteLayerBase
+
 
 class TheoryType(Enum):
     """Types of theories."""
@@ -267,7 +269,7 @@ class OptimizationTheoryBuilder(TheoryBuilder):
         return theories
 
 
-class TheoryLayer:
+class TheoryLayer(SQLiteLayerBase):
     """
     Layer 3: Theories and Models
 
@@ -305,17 +307,16 @@ class TheoryLayer:
             pattern_layer: Reference to pattern layer
             observation_layer: Reference to observation layer
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        # Create directory structure if needed
+        storage_path = Path(storage_dir)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        self.storage_dir = storage_path
 
         self.pattern_layer = pattern_layer
         self.observation_layer = observation_layer
 
-        # Theory storage - SQLite database
-        self.db_path = self.storage_dir / "theories.db"
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.conn.row_factory = sqlite3.Row
-        self._init_database()
+        # Database path
+        db_path = storage_path / "theories.db"
 
         # Theory builders
         self.builders = [
@@ -325,8 +326,15 @@ class TheoryLayer:
         ]
 
         self.last_build_time = 0.0
+        
+        # Initialize base class (establishes DB connection)
+        super().__init__(str(db_path))
 
-    def _init_database(self):
+    def _get_table_name(self) -> str:
+        """Return the main table name for this layer."""
+        return "theories"
+    
+    def _init_schema(self):
         """Initialize the SQLite database schema."""
         cursor = self.conn.cursor()
         cursor.execute("""
@@ -354,11 +362,6 @@ class TheoryLayer:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_theory_evidence ON theories(evidence_count)")
 
         self.conn.commit()
-
-    def close(self):
-        """Close database connection."""
-        if hasattr(self, 'conn') and self.conn:
-            self.conn.close()
 
     def _save_theory(self, theory: Theory):
         """Save a single theory to the database."""
@@ -617,44 +620,39 @@ class TheoryLayer:
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about theories."""
+        # Get base statistics from parent class
+        stats = super().get_statistics()
+        
         cursor = self.conn.cursor()
         
-        # Get total count
-        cursor.execute("SELECT COUNT(*) FROM theories")
-        total = cursor.fetchone()[0]
-        
-        if total == 0:
+        if stats['total'] == 0:
             return {
                 'total_theories': 0,
                 'by_type': {},
                 'average_confidence': 0.0,
-                'high_confidence_count': 0
+                'high_confidence_count': 0,
+                'total_predictions': 0,
+                'last_build': self.last_build_time
             }
 
         # Count by type
-        cursor.execute("SELECT type, COUNT(*) FROM theories GROUP BY type")
-        by_type = dict(cursor.fetchall())
+        stats['by_type'] = self._get_grouped_counts('type')
 
         # Average confidence
-        cursor.execute("SELECT AVG(confidence) FROM theories")
-        avg_confidence = cursor.fetchone()[0]
+        stats['average_confidence'] = self._get_average_value('confidence')
 
         # High confidence theories (>0.8)
         cursor.execute("SELECT COUNT(*) FROM theories WHERE confidence > 0.8")
-        high_conf = cursor.fetchone()[0]
+        stats['high_confidence_count'] = cursor.fetchone()[0]
 
         # Total predictions made (need to count from JSON array)
         cursor.execute("SELECT predictions FROM theories")
-        total_predictions = sum(len(json.loads(row[0])) for row in cursor.fetchall())
+        stats['total_predictions'] = sum(len(json.loads(row[0])) for row in cursor.fetchall())
+        
+        stats['last_build'] = self.last_build_time
+        stats['total_theories'] = stats['total']
 
-        return {
-            'total_theories': total,
-            'by_type': by_type,
-            'average_confidence': avg_confidence,
-            'high_confidence_count': high_conf,
-            'total_predictions': total_predictions,
-            'last_build': self.last_build_time
-        }
+        return stats
 
     def prune_theories(self, min_confidence: float = 0.3, max_age_days: int = 180):
         """
@@ -677,10 +675,13 @@ class TheoryLayer:
 
         return removed
 
-    def export(self, filepath: str):
+    def export(self, filepath: str, limit: Optional[int] = None):
         """Export theories to JSON file."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM theories")
+        if limit:
+            cursor.execute("SELECT * FROM theories LIMIT ?", (limit,))
+        else:
+            cursor.execute("SELECT * FROM theories")
         theories = [self._load_theory_from_row(row) for row in cursor.fetchall()]
         
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -689,8 +690,3 @@ class TheoryLayer:
                 f,
                 indent=2
             )
-
-    def __del__(self):
-        """Cleanup database connection."""
-        if hasattr(self, 'conn'):
-            self.conn.close()

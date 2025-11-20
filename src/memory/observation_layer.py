@@ -32,6 +32,8 @@ from enum import Enum
 import sqlite3
 from datetime import datetime
 
+from .base_layer import SQLiteLayerBase
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,7 +85,7 @@ class Observation:
         return Observation(**data)
 
 
-class ObservationLayer:
+class ObservationLayer(SQLiteLayerBase):
     """
     Layer 1: Direct Observations
 
@@ -124,21 +126,30 @@ class ObservationLayer:
         Initialize observation layer.
 
         Args:
-            storage_dir: Directory for storing observations
+            storage_dir: Directory for storing observations (legacy parameter)
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-
-        # SQLite database for efficient queries
-        self.db_path = self.storage_dir / "observations.db"
-        self.conn = sqlite3.connect(str(self.db_path))
-        self._init_database()
+        # Create directory structure if needed
+        storage_path = Path(storage_dir)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        
+        # Store for backward compatibility
+        self.storage_dir = storage_path
+        
+        # Database path
+        db_path = storage_path / "observations.db"
 
         # In-memory cache for recent observations (ID -> Observation)
         self.cache: Dict[str, Observation] = {}
         self.cache_size = 1000
+        
+        # Initialize base class (establishes DB connection)
+        super().__init__(str(db_path))
 
-    def _init_database(self):
+    def _get_table_name(self) -> str:
+        """Return the main table name for this layer."""
+        return "observations"
+    
+    def _init_schema(self):
         """Initialize database schema."""
         cursor = self.conn.cursor()
 
@@ -193,11 +204,6 @@ class ObservationLayer:
         """)
 
         self.conn.commit()
-
-    def close(self):
-        """Close database connection."""
-        if hasattr(self, 'conn') and self.conn:
-            self.conn.close()
 
     def record(
         self,
@@ -428,21 +434,16 @@ class ObservationLayer:
         Returns:
             Dictionary with statistics
         """
+        # Get base statistics from parent class
+        stats = super().get_statistics()
+        
+        # Add observation-specific statistics
         cursor = self.conn.cursor()
-
-        # Total count
-        cursor.execute("SELECT COUNT(*) FROM observations")
-        total = cursor.fetchone()[0]
-
+        
         # Count by type
-        cursor.execute("""
-            SELECT type, COUNT(*)
-            FROM observations
-            GROUP BY type
-        """)
-        by_type = {row[0]: row[1] for row in cursor.fetchall()}
-
-        # Count by category
+        stats['by_type'] = self._get_grouped_counts('type')
+        
+        # Top 10 categories
         cursor.execute("""
             SELECT category, COUNT(*)
             FROM observations
@@ -450,30 +451,12 @@ class ObservationLayer:
             ORDER BY COUNT(*) DESC
             LIMIT 10
         """)
-        top_categories = {row[0]: row[1] for row in cursor.fetchall()}
-
-        # Time range
-        cursor.execute("""
-            SELECT MIN(timestamp), MAX(timestamp)
-            FROM observations
-        """)
-        time_range = cursor.fetchone()
-
+        stats['top_categories'] = {row[0]: row[1] for row in cursor.fetchall()}
+        
         # Average importance
-        cursor.execute("SELECT AVG(importance) FROM observations")
-        avg_importance = cursor.fetchone()[0] or 0.0
-
-        return {
-            'total': total,
-            'by_type': by_type,
-            'top_categories': top_categories,
-            'time_range': {
-                'start': time_range[0],
-                'end': time_range[1],
-                'span_hours': (time_range[1] - time_range[0]) / 3600 if time_range[0] else 0
-            },
-            'average_importance': avg_importance
-        }
+        stats['average_importance'] = self._get_average_value('importance')
+        
+        return stats
 
     def consolidate(self, older_than_days: int = 30, importance_threshold: float = 0.3):
         """
@@ -534,15 +517,16 @@ class ObservationLayer:
         # Clear cache
         self.cache = {}
 
-    def export(self, filepath: str, export_format: str = 'json'):
+    def export(self, filepath: str, limit: Optional[int] = None, export_format: str = 'json'):
         """
         Export observations to file.
 
         Args:
             filepath: Output file path
-            format: Export format ('json' or 'csv')
+            limit: Maximum number of observations to export (default: None for all)
+            export_format: Export format ('json' or 'csv')
         """
-        observations = self.get_recent(limit=10000)  # Get all recent
+        observations = self.get_recent(limit=limit if limit else 10000)
 
         if export_format == 'json':
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -813,8 +797,3 @@ class ObservationLayer:
             obsolete_reason=row[12] if len(row) > 12 else None,
             updated_at=row[13] if len(row) > 13 else None
         )
-
-    def __del__(self):
-        """Cleanup database connection."""
-        if hasattr(self, 'conn'):
-            self.conn.close()

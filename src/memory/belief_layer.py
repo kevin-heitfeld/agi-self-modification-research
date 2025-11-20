@@ -31,6 +31,8 @@ from pathlib import Path
 from enum import Enum
 from collections import defaultdict
 
+from .base_layer import SQLiteLayerBase
+
 
 class BeliefType(Enum):
     """Types of beliefs."""
@@ -167,7 +169,7 @@ class BeliefFormation:
         )
 
 
-class BeliefLayer:
+class BeliefLayer(SQLiteLayerBase):
     """
     Layer 4: Core Beliefs and Principles
 
@@ -203,24 +205,30 @@ class BeliefLayer:
             storage_dir: Directory for storing beliefs
             theory_layer: Reference to theory layer
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        # Create directory structure if needed
+        storage_path = Path(storage_dir)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        self.storage_dir = storage_path
 
         self.theory_layer = theory_layer
 
-        # Belief storage - SQLite database
-        self.db_path = self.storage_dir / "beliefs.db"
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.conn.row_factory = sqlite3.Row
-        self._init_database()
+        # Database path
+        db_path = storage_path / "beliefs.db"
 
         # Track when beliefs were last formed
         self.last_formation_time = 0.0
+        
+        # Initialize base class (establishes DB connection)
+        super().__init__(str(db_path))
 
         # Initialize core safety beliefs (hardcoded foundational beliefs)
         self._initialize_core_beliefs()
 
-    def _init_database(self):
+    def _get_table_name(self) -> str:
+        """Return the main table name for this layer."""
+        return "beliefs"
+
+    def _init_schema(self):
         """Initialize the SQLite database schema."""
         cursor = self.conn.cursor()
         cursor.execute("""
@@ -249,11 +257,6 @@ class BeliefLayer:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_belief_importance ON beliefs(importance)")
 
         self.conn.commit()
-
-    def close(self):
-        """Close database connection."""
-        if hasattr(self, 'conn') and self.conn:
-            self.conn.close()
 
     def _save_belief(self, belief: Belief):
         """Save a single belief to the database."""
@@ -570,51 +573,44 @@ class BeliefLayer:
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about beliefs."""
+        # Get base statistics from parent class
+        stats = super().get_statistics()
+        
         cursor = self.conn.cursor()
 
-        # Get total count
-        cursor.execute("SELECT COUNT(*) FROM beliefs")
-        total = cursor.fetchone()[0]
-
-        if total == 0:
+        if stats['total'] == 0:
             return {
                 'total_beliefs': 0,
                 'by_type': {},
                 'by_strength': {},
-                'average_confidence': 0.0
+                'average_confidence': 0.0,
+                'average_success_rate': 0.0,
+                'total_applications': 0,
+                'conflicts': 0,
+                'last_formation': self.last_formation_time
             }
 
-        # Count by type
-        cursor.execute("SELECT type, COUNT(*) FROM beliefs GROUP BY type")
-        by_type = dict(cursor.fetchall())
-
-        # Count by strength
-        cursor.execute("SELECT strength, COUNT(*) FROM beliefs GROUP BY strength")
-        by_strength = dict(cursor.fetchall())
+        # Count by type and strength
+        stats['by_type'] = self._get_grouped_counts('type')
+        stats['by_strength'] = self._get_grouped_counts('strength')
 
         # Average confidence
-        cursor.execute("SELECT AVG(confidence) FROM beliefs")
-        avg_confidence = cursor.fetchone()[0]
+        stats['average_confidence'] = self._get_average_value('confidence')
 
         # Average success rate (for beliefs that have been applied)
         cursor.execute("SELECT AVG(success_rate) FROM beliefs WHERE times_applied > 0")
         result = cursor.fetchone()
-        avg_success = result[0] if result[0] is not None else 0.0
+        stats['average_success_rate'] = result[0] if result[0] is not None else 0.0
 
         # Total applications
         cursor.execute("SELECT SUM(times_applied) FROM beliefs")
-        total_applications = cursor.fetchone()[0] or 0
+        stats['total_applications'] = cursor.fetchone()[0] or 0
 
-        return {
-            'total_beliefs': total,
-            'by_type': by_type,
-            'by_strength': by_strength,
-            'average_confidence': avg_confidence,
-            'average_success_rate': avg_success,
-            'total_applications': total_applications,
-            'conflicts': len(self.detect_conflicts()),
-            'last_formation': self.last_formation_time
-        }
+        stats['total_beliefs'] = stats['total']
+        stats['conflicts'] = len(self.detect_conflicts())
+        stats['last_formation'] = self.last_formation_time
+
+        return stats
 
     def get_core_principles(self) -> List[str]:
         """
@@ -628,10 +624,13 @@ class BeliefLayer:
 
         return [belief.statement for belief in core]
 
-    def export(self, filepath: str):
+    def export(self, filepath: str, limit: Optional[int] = None):
         """Export beliefs to JSON file."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM beliefs")
+        if limit:
+            cursor.execute("SELECT * FROM beliefs LIMIT ?", (limit,))
+        else:
+            cursor.execute("SELECT * FROM beliefs")
         beliefs = [self._load_belief_from_row(row) for row in cursor.fetchall()]
 
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -640,8 +639,3 @@ class BeliefLayer:
                 f,
                 indent=2
             )
-
-    def __del__(self):
-        """Cleanup database connection."""
-        if hasattr(self, 'conn'):
-            self.conn.close()

@@ -32,6 +32,8 @@ from enum import Enum
 from collections import Counter
 from pathlib import Path
 
+from .base_layer import SQLiteLayerBase
+
 
 # Time windows for pattern detection (in seconds)
 SEQUENTIAL_WINDOW_SECONDS = 3600  # 1 hour - sequences within this time are related
@@ -469,7 +471,7 @@ class ThresholdPatternDetector(PatternDetector):
         return patterns
 
 
-class PatternLayer:
+class PatternLayer(SQLiteLayerBase):
     """
     Layer 2: Patterns and Correlations
 
@@ -485,7 +487,7 @@ class PatternLayer:
     - Query interface for finding relevant patterns
 
     Usage:
-        >>> layer = PatternLayer("data/memory/patterns", observation_layer)
+        >>> layer = PatternLayer("data/memory/patterns.db", observation_layer)
         >>>
         >>> # Detect patterns (run periodically)
         >>> layer.detect_patterns()
@@ -498,24 +500,15 @@ class PatternLayer:
         >>> pattern = layer.get_pattern("seq_12345")
     """
 
-    def __init__(self, storage_dir: str, observation_layer: Any):
+    def __init__(self, db_path: str, observation_layer: Any):
         """
         Initialize pattern layer.
 
         Args:
-            storage_dir: Directory for storing patterns
+            db_path: Path to SQLite database file
             observation_layer: Reference to observation layer
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-
         self.observation_layer = observation_layer
-
-        # SQLite database for efficient queries
-        self.db_path = self.storage_dir / "patterns.db"
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.conn.row_factory = sqlite3.Row
-        self._init_database()
 
         # Pattern detectors
         self.detectors = [
@@ -527,7 +520,14 @@ class PatternLayer:
         # Track when patterns were last updated
         self.last_detection_time = 0.0
 
-    def _init_database(self):
+        # Initialize base class (handles DB connection and schema)
+        super().__init__(db_path)
+
+    def _get_table_name(self) -> str:
+        """Return the main table name for this layer."""
+        return "patterns"
+
+    def _init_schema(self):
         """Initialize database schema."""
         cursor = self.conn.cursor()
         
@@ -553,11 +553,6 @@ class PatternLayer:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_support ON patterns(support_count)")
         
         self.conn.commit()
-
-    def close(self):
-        """Close database connection."""
-        if hasattr(self, 'conn') and self.conn:
-            self.conn.close()
 
     def _save_pattern(self, pattern: Pattern):
         """Save a single pattern to database."""
@@ -758,35 +753,32 @@ class PatternLayer:
         Returns:
             Dictionary with statistics
         """
-        cursor = self.conn.cursor()
+        # Get base statistics from parent class
+        stats = super().get_statistics()
         
-        # Total count
-        cursor.execute("SELECT COUNT(*) as total FROM patterns")
-        total = cursor.fetchone()['total']
+        # Add pattern-specific statistics
+        total = stats['total']
         
         if total == 0:
-            return {
-                'total_patterns': 0,
+            stats.update({
                 'by_type': {},
                 'average_confidence': 0.0,
-                'high_confidence_count': 0
-            }
+                'high_confidence_count': 0,
+                'most_common_tags': {},
+                'last_detection': self.last_detection_time
+            })
+            return stats
 
-        # Count by type
-        cursor.execute("""
-            SELECT type, COUNT(*) as count 
-            FROM patterns 
-            GROUP BY type
-        """)
-        by_type = {row['type']: row['count'] for row in cursor.fetchall()}
+        # Count by type using base class helper
+        stats['by_type'] = self._get_grouped_counts('type')
 
-        # Average confidence
-        cursor.execute("SELECT AVG(confidence) as avg_conf FROM patterns")
-        avg_confidence = cursor.fetchone()['avg_conf']
+        # Average confidence using base class helper
+        stats['average_confidence'] = self._get_average_value('confidence') or 0.0
 
         # High confidence patterns (>0.8)
+        cursor = self.conn.cursor()
         cursor.execute("SELECT COUNT(*) as high_conf FROM patterns WHERE confidence > 0.8")
-        high_conf = cursor.fetchone()['high_conf']
+        stats['high_confidence_count'] = cursor.fetchone()['high_conf']
 
         # Most common tags (need to query all for this)
         all_patterns = self.get_patterns()
@@ -794,15 +786,10 @@ class PatternLayer:
         for pattern in all_patterns:
             all_tags.extend(pattern.tags)
         tag_counts = Counter(all_tags)
+        stats['most_common_tags'] = dict(tag_counts.most_common(10))
+        stats['last_detection'] = self.last_detection_time
 
-        return {
-            'total_patterns': total,
-            'by_type': by_type,
-            'average_confidence': avg_confidence,
-            'high_confidence_count': high_conf,
-            'most_common_tags': dict(tag_counts.most_common(10)),
-            'last_detection': self.last_detection_time
-        }
+        return stats
 
     def prune_patterns(self, min_confidence: float = 0.3, max_age_days: int = 90):
         """
@@ -825,19 +812,18 @@ class PatternLayer:
         
         return deleted
 
-    def __del__(self):
-        """Cleanup database connection."""
-        if hasattr(self, 'conn'):
-            self.conn.close()
-
-    def export(self, filepath: str):
+    def export(self, filepath: str, limit: Optional[int] = None):
         """
         Export patterns to JSON file.
 
         Args:
             filepath: Output file path
+            limit: Maximum number of patterns to export (None = all)
         """
         patterns = self.get_patterns()
+        if limit:
+            patterns = patterns[:limit]
+        
         with open(filepath, 'w') as f:
             json.dump(
                 [pattern.to_dict() for pattern in patterns],
