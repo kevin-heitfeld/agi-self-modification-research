@@ -28,6 +28,16 @@ import time
 import sqlite3
 from typing import Dict, List, Any, Optional, Set, Tuple
 from dataclasses import dataclass, asdict
+from enum import Enum
+from collections import Counter
+from pathlib import Path
+
+
+# Time windows for pattern detection (in seconds)
+SEQUENTIAL_WINDOW_SECONDS = 3600  # 1 hour - sequences within this time are related
+CAUSAL_WINDOW_SECONDS = 3600      # 1 hour - causal effects within this time
+THRESHOLD_WINDOW_SECONDS = 600    # 10 minutes - threshold crossings before events
+MIN_CAUSAL_CHANGE_PERCENT = 1.0   # Minimum % change to consider significant
 from pathlib import Path
 from enum import Enum
 from collections import defaultdict, Counter
@@ -97,6 +107,149 @@ class PatternDetector:
             List of detected patterns
         """
         raise NotImplementedError
+    
+    # ===== Common Helper Methods =====
+    
+    def _generate_pattern_id(self, pattern_type: PatternType, *components) -> str:
+        """
+        Generate consistent pattern ID from components.
+        
+        Args:
+            pattern_type: Type of pattern
+            *components: Components to hash (should be hashable types)
+            
+        Returns:
+            Pattern ID string
+        """
+        hash_value = hash(components)
+        return f"{pattern_type.value}_{abs(hash_value)}"
+    
+    def _find_evidence_ids(
+        self,
+        observations: List[Any],
+        filter_fn
+    ) -> List[str]:
+        """
+        Find observation IDs matching a filter function.
+        
+        Args:
+            observations: List of observations to search
+            filter_fn: Function that returns True for matching observations
+            
+        Returns:
+            List of observation IDs
+        """
+        return [obs.id for obs in observations if filter_fn(obs)]
+    
+    def _get_time_bounds(self, observations: List[Any], evidence_ids: List[str]) -> Tuple[float, float]:
+        """
+        Get first_seen and last_seen timestamps for evidence.
+        
+        Args:
+            observations: List of all observations
+            evidence_ids: IDs of evidence observations
+            
+        Returns:
+            Tuple of (first_seen, last_seen)
+        """
+        evidence_obs = [obs for obs in observations if obs.id in evidence_ids]
+        if not evidence_obs:
+            return (time.time(), time.time())
+        
+        timestamps = [obs.timestamp for obs in evidence_obs]
+        return (min(timestamps), max(timestamps))
+    
+    def _build_pattern(
+        self,
+        pattern_id: str,
+        pattern_type: PatternType,
+        name: str,
+        description: str,
+        components: Dict[str, Any],
+        support_count: int,
+        confidence: float,
+        evidence: List[str],
+        tags: List[str],
+        observations: List[Any]
+    ) -> Pattern:
+        """
+        Build a Pattern object with common fields.
+        
+        Args:
+            pattern_id: Unique pattern identifier
+            pattern_type: Type of pattern
+            name: Short pattern name
+            description: Human-readable description
+            components: Pattern-specific data
+            support_count: Number of occurrences
+            confidence: Confidence score (0.0-1.0)
+            evidence: List of observation IDs
+            tags: List of tags
+            observations: Full observation list (for timestamp lookup)
+            
+        Returns:
+            Pattern object
+        """
+        first_seen, last_seen = self._get_time_bounds(observations, evidence)
+        
+        return Pattern(
+            id=pattern_id,
+            type=pattern_type,
+            name=name,
+            description=description,
+            components=components,
+            support_count=support_count,
+            confidence=confidence,
+            first_seen=first_seen,
+            last_seen=last_seen,
+            evidence=evidence[:20],  # Limit evidence size
+            tags=tags
+        )
+    
+    def _find_temporal_pairs(
+        self,
+        observations: List[Any],
+        window_seconds: float,
+        filter_first = None,
+        filter_second = None
+    ) -> List[Tuple[Any, Any, float]]:
+        """
+        Find pairs of observations within a time window.
+        
+        Args:
+            observations: List of observations
+            window_seconds: Maximum time gap between pairs
+            filter_first: Optional filter for first observation
+            filter_second: Optional filter for second observation
+            
+        Returns:
+            List of (first_obs, second_obs, time_gap) tuples
+        """
+        pairs = []
+        
+        for i in range(len(observations) - 1):
+            first = observations[i]
+            
+            # Apply first filter if provided
+            if filter_first and not filter_first(first):
+                continue
+            
+            # Look for matching second observations
+            for j in range(i + 1, len(observations)):
+                second = observations[j]
+                time_gap = second.timestamp - first.timestamp
+                
+                # Stop if beyond window
+                if time_gap > window_seconds:
+                    break
+                
+                # Apply second filter if provided
+                if filter_second and not filter_second(second):
+                    continue
+                
+                pairs.append((first, second, time_gap))
+        
+        return pairs
 
 
 class SequentialPatternDetector(PatternDetector):
@@ -113,8 +266,8 @@ class SequentialPatternDetector(PatternDetector):
             next_obs = (observations[i+1].type.value, observations[i+1].category)
             time_gap = observations[i+1].timestamp - observations[i].timestamp
 
-            # Only consider sequences within reasonable time windows (e.g., 1 hour)
-            if time_gap < 3600:
+            # Only consider sequences within reasonable time window
+            if time_gap < SEQUENTIAL_WINDOW_SECONDS:
                 sequences.append((current, next_obs, time_gap))
 
         # Count sequence frequencies
@@ -126,32 +279,45 @@ class SequentialPatternDetector(PatternDetector):
                 confidence = count / len([s for s in sequences if s[0] == first])
 
                 if confidence >= self.min_confidence:
-                    pattern_id = f"seq_{hash((first, second))}"
+                    # Generate pattern ID using helper
+                    pattern_id = self._generate_pattern_id(
+                        PatternType.SEQUENTIAL,
+                        first,
+                        second
+                    )
 
                     # Find supporting observations
                     evidence = []
-                    for i, seq in enumerate(sequences):
-                        if (seq[0], seq[1]) == (first, second):
-                            if i < len(observations) - 1:
-                                evidence.append(observations[i].id)
+                    for i in range(len(observations) - 1):
+                        obs_pair = (
+                            (observations[i].type.value, observations[i].category),
+                            (observations[i+1].type.value, observations[i+1].category)
+                        )
+                        if obs_pair == (first, second):
+                            evidence.append(observations[i].id)
 
-                    patterns.append(Pattern(
-                        id=pattern_id,
-                        type=PatternType.SEQUENTIAL,
+                    # Calculate average time gap
+                    matching_gaps = [s[2] for s in sequences if (s[0], s[1]) == (first, second)]
+                    avg_time_gap = sum(matching_gaps) / len(matching_gaps) if matching_gaps else 0
+
+                    # Build pattern using helper
+                    pattern = self._build_pattern(
+                        pattern_id=pattern_id,
+                        pattern_type=PatternType.SEQUENTIAL,
                         name=f"{first[1]} → {second[1]}",
                         description=f"'{first[1]}' is typically followed by '{second[1]}'",
                         components={
                             'first': first,
                             'second': second,
-                            'avg_time_gap': sum(s[2] for s in sequences if (s[0], s[1]) == (first, second)) / count
+                            'avg_time_gap': avg_time_gap
                         },
                         support_count=count,
                         confidence=confidence,
-                        first_seen=min(obs.timestamp for obs in observations if obs.id in evidence),
-                        last_seen=max(obs.timestamp for obs in observations if obs.id in evidence),
-                        evidence=evidence[:10],  # Keep first 10 for space
-                        tags=['sequential', first[1], second[1]]
-                    ))
+                        evidence=evidence,
+                        tags=['sequential', first[1], second[1]],
+                        observations=observations
+                    )
+                    patterns.append(pattern)
 
         return patterns
 
@@ -169,10 +335,10 @@ class CausalPatternDetector(PatternDetector):
 
         # For each modification, look at performance changes shortly after
         for mod in modifications:
-            # Find performance observations within 1 hour after modification
+            # Find performance observations within time window after modification
             relevant_perf = [
                 p for p in performances
-                if mod.timestamp < p.timestamp < mod.timestamp + 3600
+                if mod.timestamp < p.timestamp < mod.timestamp + CAUSAL_WINDOW_SECONDS
             ]
 
             if not relevant_perf:
@@ -206,13 +372,19 @@ class CausalPatternDetector(PatternDetector):
                     after = perf.data['after']
                     change = ((after - before) / before) * 100
                 
-                # If we found a change, create pattern
-                if metric and change is not None and abs(change) > 1:  # >1% change
-                    pattern_id = f"causal_{mod.category}_{metric}"
+                # If we found a significant change, create pattern
+                if metric and change is not None and abs(change) > MIN_CAUSAL_CHANGE_PERCENT:
+                    # Generate pattern ID using helper
+                    pattern_id = self._generate_pattern_id(
+                        PatternType.CAUSAL,
+                        mod.category,
+                        metric
+                    )
 
-                    patterns.append(Pattern(
-                        id=pattern_id,
-                        type=PatternType.CAUSAL,
+                    # Build pattern using helper
+                    pattern = self._build_pattern(
+                        pattern_id=pattern_id,
+                        pattern_type=PatternType.CAUSAL,
                         name=f"{mod.category} → {metric} change",
                         description=f"Modifying '{mod.category}' affects '{metric}' by ~{change:.1f}%",
                         components={
@@ -222,11 +394,11 @@ class CausalPatternDetector(PatternDetector):
                         },
                         support_count=1,  # Would need to track across multiple instances
                         confidence=0.7,  # Initial confidence
-                        first_seen=mod.timestamp,
-                        last_seen=perf.timestamp,
                         evidence=[mod.id, perf.id],
-                        tags=['causal', mod.category, metric]
-                    ))
+                        tags=['causal', mod.category, metric],
+                        observations=observations
+                    )
+                    patterns.append(pattern)
 
         return patterns
 
@@ -243,10 +415,10 @@ class ThresholdPatternDetector(PatternDetector):
         safety_events = [o for o in observations if o.type.value == 'safety_event']
 
         for safety_event in safety_events:
-            # Find performance observations shortly before
+            # Find performance observations shortly before using time window constant
             preceding_perf = [
                 p for p in performances
-                if safety_event.timestamp - 600 < p.timestamp < safety_event.timestamp  # Within 10 min
+                if safety_event.timestamp - THRESHOLD_WINDOW_SECONDS < p.timestamp < safety_event.timestamp
             ]
 
             for perf in preceding_perf:
@@ -268,11 +440,17 @@ class ThresholdPatternDetector(PatternDetector):
                             break
                 
                 if metric and value is not None:
-                    pattern_id = f"threshold_{metric}_{safety_event.category}"
+                    # Generate pattern ID using helper
+                    pattern_id = self._generate_pattern_id(
+                        PatternType.THRESHOLD,
+                        metric,
+                        safety_event.category
+                    )
 
-                    patterns.append(Pattern(
-                        id=pattern_id,
-                        type=PatternType.THRESHOLD,
+                    # Build pattern using helper
+                    pattern = self._build_pattern(
+                        pattern_id=pattern_id,
+                        pattern_type=PatternType.THRESHOLD,
                         name=f"{metric} threshold → {safety_event.category}",
                         description=f"When '{metric}' reaches {value:.2f}, '{safety_event.category}' often follows",
                         components={
@@ -282,11 +460,11 @@ class ThresholdPatternDetector(PatternDetector):
                         },
                         support_count=1,
                         confidence=0.65,
-                        first_seen=perf.timestamp,
-                        last_seen=safety_event.timestamp,
                         evidence=[perf.id, safety_event.id],
-                        tags=['threshold', metric, safety_event.category]
-                    ))
+                        tags=['threshold', metric, safety_event.category],
+                        observations=observations
+                    )
+                    patterns.append(pattern)
 
         return patterns
 
