@@ -104,47 +104,47 @@ class ModelManager:
         # Detect GPU tier based on memory and compute capability
         if "A100" in self.gpu_name or "A10" in self.gpu_name:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
-            # With HQQ 4-bit quantization: 75% memory savings on KV cache
+            # With 8-bit KV cache quantization: 50% memory savings
             limits = {
                 "max_new_tokens": int(1200 * size_scale),
                 "max_conversation_tokens": int(8000 * size_scale),
                 "gpu_profile": "high_end_ampere",
                 "model_size_b": model_size_b
             }
-            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with HQQ quantization")
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with 8-bit KV cache quantization")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
-            # With HQQ 4-bit quantization: 75% memory savings on KV cache
+            # With 8-bit KV cache quantization: 50% memory savings
             limits = {
                 "max_new_tokens": int(1500 * size_scale),
                 "max_conversation_tokens": int(10000 * size_scale),
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with HQQ quantization + Flash Attention")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with 8-bit KV cache + Flash Attention")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
-            # With HQQ 4-bit quantization: 75% memory savings on KV cache
+            # With 8-bit KV cache quantization: 50% memory savings
             limits = {
                 "max_new_tokens": int(700 * size_scale),
                 "max_conversation_tokens": int(3500 * size_scale),
                 "gpu_profile": "t4_turing",
                 "model_size_b": model_size_b
             }
-            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with HQQ quantization")
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with 8-bit KV cache quantization")
             
         elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
             # V100 (16-32 GB) - Volta
-            # With HQQ 4-bit quantization: 75% memory savings on KV cache
+            # With 8-bit KV cache quantization: 50% memory savings
             limits = {
                 "max_new_tokens": int(700 * size_scale),
                 "max_conversation_tokens": int(3500 * size_scale),
                 "gpu_profile": "v100_volta",
                 "model_size_b": model_size_b
             }
-            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with HQQ quantization")
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with 8-bit KV cache quantization")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
