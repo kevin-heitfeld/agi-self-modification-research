@@ -26,10 +26,12 @@ transformers>=4.57.0
 hqq
 
 # Accelerate - Efficient model loading and distributed training
-accelerate==0.25.0
+# Version 1.11+ required for transformers 4.57+ device_map compatibility
+accelerate>=1.11.0
 
 # Bitsandbytes - For quantization and memory optimization
-bitsandbytes==0.41.3.post2
+# Version 0.48+ required for CUDA 13.0 support
+bitsandbytes>=0.48.0
 
 # Flash Attention 2 - Memory-efficient attention (O(n) instead of O(n²))
 # Reduces attention memory and improves speed 2-4x
@@ -42,7 +44,8 @@ flash-attn>=2.3.0
 safetensors==0.6.2
 
 # Tokenizers - Fast tokenization for transformers
-tokenizers==0.19.1
+# Version must be compatible with transformers 4.57+ (requires >=0.22.0, <=0.23.0)
+tokenizers>=0.22.0,<=0.23.0
 
 # Hugging Face Hub - Model downloading and management
 huggingface-hub==0.36.0
