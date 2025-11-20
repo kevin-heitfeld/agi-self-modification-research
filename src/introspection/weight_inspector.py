@@ -168,8 +168,10 @@ class WeightInspector:
         """
         Get summary of parameter names in the model with patterns.
         
-        Instead of returning a huge list of individual parameter names (which can cause OOM),
-        returns a structured summary showing parameter patterns and a sample of actual names.
+        Returns a structured summary showing parameter patterns and sample names rather than
+        a flat list of all parameter names. This makes it easier to understand the model
+        structure at a glance and discover what parameters exist without scrolling through
+        hundreds of individual names.
         
         Parameters are the actual weight/bias tensors (leaf nodes with data), not container modules.
         
@@ -205,7 +207,7 @@ class WeightInspector:
             pattern = re.sub(r'\b\d+\b', '{N}', name)
             pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
         
-        # Return summary instead of full list to prevent OOM
+        # Return summary for better usability
         return {
             'total_parameters': len(names),
             'patterns': pattern_counts,
@@ -655,8 +657,8 @@ class WeightInspector:
             },
             
             # layer_groups_detail removed - it contains all 434 layer names
-            # which creates a massive JSON that causes OOM when added to conversation
-            # Use get_layer_names() if you need the full list
+            # which creates unnecessarily verbose output
+            # Use list_parameters() or get_layer_parameters() if you need specific names
         }
         
         return summary

@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 # Memory pruning threshold for post-prune target (used as fallback/minimum)
 # Trigger is generation-aware: prune when not enough room for next generation
 MEMORY_PRUNE_TARGET_RATIO = 0.25   # Minimum target: prune down to 25% (leaves 75% headroom)
-MEMORY_PRUNE_SAFETY_MARGIN = 1.2   # 20% safety margin on top of calculated needs
+MEMORY_PRUNE_SAFETY_MARGIN = 1.1   # 10% safety margin on top of calculated needs
 
 
 class MemoryManager:

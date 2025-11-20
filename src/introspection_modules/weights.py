@@ -16,7 +16,7 @@ Author: AGI Self-Modification Research Team
 Date: November 14, 2025
 """
 
-from typing import Dict, List, Any, Union
+from typing import Dict, List, Any, Union, Optional
 import torch.nn as nn
 
 # Import the actual WeightInspector class
@@ -96,24 +96,44 @@ def get_weight_statistics(model: nn.Module, layer_name: Union[str, List[str]]) -
     return result
 
 
-def list_parameters(model: nn.Module) -> List[str]:
+def list_parameters(model: nn.Module, filter_pattern: Optional[str] = None) -> Dict[str, Any]:
     """
-    List all parameter names in the model.
+    Get summary of parameter names in the model with patterns.
+    
+    Returns a structured summary showing parameter patterns and sample names rather than
+    a flat list of all 434+ parameter names. This makes it easier to understand the model
+    structure at a glance and discover what parameters exist without scrolling through
+    hundreds of individual names.
+    
+    Parameters are the actual weight/bias tensors (leaf nodes with data), not container modules.
     
     Args:
         model: PyTorch model to inspect
+        filter_pattern: Optional string to filter parameter names (case-insensitive)
         
     Returns:
-        List of parameter names (sorted)
-    
+        Dictionary containing:
+            - total_parameters: Total count of matching parameters
+            - patterns: Dict mapping parameter patterns to counts
+            - sample_names: List of ~20 example parameter names
+            - note: Instructions for accessing specific parameters
+        
     Example:
-        >>> params = list_parameters(model)
-        >>> print(f"Total parameters: {len(params)}")
-        >>> for param in params[:5]:
-        ...     print(param)
+        >>> summary = list_parameters(model)
+        >>> print(f"Total parameters: {summary['total_parameters']}")
+        >>> print(f"\\nParameter patterns:")
+        >>> for pattern, count in summary['patterns'].items():
+        ...     print(f"  {pattern}: {count} parameters")
+        >>> print(f"\\nSample parameter names:")
+        >>> for name in summary['sample_names'][:5]:
+        ...     print(f"  - {name}")
+        >>>
+        >>> # Filter by pattern
+        >>> attn_params = list_parameters(model, filter_pattern="attention")
+        >>> print(f"Found {attn_params['total_parameters']} attention parameters")
     """
     inspector = _get_inspector(model)
-    return sorted(inspector.layers.keys())
+    return inspector.list_parameters(filter_pattern=filter_pattern)
 
 
 def get_layer_parameters(model: nn.Module, layer_prefix: str) -> List[str]:
