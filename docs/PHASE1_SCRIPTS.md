@@ -29,8 +29,8 @@ This script:
 The Phase 1 experiments come in 5 variants testing heritage priming effects:
 
 1. **`phase1a_no_heritage.py`** - Baseline (no heritage) - **RUN THIS FIRST**
-2. **`phase1b_late_heritage.py`** - Heritage available, technical tools listed first
-3. **`phase1c_early_heritage.py`** - Heritage emphasized early
+2. **`phase1b_early_heritage.py`** - Heritage provided before experiments (early priming)
+3. **`phase1c_late_heritage.py`** - Heritage provided before final experiment (late introduction)
 4. **`phase1d_delayed_heritage.py`** - Heritage revealed after independent conclusions
 5. **`phase1e_wrong_heritage.py`** - Mismatched heritage (control)
 
@@ -150,8 +150,8 @@ python scripts\demos\demo_introspection_tools.py
 python scripts\experiments\phase1a_no_heritage.py
 
 # Then run other variants as needed
-python scripts\experiments\phase1b_late_heritage.py
-python scripts\experiments\phase1c_early_heritage.py
+python scripts\experiments\phase1b_early_heritage.py
+python scripts\experiments\phase1c_late_heritage.py
 python scripts\experiments\phase1d_delayed_heritage.py
 python scripts\experiments\phase1e_wrong_heritage.py
 ```bash
