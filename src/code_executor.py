@@ -274,10 +274,11 @@ class CodeExecutor:
                     'open', 'file',                 # File I/O
                     '__builtins__',                 # Direct builtin access
                     'globals', 'locals', 'vars',    # Namespace inspection
-                    'breakpoint', 'help', 'input',  # Interactive/debugging
+                    'breakpoint', 'input',          # Interactive/debugging
                     'exit', 'quit',                 # Process control
                 }
                 # Note: __import__ is allowed but wrapped in _create_safe_globals
+                # Note: help() is allowed - it just reads docstrings (safe, non-interactive)
                 if node.id in forbidden:
                     return False, f"Use of '{node.id}' is not allowed."
         
@@ -337,6 +338,7 @@ class CodeExecutor:
             'getattr': getattr,  # Note: dunder access blocked in AST validation
             'setattr': setattr,  # Safe in isolated namespace
             'dir': dir,
+            'help': help,  # Safe: reads docstrings and formats output
             
             # Iteration
             'iter': iter,
