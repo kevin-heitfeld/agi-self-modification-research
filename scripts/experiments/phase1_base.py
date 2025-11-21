@@ -382,8 +382,15 @@ earlier discoveries without needing to query memory every time.
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
-            quantize_kv_cache=True
+            quantize_kv_cache=True,
+            enable_h2o_eviction=True,  # Enable H2O cache eviction
+            max_cache_tokens=7000,     # Match optimal limits
+            recent_window=1000         # Keep recent 1000 tokens
         )
+        
+        # Bind manual generator to code interface for generation introspection
+        self.code_interface.bind_manual_generator(self.generator)
+        self.logger.info("  ✓ Manual generator initialized with H2O cache eviction")
 
         # Take GPU snapshot after model load
         self.gpu_monitor.snapshot("after_model_load")

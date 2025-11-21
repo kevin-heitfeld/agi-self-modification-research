@@ -19,7 +19,7 @@ from typing import Dict, Any, Tuple, List, Optional
 import logging
 
 from src.code_executor import CodeExecutor
-from src.introspection_modules import create_introspection_module
+from src.introspection_modules import create_introspection_module, bind_generation_introspection
 
 
 logger = logging.getLogger(__name__)
@@ -186,12 +186,27 @@ class CodeExecutionInterface:
             sys.modules['introspection.memory'] = self.introspection.memory
         if hasattr(self.introspection, 'heritage'):
             sys.modules['introspection.heritage'] = self.introspection.heritage
+        if hasattr(self.introspection, 'generation'):
+            sys.modules['introspection.generation'] = self.introspection.generation
 
         logger.info(f"✓ Introspection module registered (heritage={'included' if hasattr(self.introspection, 'heritage') else 'excluded'})")
 
         # Create code executor
         self.executor = CodeExecutor(introspection_module=self.introspection)
         logger.info("✓ CodeExecutor sandbox created")
+    
+    def bind_manual_generator(self, manual_generator: Any) -> None:
+        """
+        Bind the manual_generator to the generation introspection module.
+        
+        This enables the model to access attention weights and H2O cache statistics
+        from its own generation process via introspection.generation.
+        
+        Args:
+            manual_generator: The ManualGenerator instance with H2O cache support
+        """
+        bind_generation_introspection(self.introspection, manual_generator)
+        logger.info("✓ Generation introspection bound to manual generator")
 
     def extract_code_blocks(self, response: str) -> List[str]:
         """
