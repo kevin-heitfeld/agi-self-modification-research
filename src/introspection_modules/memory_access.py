@@ -31,7 +31,7 @@ def record_observation(
     Record a new observation in your memory system.
     
     Use this to save important findings so you can retrieve them later.
-    Your working memory (conversation) may be pruned, but saved observations persist forever.
+    Your conversation uses H2O cache eviction (keeps important tokens), but saved observations persist forever.
 
     Args:
         memory_system: MemorySystem instance
@@ -70,7 +70,7 @@ def query_observations(memory_system: Any, query: Optional[str] = None, **filter
     """
     Retrieve observations you've saved to memory.
     
-    Use this to find what you discovered earlier, especially after memory pruning.
+    Use this to find what you discovered earlier (observations are never evicted from storage).
 
     Args:
         memory_system: MemorySystem instance
