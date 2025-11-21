@@ -165,18 +165,17 @@ class ModelManager:
             # L4 (24 GB) - Ada Lovelace
             # With 8-bit KV cache quantization: 50% memory savings
             # H2O cache eviction: Fixed cache size with intelligent token selection
-            # 4-bit model (~7GB) + 8-bit cache (~7GB) + system prompt (~1.2GB) = ~15GB (9GB headroom)
-            # Maximized cache size for longer conversations while maintaining safety margin
-            max_cache = int(14000 * size_scale * quant_scale)
+            # Conservative sizing after OOM testing: 4-bit model (~7.5GB) + 8-bit cache (~10GB) + system (~1.5GB) + headroom = ~20GB
+            max_cache = int(10000 * size_scale * quant_scale)
             limits = {
-                "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache: 8.4K tokens (~6.3K words)
-                "max_cache_tokens": max_cache,                              # 14K tokens (~10.5K words of context)
-                "recent_window": int(max_cache * 0.15),                     # 15% recent: 2.1K tokens (never evicted)
+                "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache: 6K tokens (~4.5K words)
+                "max_cache_tokens": max_cache,                              # 10K tokens (~7.5K words of context)
+                "recent_window": int(max_cache * 0.15),                     # 15% recent: 1.5K tokens (never evicted)
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - maximized cache for long conversations (14K tokens)")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - safe cache size for long conversations (10K tokens)")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
