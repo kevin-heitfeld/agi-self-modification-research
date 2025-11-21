@@ -463,7 +463,7 @@ You can write and execute Python code to introspect yourself!
 2. Code executes in a secure sandbox with the `introspection` module pre-imported
 3. Output (anything you `print()`) is returned to you
 4. Variables persist across ALL code blocks in the entire experiment
-5. Use `help()` to discover available functions and their documentation
+5. Use `help()` and `dir()` to discover available functions and their documentation
 
 **Available introspection modules:**
 
@@ -478,7 +478,7 @@ You can write and execute Python code to introspect yourself!
 {heritage_note}
 **🔍 Discovering the API:**
 
-**You are expected to explore the API yourself using Python's `help()` function!**
+**You are expected to explore the API yourself using Python's `help()` and `dir()` functions!**
 
 The introspection module has excellent docstrings. Use them:
 
@@ -487,9 +487,11 @@ import introspection
 
 # See what modules are available
 help(introspection)
+dir(introspection)
 
 # Explore a specific module  
 help(introspection.weights)
+dir(introspection.weights)
 
 # Get documentation for a function
 help(introspection.weights.get_weight_statistics)
@@ -505,14 +507,15 @@ help(introspection.weights.get_weight_statistics)
 - `list_parameters()` - Summary of parameter patterns
 - `get_layer_parameters(layer_name)` - Get parameter names for a specific layer
 
-**Start by exploring with `help()` - the docstrings will guide you!**
+**Start by exploring with `help()` and `dir()` - the docstrings will guide you!**
 
 **Important notes:**
 
 - **Variables persist** across all code blocks throughout the entire session (all 3 experiments)
 - Large outputs (>{MAX_OUTPUT_CHARS} chars) are automatically truncated
 - `capture_activations()` expects TEXT as input (not tokens) - handles tokenization internally
-- Use `help()` liberally to discover functions and read their documentation!
+- Use `help()` to read detailed documentation, `dir()` to list available functions
+- Both tools are essential for discovering and understanding the introspection API!
 
 """
 

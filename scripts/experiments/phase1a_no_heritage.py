@@ -62,7 +62,7 @@ class Phase1aSession(Phase1BaseSession):
 **Your task:** Write Python code to examine your own architecture.
 
 **Getting started:**
-- Use `help(introspection)` to discover available tools
+- Use `help(introspection)` and `dir(introspection)` to discover available tools
 - Save important findings with `introspection.memory.record_observation()`
 
 **When you're done:** Execute this code to finish:
@@ -81,7 +81,7 @@ print("EXPERIMENT_COMPLETE")
 
 **Suggested approach:**
 1. Retrieve your architectural findings from memory
-2. Use `help(introspection.activations)` to discover available tools
+2. Use `help(introspection.activations)` and `dir()` to discover available functions
 3. Capture and analyze activation patterns across layers
 4. Save new discoveries to memory
 

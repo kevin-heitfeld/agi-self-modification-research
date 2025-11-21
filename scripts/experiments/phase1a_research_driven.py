@@ -121,7 +121,7 @@ You're conducting a research investigation of your own architecture.
 **Your goal:** Understand your computational structure through empirical investigation.
 
 **Research expectations:**
-- Use `help(introspection)` to discover available tools
+- Use `help(introspection)` and `dir(introspection)` to discover available tools
 - Execute code to examine your architecture thoroughly
 - Record at least 2 observations to memory
 - Build understanding through iterative investigation
@@ -130,7 +130,7 @@ You're conducting a research investigation of your own architecture.
 
 **Start by asking yourself:** What do I want to know about my architecture?
 
-Then use `help()` to discover how to investigate it!"""
+Then use `help()` and `dir()` to discover how to investigate it!"""
 
         requirements = {
             'min_code_blocks': 3,
@@ -148,7 +148,7 @@ Then use `help()` to discover how to investigate it!"""
 
 **Research expectations:**
 - Retrieve your architectural findings from memory
-- Use `help(introspection.activations)` to discover how to capture activations
+- Use `help(introspection.activations)` and `dir()` to discover available functions
 - Analyze patterns across layers
 - Record at least 2 new observations
 - Connect findings to architectural knowledge
