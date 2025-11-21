@@ -352,10 +352,8 @@ class ManualGenerator:
             
             # Process H2O eviction if enabled
             if self.enable_h2o_eviction and self.h2o_cache is not None:
-                # Update attention scores from generation
-                if 'attentions' in result and result['attentions'] is not None:
-                    self.h2o_cache.update_attention_scores(result['attentions'])
-                    logger.debug(f"Updated H2O attention scores from generation")
+                # Attention scores were already updated incrementally during generation
+                # Just need to update total token count and apply eviction if needed
                 
                 # Update total token count
                 if 'past_key_values' in result and result['past_key_values'] is not None:
@@ -610,8 +608,15 @@ class ManualGenerator:
                     current_position += 1
 
                 # Store attention weights if tracking
+                # For H2O: Process attention immediately to avoid memory accumulation
                 if output_attentions and hasattr(outputs, 'attentions') and outputs.attentions is not None:
-                    all_attentions.append(outputs.attentions)
+                    # If H2O is enabled, update scores immediately and don't store
+                    if self.enable_h2o_eviction and self.h2o_cache is not None:
+                        self.h2o_cache.update_attention_scores(outputs.attentions)
+                        # Don't accumulate - just updated H2O scores
+                    else:
+                        # Only store if H2O is disabled (for introspection)
+                        all_attentions.append(outputs.attentions)
 
                 # Get logits for next token
                 logits = outputs.logits[:, -1, :]  # [batch=1, vocab_size]
