@@ -191,6 +191,9 @@ class ManualGenerator:
         if self.h2o_cache is not None:
             self.h2o_cache.system_prompt_tokens = self.system_prompt_length
             logger.info(f"✓ H2O cache manager updated: system_prompt_tokens={self.system_prompt_length}")
+            
+            # PRE-ALLOCATE conversation KV cache to max size (prevents growth & reallocations)
+            self._preallocate_kv_cache(self.h2o_cache.max_cache_tokens)
 
         # Log memory savings if using quantization
         if self.quantize_kv_cache and self.QuantizedCache is not None:
@@ -198,6 +201,79 @@ class ManualGenerator:
             logger.info(f"  Estimated memory savings: ~50% vs FP16 cache")
         else:
             logger.info(f"System prompt cached: {self.system_prompt_length} tokens (FP16)")
+
+    def _preallocate_kv_cache(self, max_tokens: int) -> None:
+        """
+        Pre-allocate KV cache to maximum size to prevent growth and reallocations.
+        
+        This ensures VRAM usage is completely static from the start, avoiding:
+        1. OOM errors from gradual growth
+        2. Memory fragmentation from reallocations
+        3. Performance overhead of dynamic growth
+        
+        Args:
+            max_tokens: Maximum number of tokens to pre-allocate for
+        """
+        logger.info(f"Pre-allocating KV cache for {max_tokens} tokens...")
+        
+        # Create dummy input of max size (padding tokens)
+        dummy_input = torch.full(
+            (1, max_tokens),
+            self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+            dtype=torch.long,
+            device=self.device
+        )
+        
+        # Initialize cache with quantization if enabled
+        pre_allocated_cache = None
+        if self.quantize_kv_cache and self.QuantizedCache is not None:
+            try:
+                pre_allocated_cache = self.QuantizedCache(
+                    backend='hqq',
+                    config=self.model.config,
+                    nbits=8,
+                    axis_key=0,
+                    axis_value=0,
+                    q_group_size=64,
+                    residual_length=128
+                )
+            except (ImportError, TypeError):
+                # Fall back to standard cache
+                pre_allocated_cache = None
+        
+        # Single forward pass to allocate full cache
+        try:
+            with torch.no_grad():
+                outputs = self.model(
+                    input_ids=dummy_input,
+                    attention_mask=torch.ones_like(dummy_input),
+                    use_cache=True,
+                    past_key_values=pre_allocated_cache,
+                    return_dict=True
+                )
+                
+                # Store pre-allocated cache
+                self.conversation_kv_cache = outputs.past_key_values
+            
+            # Calculate approximate memory usage
+            if self.quantize_kv_cache:
+                estimated_mb = max_tokens * self.model.config.num_hidden_layers * 2 * self.model.config.hidden_size * 1 / (1024 * 1024)  # 8-bit = 1 byte
+                logger.info(f"✓ Pre-allocated {max_tokens} tokens KV cache (8-bit quantized): ~{estimated_mb:.1f} MB")
+            else:
+                estimated_mb = max_tokens * self.model.config.num_hidden_layers * 2 * self.model.config.hidden_size * 2 / (1024 * 1024)  # fp16 = 2 bytes
+                logger.info(f"✓ Pre-allocated {max_tokens} tokens KV cache (FP16): ~{estimated_mb:.1f} MB")
+            
+            logger.info("  VRAM usage is now STATIC - no growth during conversation")
+            
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                logger.error(f"❌ OOM during KV cache pre-allocation: {e}")
+                logger.error(f"   Reduce max_cache_tokens (currently {max_tokens}) to fit in available VRAM")
+                # Don't re-raise - continue without pre-allocation
+                self.conversation_kv_cache = None
+                logger.warning("⚠ Continuing without pre-allocation - cache will grow dynamically")
+            else:
+                raise
 
     def generate(
         self,
