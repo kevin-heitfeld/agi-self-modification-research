@@ -24,11 +24,68 @@ This is why long conversations cause OOM errors even when the model itself fits 
 
 ---
 
+## Current Implementation: What We Actually Do
+
+Before discussing advanced strategies, let's clarify what our system currently does:
+
+### Two-Level Caching:
+
+1. **System Prompt Cache** (Static, ~6000 tokens)
+   - Cached once at session start
+   - Regenerated fresh each turn (quantized) or deep-copied (standard)
+   - Memory: ~3-4 GB (8-bit quantized)
+   - **Never grows**
+
+2. **Conversation KV Cache** (Dynamic, Grows Each Turn)
+   - Stores KV pairs for entire conversation history
+   - **Grows linearly:** system + turn1 + turn2 + turn3...
+   - Updated after each generation
+   - Passed to next turn for continued generation
+   - **This is what causes OOM!**
+
+### How It Works Currently:
+
+```
+Turn 1: System (6000) + User (50) + Assistant (200) = 6250 tokens cached
+Turn 2: Previous 6250 + User (50) + Assistant (200) = 6500 tokens cached
+Turn 3: Previous 6500 + User (50) + Assistant (200) = 6750 tokens cached
+...continues growing until OOM! 💥
+```
+
+### Our Conversation Pruning (Not Cache Eviction):
+
+When token limit is reached, we:
+1. **Remove old messages from conversation text** (RAM)
+2. **Clear KV cache entirely** (`conversation_kv_cache = None`)
+3. **Rebuild cache from scratch** with pruned conversation
+
+**This is different from KV cache eviction:**
+- ✅ Clears GPU memory completely
+- ✅ Simpler to implement
+- ✅ No complex eviction logic
+- ❌ Model loses old context entirely
+- ❌ Must recompute from scratch
+
+**Conversation Pruning vs KV Cache Eviction:**
+
+| Aspect | Conversation Pruning (Current) | KV Cache Eviction (Proposed) |
+|--------|-------------------------------|------------------------------|
+| **What's removed** | Old message text from RAM | Old KV pairs from GPU cache |
+| **Conversation text** | Shortened (messages deleted) | Unchanged (all messages kept) |
+| **KV cache** | Cleared entirely, rebuilt | Selectively trimmed |
+| **Model visibility** | Can't see pruned messages | Sees all text, recomputes for evicted |
+| **Memory control** | Indirect (via conversation length) | Direct (GPU memory cap) |
+| **Implementation** | ✅ Simple (already done) | ❌ Complex (needs custom logic) |
+
+---
+
 ## Strategy 3: Static KV Cache with Fixed Size
 
 ### What Is It?
 
 Pre-allocate a fixed-size KV cache buffer and implement a **sliding window** or **eviction policy** when the cache fills up.
+
+**Key difference from our current approach:** Keep full conversation text visible to model, but selectively evict KV pairs to cap GPU memory.
 
 ### How It Works:
 
@@ -101,10 +158,16 @@ You'd need to:
 ### Our Situation:
 
 **Not ideal for Phase 1 experiments** because:
+- We already have conversation pruning that clears the cache
 - Research conversations need full context for coherent investigation
-- Losing early observations could hurt quality of later reflections
 - Our conversations are relatively short (~20 iterations)
-- We have other options (4-bit quantization, reduced limits)
+- 4-bit quantization provides sufficient headroom
+- Simpler to clear cache than implement selective eviction
+
+**Would be useful if:**
+- You need model to "see" full conversation text even when cache is full
+- You can tolerate recomputation overhead for evicted tokens
+- You want more gradual degradation than full cache reset
 
 ---
 
@@ -261,22 +324,25 @@ This is essentially reimplementing vLLM's core innovation.
 
 ## Recommendation for Our Project:
 
-**Immediate (Easy):**
+**Immediate (Done):**
 1. ✅ CUDA fragmentation flag (already added)
-2. 🔥 **Try 4-bit model quantization** (one-line change, ~3.5 GB savings)
+2. ✅ **4-bit model quantization** (now default, ~7 GB savings vs 8-bit)
 
-**Short-term (Medium):**
-3. 4-bit KV cache (change `nbits=8` → `nbits=4`)
-4. Shorter system prompts if possible
+**Short-term (If needed):**
+3. Monitor memory usage with 4-bit - may not need further optimization
+4. 4-bit KV cache if still hitting OOM (change `nbits=8` → `nbits=4`)
+5. Shorter system prompts if possible
 
-**Long-term (Complex):**
-5. Static KV cache if we need unlimited conversation length
-6. PagedAttention / vLLM if we move to production serving
+**Long-term (Complex, likely unnecessary):**
+6. Static KV cache if we need unlimited conversation length
+7. PagedAttention / vLLM if we move to production serving
 
 **For Phase 1 experiments specifically:**
-- 4-bit quantization + reduced token limits should be sufficient
-- Quality should still be good for introspection tasks
-- Can always run 8-bit for final "best" runs
+- ✅ 4-bit quantization now default (~11 GB total vs ~18 GB with 8-bit)
+- ✅ Conversation pruning handles growing cache
+- ✅ Reduced limits + 4-bit should provide sufficient headroom
+- Quality should remain excellent with NF4 + double quantization
+- Can always revert to 8-bit for "gold standard" runs if needed
 
 ---
 
