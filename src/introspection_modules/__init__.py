@@ -175,7 +175,7 @@ def create_introspection_module(
 
     Args:
         model: The PyTorch model to introspect
-        tokenizer: Tokenizer for the model (needed for activation monitoring)
+        tokenizer: Tokenizer for your architecture (needed for activation monitoring)
         memory_system: MemorySystem instance (optional)
         heritage_system: HeritageSystem instance (optional, excluded in Phase 1a)
         phase: Experimental phase ('1a', '1b', '1c', '1d', '1e', '2')
@@ -232,33 +232,42 @@ USAGE:
 
 FUNCTIONS:
     get_architecture_summary() -> Dict
-        Get a comprehensive overview of the model architecture including
+        Get a comprehensive overview of your architecture including
         total parameters, layers, embedding dimensions, and configuration.
     
     describe_layer(layer_names: Union[str, List[str]]) -> Dict
-        Get detailed information about specific layers including their
-        type, parameters, input/output shapes, and connections.
+        Get NATURAL LANGUAGE description of layers: what they do, their role,
+        and how they fit into your architecture. Best for understanding conceptually.
+        Returns: name, type, explanation, role, parameters, input/output shapes
     
     list_layers(layer_type: str = None, pattern: str = None) -> List[str]
-        List all layers in the model, optionally filtered by type or name pattern.
+        List all layers in your architecture, optionally filtered by type or name pattern.
         Examples: layer_type='Linear', pattern='attention'
     
     get_layer_info(layer_names: Union[str, List[str]]) -> Dict
-        Get technical information about layers (similar to describe_layer
-        but with different formatting).
+        Get TECHNICAL metadata about layers: parameter names, shapes, counts.
+        Best for detailed inspection of layer structure and parameters.
+        Returns: name, type, parameters, trainable_parameters, parameter_names, shape_info
     
     find_similar_layers(reference_layer: str, top_k: int = 5) -> List[Dict]
         Find layers structurally similar to a reference layer based on
         parameter shapes and types.
+
+TIP: Use describe_layer() to understand "what is this?", use get_layer_info() to see "what's inside?"
 
 USAGE:
     # Get overview
     summary = introspection.architecture.get_architecture_summary()
     print(f"Total parameters: {summary['total_parameters']}")
     
-    # Explore layers
-    layers = introspection.architecture.list_layers(pattern='attention')
-    info = introspection.architecture.describe_layer(layers[0])
+    # Understand a layer conceptually
+    desc = introspection.architecture.describe_layer('model.layers.0')
+    print(desc['explanation'])  # Natural language description
+    
+    # Inspect layer details technically
+    info = introspection.architecture.get_layer_info('model.layers.0')
+    print(info['parameter_names'])  # List of parameter names
+    print(info['shape_info'])  # Shapes of each parameter
 '''
     arch_module.get_architecture_summary = _make_wrapper(architecture.get_architecture_summary, model)
     arch_module.describe_layer = _make_wrapper(architecture.describe_layer, model)
@@ -277,7 +286,7 @@ FUNCTIONS:
         L1/L2 norms, sparsity, and value distribution.
     
     list_parameters(pattern: str = None) -> List[str]
-        List all parameter names in the model, optionally filtered by pattern.
+        List all parameter names in your architecture, optionally filtered by pattern.
         Examples: pattern='attention', pattern='weight' (excludes biases)
     
     get_layer_parameters(layer_names: Union[str, List[str]]) -> List[str]
@@ -463,7 +472,7 @@ FUNCTIONS:
     
     find_influential_tokens(text: str, layer_names: Union[str, List[str]] = None) -> Dict
         Identify which tokens have the strongest gradient signal.
-        These tokens most influence the model's processing.
+        These tokens most influence your processing.
     
     compute_layer_gradients(text: str, target_layer: str,
                            layer_names: Union[str, List[str]] = None) -> Dict
