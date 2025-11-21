@@ -178,8 +178,30 @@ class CodeExecutor:
                         error_msg += f": {failed_line}"
                 except:
                     pass
+                
+                # Add helpful hint for TypeError related to function arguments
+                if isinstance(e, TypeError) and any(hint in str(e).lower() for hint in [
+                    'unexpected keyword argument',
+                    'missing', 
+                    'required positional argument',
+                    'takes', 
+                    'argument'
+                ]):
+                    error_msg += "\n\n💡 Hint: Use help() to see the correct function signature:\n"
+                    error_msg += "   help(introspection.module.function_name)"
             else:
                 error_msg = f"{type(e).__name__}: {str(e)}"
+                
+                # Add helpful hint for TypeError related to function arguments (no line number case)
+                if isinstance(e, TypeError) and any(hint in str(e).lower() for hint in [
+                    'unexpected keyword argument',
+                    'missing',
+                    'required positional argument', 
+                    'takes',
+                    'argument'
+                ]):
+                    error_msg += "\n\n💡 Hint: Use help() to see the correct function signature:\n"
+                    error_msg += "   help(introspection.module.function_name)"
             
             self.logger.error(f"Code execution exception: {error_msg}")
             return False, stdout_capture.getvalue(), error_msg
@@ -288,8 +310,30 @@ class CodeExecutor:
                         error_msg += f": {failed_line}"
                 except:
                     pass
+                
+                # Add helpful hint for TypeError related to function arguments
+                if isinstance(e, TypeError) and any(hint in str(e).lower() for hint in [
+                    'unexpected keyword argument',
+                    'missing', 
+                    'required positional argument',
+                    'takes', 
+                    'argument'
+                ]):
+                    error_msg += "\n\n💡 Hint: Use help() to see the correct function signature:\n"
+                    error_msg += "   help(introspection.module.function_name)"
             else:
                 error_msg = f"{type(e).__name__}: {str(e)}"
+                
+                # Add helpful hint for TypeError related to function arguments (no line number case)
+                if isinstance(e, TypeError) and any(hint in str(e).lower() for hint in [
+                    'unexpected keyword argument',
+                    'missing',
+                    'required positional argument', 
+                    'takes',
+                    'argument'
+                ]):
+                    error_msg += "\n\n💡 Hint: Use help() to see the correct function signature:\n"
+                    error_msg += "   help(introspection.module.function_name)"
             
             self.logger.error(f"Code execution exception: {error_msg}")
             return False, stdout_capture.getvalue(), error_msg
