@@ -53,8 +53,8 @@ class ManualGenerator:
         device: str = "cuda", 
         quantize_kv_cache: bool = False,
         enable_h2o_eviction: bool = False,
-        max_cache_tokens: int = 7000,
-        recent_window: int = 1000
+        max_cache_tokens: int = 14000,
+        recent_window: int = 2000
     ):
         """
         Initialize manual generator.
@@ -65,8 +65,8 @@ class ManualGenerator:
             device: Device to run on ("cuda" or "cpu")
             quantize_kv_cache: Use HQQ quantization for KV cache (saves 50-75% memory)
             enable_h2o_eviction: Enable H2O cache eviction (unlimited conversation length)
-            max_cache_tokens: Maximum tokens in KV cache (only used if H2O enabled)
-            recent_window: Recent window size for H2O eviction
+            max_cache_tokens: Maximum tokens in KV cache (default 14K for L4 GPU)
+            recent_window: Recent window size for H2O eviction (never evicted)
         """
         self.model = model
         self.tokenizer = tokenizer
