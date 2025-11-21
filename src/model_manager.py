@@ -268,6 +268,12 @@ class ModelManager:
         Returns:
             True if successful, False otherwise
         """
+        # Configure CUDA memory allocator to prevent fragmentation
+        # This is especially important for long-running sessions (like Colab)
+        # See: https://pytorch.org/docs/stable/notes/cuda.html#environment-variables
+        import os
+        os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
+        
         try:
             # Check if already loaded
             if self.model is not None and self.tokenizer is not None:
