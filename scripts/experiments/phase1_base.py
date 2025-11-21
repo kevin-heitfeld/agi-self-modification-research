@@ -77,7 +77,7 @@ class ColoredFormatter(logging.Formatter):
         'USER': '\033[1;36m',        # Bold Cyan for user messages
         'DEBUG': '\033[90m',         # Gray for debug messages
         'TOKENS': '\033[95m',        # Magenta for token usage
-        'MEMORY': '\033[1;31m',      # Bold Red for memory warnings/pruning
+        'MEMORY': '\033[1;31m',      # Bold Red for memory warnings
         'INITIALIZATION': '\033[1;37m',  # Bold White for initialization
         'CHECKPOINT': '\033[33m',    # Yellow for checkpoint saves
         'SESSION': '\033[36m',       # Cyan for session management
@@ -229,12 +229,8 @@ class Phase1BaseSession(ABC):
         self.logger.info(f"Directory: {self.session_dir}")
         self.logger.info("")
 
-        # Track conversation history
+        # Track conversation history (saved to conversation.json)
         self.conversation_history: List[Dict[str, str]] = []
-        
-        # Track COMPLETE conversation history (never pruned, kept in CPU RAM)
-        # This is saved to conversation.json for full analysis
-        self.complete_conversation_history: List[Dict[str, str]] = []
 
         # Initialize GPU memory monitor
         self.gpu_monitor = GPUMonitor(logger=self.logger, gpu_total_gb=15.0)
@@ -491,17 +487,14 @@ Use `introspection.memory.record_observation()` to save key discoveries.
 
     def _add_message(self, role: str, content: str):
         """
-        Add a message to both conversation histories.
+        Add a message to conversation history.
         
         Args:
             role: Message role ('user' or 'assistant')
             content: Message content
         """
         message = {"role": role, "content": content}
-        # Add to active conversation (may be pruned)
         self.conversation_history.append(message)
-        # Add to complete conversation (never pruned, saved to file)
-        self.complete_conversation_history.append(message)
 
     def chat(self, user_message: str) -> str:
         """
@@ -795,7 +788,6 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         self.gpu_monitor.snapshot("before_reset")
         
         self.conversation_history = []
-        self.complete_conversation_history = []  # Also reset complete history
         self.conversation_kv_cache = None
         
         # Reset Python namespace for code execution
@@ -856,23 +848,21 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         
         self.logger.info(f"[SESSION] Saving results to {self.session_dir}")
         
-        # Save COMPLETE conversation history (never pruned)
+        # Save conversation history
         conversation_file = self.session_dir / "conversation.json"
         with open(conversation_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "session_name": self.session_name,
                 "phase": self.phase_name,
                 "timestamp": datetime.now().isoformat(),
-                "conversation": self.complete_conversation_history,  # Use complete, not pruned
+                "conversation": self.conversation_history,
                 "metadata": {
-                    "total_messages": len(self.complete_conversation_history),
-                    "pruned_to_messages": len(self.conversation_history),
-                    "messages_pruned": len(self.complete_conversation_history) - len(self.conversation_history)
+                    "total_messages": len(self.conversation_history),
+                    "uses_h2o_cache": True,  # KV cache eviction, not message pruning
                 }
             }, f, indent=2, ensure_ascii=False)
         self.logger.info(f"[SESSION] Saved conversation: {conversation_file}")
-        self.logger.info(f"[SESSION]   Complete history: {len(self.complete_conversation_history)} messages")
-        self.logger.info(f"[SESSION]   Active (pruned): {len(self.conversation_history)} messages")
+        self.logger.info(f"[SESSION]   Total messages: {len(self.conversation_history)} (H2O cache eviction)")
         
         # Generate summary statistics
         summary = {
@@ -881,17 +871,16 @@ Use `introspection.memory.record_observation()` to save key discoveries.
             "phase_description": self.get_phase_description(),
             "timestamp": datetime.now().isoformat(),
             "statistics": {
-                "total_turns": len(self.complete_conversation_history) // 2,  # Each turn = user + assistant
-                "total_tokens": sum(len(msg.get("content", "")) for msg in self.complete_conversation_history),
-                "pruned_turns": len(self.conversation_history) // 2,
-                "messages_pruned": len(self.complete_conversation_history) - len(self.conversation_history)
+                "total_turns": len(self.conversation_history) // 2,  # Each turn = user + assistant
+                "total_tokens": sum(len(msg.get("content", "")) for msg in self.conversation_history),
+                "h2o_cache_enabled": True,
             }
         }
         
         # Count code executions if code_executor exists
         if hasattr(self, 'code_executor'):
             code_blocks = []
-            for msg in self.complete_conversation_history:
+            for msg in self.conversation_history:
                 if msg.get("role") == "assistant":
                     content = msg.get("content", "")
                     # Count code blocks (simple heuristic)
