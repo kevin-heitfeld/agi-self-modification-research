@@ -59,19 +59,19 @@ class H2OCacheManager:
     
     def __init__(
         self, 
-        max_cache_tokens: int = 7000,
-        system_prompt_tokens: int = 6000,
-        recent_window: int = 1000,
+        max_cache_tokens: int,
+        system_prompt_tokens: int,
+        recent_window: int,
         min_attention_threshold: float = 0.0
     ):
         """
         Initialize H2O Cache Manager.
         
         Args:
-            max_cache_tokens: Maximum KV cache size (in tokens)
-            system_prompt_tokens: Number of system prompt tokens (always keep)
-            recent_window: Number of recent tokens to always keep
-            min_attention_threshold: Minimum attention score to consider a token
+            max_cache_tokens: Maximum KV cache size (in tokens) - get from ModelManager.get_optimal_limits()
+            system_prompt_tokens: Number of system prompt tokens (always keep) - set after caching system prompt
+            recent_window: Number of recent tokens to always keep - get from ModelManager.get_optimal_limits()
+            min_attention_threshold: Minimum attention score to consider a token (default: 0.0)
         """
         self.max_cache_tokens = max_cache_tokens
         self.system_prompt_tokens = system_prompt_tokens

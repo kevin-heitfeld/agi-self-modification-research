@@ -53,8 +53,8 @@ class ManualGenerator:
         device: str = "cuda", 
         quantize_kv_cache: bool = False,
         enable_h2o_eviction: bool = False,
-        max_cache_tokens: int = 14000,
-        recent_window: int = 2000
+        max_cache_tokens: Optional[int] = None,
+        recent_window: Optional[int] = None
     ):
         """
         Initialize manual generator.
@@ -65,14 +65,24 @@ class ManualGenerator:
             device: Device to run on ("cuda" or "cpu")
             quantize_kv_cache: Use HQQ quantization for KV cache (saves 50-75% memory)
             enable_h2o_eviction: Enable H2O cache eviction (unlimited conversation length)
-            max_cache_tokens: Maximum tokens in KV cache (default 14K for L4 GPU)
-            recent_window: Recent window size for H2O eviction (never evicted)
+            max_cache_tokens: Maximum tokens in KV cache (required if H2O enabled, get from ModelManager.get_optimal_limits())
+            recent_window: Recent window size for H2O eviction (required if H2O enabled, get from ModelManager.get_optimal_limits())
         """
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
         self.quantize_kv_cache = quantize_kv_cache
         self.enable_h2o_eviction = enable_h2o_eviction
+
+        # Validate H2O parameters if enabled
+        if enable_h2o_eviction:
+            if max_cache_tokens is None or recent_window is None:
+                raise ValueError(
+                    "When enable_h2o_eviction=True, you must provide max_cache_tokens and recent_window.\n"
+                    "Get these values from ModelManager.get_optimal_limits():\n"
+                    "  limits = model_manager.get_optimal_limits(quantization='4bit')\n"
+                    "  ManualGenerator(..., max_cache_tokens=limits['max_cache_tokens'], recent_window=limits['recent_window'])"
+                )
 
         # Import quantized cache (transformers 4.57+)
         self.QuantizedCache = None
@@ -99,6 +109,8 @@ class ManualGenerator:
         self.h2o_cache = None
         if enable_h2o_eviction:
             from .memory.h2o_cache_manager import H2OCacheManager
+            # At this point, validation above ensures max_cache_tokens and recent_window are not None
+            assert max_cache_tokens is not None and recent_window is not None  # Type narrowing for mypy
             # System prompt length will be set after caching
             self.h2o_cache = H2OCacheManager(
                 max_cache_tokens=max_cache_tokens,

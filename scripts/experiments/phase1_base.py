@@ -378,23 +378,20 @@ earlier discoveries without needing to query memory every time.
         self.logger.info("  ✓ Code execution interface ready")
 
         # Initialize manual generator with H2O cache eviction
-        # Use values from optimal_limits if available, otherwise use defaults
-        max_cache_tokens = self.optimal_limits.get('max_cache_tokens', 7000)
-        recent_window = self.optimal_limits.get('recent_window', 1000)
-        
+        # Values come from optimal_limits (guaranteed to have these keys)
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
             quantize_kv_cache=True,
             enable_h2o_eviction=True,  # Enable H2O cache eviction
-            max_cache_tokens=max_cache_tokens,
-            recent_window=recent_window
+            max_cache_tokens=self.optimal_limits['max_cache_tokens'],
+            recent_window=self.optimal_limits['recent_window']
         )
         
         # Bind manual generator to code interface for generation introspection
         self.code_interface.bind_manual_generator(self.generator)
-        self.logger.info(f"  ✓ Manual generator initialized with H2O cache eviction (max_cache_tokens={max_cache_tokens}, recent_window={recent_window})")
+        self.logger.info(f"  ✓ Manual generator initialized with H2O cache eviction (max_cache_tokens={self.optimal_limits['max_cache_tokens']}, recent_window={self.optimal_limits['recent_window']})")
 
         # Take GPU snapshot after model load
         self.gpu_monitor.snapshot("after_model_load")
