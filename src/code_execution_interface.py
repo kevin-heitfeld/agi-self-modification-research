@@ -282,10 +282,10 @@ class CodeExecutionInterface:
             return False, "No code blocks found in response", None
 
         # Execute all code blocks in sequence with shared namespace
-        all_outputs = []
-        all_errors = []
+        all_results = []  # List of (success, message) tuples in execution order
         has_any_print = False
         has_empty_output = False
+        has_any_error = False
 
         for idx, code in enumerate(code_blocks, 1):
             logger.info(f"\n[CODE BLOCK {idx}/{len(code_blocks)}]")
@@ -305,31 +305,29 @@ class CodeExecutionInterface:
                 logger.info(f"[OUTPUT]\n{output}")
                 # Truncate output to prevent token explosion
                 truncated_output = truncate_output(output)
-                all_outputs.append(f"## Code Block {idx} Output:\n{truncated_output}")
+                all_results.append((True, f"## Code Block {idx} Output:\n{truncated_output}"))
                 
                 # Track if we got empty output
                 if not output.strip():
                     has_empty_output = True
             else:
                 logger.error(f"[ERROR] {error}")
+                has_any_error = True
                 # Never truncate errors - they're usually short and important
-                all_errors.append(f"## Code Block {idx} Error:\n{error}")
+                all_results.append((False, f"## Code Block {idx} Error:\n{error}"))
 
-        # Format results
-        if all_errors:
-            # Had errors
-            error_msg = "\n\n".join(all_errors)
-            if all_outputs:
-                # Some blocks succeeded
-                output_msg = "\n\n".join(all_outputs)
-                return True, f"{output_msg}\n\n{error_msg}", error_msg
-            else:
-                # All blocks failed
-                return True, error_msg, error_msg
+        # Format results in execution order
+        all_messages = [msg for success, msg in all_results]
+        combined_output = "\n\n".join(all_messages)
+        
+        # Determine return values
+        if has_any_error:
+            # Had at least one error
+            error_messages = [msg for success, msg in all_results if not success]
+            error_msg = "\n\n".join(error_messages)
+            return True, combined_output, error_msg
         else:
             # All succeeded
-            output_msg = "\n\n".join(all_outputs)
-            
             # Add hint if code ran but produced no output AND none of the code blocks had print statements
             # (Only hint if model seems to not know about print, not if they just forgot it once)
             if has_empty_output and not has_any_print:
@@ -345,9 +343,9 @@ class CodeExecutionInterface:
                     "print(summary)\n"
                     "```"
                 )
-                output_msg += hint
+                combined_output += hint
             
-            return True, output_msg, None
+            return True, combined_output, None
 
     def reset_namespace(self):
         """
