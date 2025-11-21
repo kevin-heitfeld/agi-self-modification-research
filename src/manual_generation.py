@@ -46,7 +46,16 @@ class ManualGenerator:
         >>> print(result["generated_text"])
     """
 
-    def __init__(self, model, tokenizer, device: str = "cuda", quantize_kv_cache: bool = False):
+    def __init__(
+        self, 
+        model, 
+        tokenizer, 
+        device: str = "cuda", 
+        quantize_kv_cache: bool = False,
+        enable_h2o_eviction: bool = False,
+        max_cache_tokens: int = 7000,
+        recent_window: int = 1000
+    ):
         """
         Initialize manual generator.
 
@@ -55,11 +64,15 @@ class ManualGenerator:
             tokenizer: HuggingFace tokenizer
             device: Device to run on ("cuda" or "cpu")
             quantize_kv_cache: Use HQQ quantization for KV cache (saves 50-75% memory)
+            enable_h2o_eviction: Enable H2O cache eviction (unlimited conversation length)
+            max_cache_tokens: Maximum tokens in KV cache (only used if H2O enabled)
+            recent_window: Recent window size for H2O eviction
         """
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
         self.quantize_kv_cache = quantize_kv_cache
+        self.enable_h2o_eviction = enable_h2o_eviction
 
         # Import quantized cache (transformers 4.57+)
         self.QuantizedCache = None
@@ -81,6 +94,21 @@ class ManualGenerator:
         self.system_prompt_cache: Optional[Any] = None
         self.system_prompt_length: int = 0
         self.system_prompt_input_ids: Optional[torch.Tensor] = None  # For regenerating quantized cache
+
+        # H2O cache manager for intelligent eviction
+        self.h2o_cache = None
+        if enable_h2o_eviction:
+            from .memory.h2o_cache_manager import H2OCacheManager
+            # System prompt length will be set after caching
+            self.h2o_cache = H2OCacheManager(
+                max_cache_tokens=max_cache_tokens,
+                system_prompt_tokens=0,  # Updated after cache_system_prompt()
+                recent_window=recent_window
+            )
+            logger.info(f"✓ H2O cache eviction enabled: max={max_cache_tokens}, recent_window={recent_window}")
+        
+        # Conversation KV cache (grows with each turn, evicted by H2O)
+        self.conversation_kv_cache: Optional[Any] = None
 
         logger.info(f"ManualGenerator initialized on {device}")
 
@@ -159,6 +187,11 @@ class ManualGenerator:
         self.system_prompt_cache = outputs.past_key_values
         self.system_prompt_length = inputs["input_ids"].shape[1]
 
+        # Update H2O cache manager with system prompt length
+        if self.h2o_cache is not None:
+            self.h2o_cache.system_prompt_tokens = self.system_prompt_length
+            logger.info(f"✓ H2O cache manager updated: system_prompt_tokens={self.system_prompt_length}")
+
         # Log memory savings if using quantization
         if self.quantize_kv_cache and self.QuantizedCache is not None:
             logger.info(f"✓ System prompt cached: {self.system_prompt_length} tokens (8-bit quantized)")
@@ -200,6 +233,82 @@ class ManualGenerator:
             - cache_used: Whether KV cache was used
             - stopped_reason: Why generation stopped ("max_length", "eos", or "other")
             - past_key_values: Final KV cache (if return_cache=True)
+            - attentions: Attention weights (if H2O enabled)
+        """
+        # If H2O is enabled, we need to track attention weights
+        # This requires temporarily switching to eager attention mode
+        original_attn_implementation = None
+        if self.enable_h2o_eviction and self.h2o_cache is not None:
+            # Check if we can modify attention implementation
+            if hasattr(self.model, 'config') and hasattr(self.model.config, '_attn_implementation'):
+                original_attn_implementation = self.model.config._attn_implementation
+                # Switch to eager for attention tracking
+                if original_attn_implementation != 'eager':
+                    self.model.config._attn_implementation = 'eager'
+                    logger.debug(f"Switched attention from '{original_attn_implementation}' to 'eager' for H2O tracking")
+        
+        try:
+            # Call the actual generation implementation
+            result = self._generate_impl(
+                prompt=prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                do_sample=do_sample,
+                use_cache=use_cache,
+                past_key_values=past_key_values,
+                callback=callback,
+                return_cache=return_cache,
+                output_attentions=self.enable_h2o_eviction  # Track attention if H2O enabled
+            )
+            
+            # Process H2O eviction if enabled
+            if self.enable_h2o_eviction and self.h2o_cache is not None:
+                # Update attention scores from generation
+                if 'attentions' in result and result['attentions'] is not None:
+                    self.h2o_cache.update_attention_scores(result['attentions'])
+                    logger.debug(f"Updated H2O attention scores from generation")
+                
+                # Update total token count
+                if 'past_key_values' in result and result['past_key_values'] is not None:
+                    cache_length = self._get_cache_length(result['past_key_values'])
+                    self.h2o_cache.total_tokens = cache_length
+                    logger.debug(f"H2O cache: {cache_length} total tokens")
+                    
+                    # Apply eviction if needed
+                    if self.h2o_cache.should_evict():
+                        keep_positions = self.h2o_cache.select_tokens_to_keep()
+                        result['past_key_values'] = self.h2o_cache.evict_cache(
+                            result['past_key_values'],
+                            keep_positions
+                        )
+                        logger.info(f"H2O evicted cache: {cache_length} → {len(keep_positions)} tokens")
+            
+            return result
+            
+        finally:
+            # Restore original attention implementation
+            if original_attn_implementation is not None:
+                self.model.config._attn_implementation = original_attn_implementation
+                logger.debug(f"Restored attention to '{original_attn_implementation}'")
+
+    def _generate_impl(
+        self,
+        prompt: str,
+        max_new_tokens: int = 100,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        do_sample: bool = True,
+        use_cache: bool = True,
+        past_key_values: Optional[Any] = None,
+        callback: Optional[Callable[[int, torch.Tensor], None]] = None,
+        return_cache: bool = False,
+        output_attentions: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Internal implementation of generation (called by generate()).
+        
+        Separated to allow attention tracking wrapper in generate().
         """
         # Tokenize the prompt
         inputs = self.tokenizer(prompt, return_tensors="pt")
@@ -334,6 +443,9 @@ class ManualGenerator:
         # Track generated tokens
         generated_tokens = []
         stopped_reason = "max_length"
+        
+        # Track attention weights if requested
+        all_attentions = [] if output_attentions else None
 
         # CRITICAL: Calculate position_ids for models with rotary embeddings
         # When using cached KV states, position_ids must account for cached sequence length
@@ -388,6 +500,7 @@ class ManualGenerator:
                         position_ids=position_ids,
                         past_key_values=current_cache,
                         use_cache=use_cache,
+                        output_attentions=output_attentions,
                         return_dict=True
                     )
                 else:
@@ -401,11 +514,16 @@ class ManualGenerator:
                         position_ids=next_position_id,
                         past_key_values=current_cache,
                         use_cache=use_cache,
+                        output_attentions=output_attentions,
                         return_dict=True
                     )
 
                     # Increment position for next token
                     current_position += 1
+
+                # Store attention weights if tracking
+                if output_attentions and hasattr(outputs, 'attentions') and outputs.attentions is not None:
+                    all_attentions.append(outputs.attentions)
 
                 # Get logits for next token
                 logits = outputs.logits[:, -1, :]  # [batch=1, vocab_size]
@@ -455,6 +573,26 @@ class ManualGenerator:
             "cache_used": use_cache,
             "stopped_reason": stopped_reason
         }
+        
+        # Add attention weights if tracked
+        if output_attentions and all_attentions:
+            # Combine attentions from all steps
+            # Each step has tuple of (layer1_attn, layer2_attn, ...)
+            # We want: tuple of (all_layer1_attns, all_layer2_attns, ...)
+            try:
+                # Stack attentions from each layer across all steps
+                num_layers = len(all_attentions[0])
+                combined_attentions = tuple(
+                    torch.cat([step_attns[layer_idx] for step_attns in all_attentions], dim=2)  # Concat along query dim
+                    for layer_idx in range(num_layers)
+                )
+                result["attentions"] = combined_attentions
+                logger.debug(f"Captured attention weights: {len(combined_attentions)} layers")
+            except Exception as e:
+                logger.warning(f"Failed to combine attention weights: {e}")
+                result["attentions"] = None
+        else:
+            result["attentions"] = None
 
         if return_cache:
             # CRITICAL: Don't return HQQ caches - they're corrupted by in-place mutations
