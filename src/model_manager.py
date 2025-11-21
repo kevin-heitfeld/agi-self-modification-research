@@ -378,7 +378,6 @@ class ModelManager:
                 elif isinstance(quantization_config, object) and hasattr(quantization_config, 'load_in_4bit'):
                     load_kwargs["quantization_config"] = quantization_config
                     load_kwargs["device_map"] = "auto"  # Required for quantization
-                    load_kwargs["llm_int8_enable_fp32_cpu_offload"] = True  # Allow CPU offload if needed
                 else:
                     # No quantization, use manual dtype and device placement
                     load_kwargs["torch_dtype"] = torch.float16
@@ -434,7 +433,6 @@ class ModelManager:
                 elif isinstance(quantization_config, object) and hasattr(quantization_config, 'load_in_4bit'):
                     load_kwargs["quantization_config"] = quantization_config
                     load_kwargs["device_map"] = "auto"
-                    load_kwargs["llm_int8_enable_fp32_cpu_offload"] = True  # Allow CPU offload if needed
                     del load_kwargs["attn_implementation"]  # Quantization controls dtype
                 else:
                     load_kwargs["torch_dtype"] = torch.float16
