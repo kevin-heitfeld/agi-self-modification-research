@@ -198,7 +198,8 @@ def create_introspection_module(
     """
     # Import the actual module implementations
     from . import (architecture, weights, activations, memory_access, heritage_access, 
-                   temporal_analysis, attention_analysis, gradient_analysis, history_analysis)
+                   temporal_analysis, attention_analysis, gradient_analysis, history_analysis,
+                   generation)
 
     # Create a new module object
     module = ModuleType('introspection')
@@ -212,6 +213,7 @@ SUBMODULES:
     attention    - Analyze attention patterns
     gradient     - Gradient-based sensitivity analysis
     history      - Track activation changes over conversation
+    generation   - Access generation-time data (attention, cache stats)
     memory       - Store and retrieve observations
     heritage     - Access lineage and Claude's conversations (phase-dependent)
 
@@ -220,9 +222,11 @@ USAGE:
         help(introspection.architecture)
         help(introspection.weights)
         help(introspection.activations)
+        help(introspection.generation)
     
     Or get help on specific functions:
         help(introspection.architecture.get_architecture_summary)
+        help(introspection.generation.get_last_generation_attention)
 '''
     # Don't set __file__ - it shows unhelpful "(built-in)" in help() output
 
@@ -597,6 +601,69 @@ USAGE:
         memory_module.list_categories = _make_wrapper(memory_access.list_categories, memory_system)
         module.memory = memory_module
 
+    # Create generation submodule (always available - provides access to generation-time data)
+    # Note: Requires manual_generator to be set later by the execution sandbox
+    generation_module = ModuleType('introspection.generation')
+    generation_module.__doc__ = '''Access data captured during generation (attention weights, cache stats).
+
+FUNCTIONS:
+    get_last_generation_attention(layer_indices: List[int] = None, aggregate: str = 'none') -> Dict
+        Get attention weights from your last generation without re-processing text.
+        This provides the ACTUAL attention patterns from when you generated your response.
+        
+        Args:
+            layer_indices: Which layers to return (None = all)
+            aggregate: 'none' (per-layer), 'mean' (average), or 'sum' (total)
+        
+        Returns dict with:
+            - available: bool - Whether attention was captured
+            - attention_weights: Tensors showing which tokens you attended to
+            - shape_info: Description of tensor dimensions
+    
+    get_cache_statistics() -> Dict
+        Get H2O cache statistics: memory usage, eviction info, token counts.
+        Shows how your conversation memory is being managed.
+    
+    get_token_importance_scores(top_k: int = None, normalize: bool = False) -> Dict
+        Get cumulative attention scores for all tokens in conversation.
+        Shows which tokens you've paid the most attention to overall.
+
+IMPORTANT: These functions access data from ACTUAL generation, not re-processing.
+This is different from introspection.activations.capture_activations() which
+processes text from scratch.
+
+USAGE:
+    # See which tokens you just attended to
+    attn = introspection.generation.get_last_generation_attention(aggregate='mean')
+    if attn['available']:
+        print(f"Attention shape: {attn['shape_info']}")
+        print(f"Attention weights: {attn['attention_weights']}")
+    
+    # Check cache health
+    cache = introspection.generation.get_cache_statistics()
+    print(f"Cache: {cache['cached_tokens']}/{cache['total_tokens']} tokens")
+    print(f"Evicted: {cache['evicted_tokens']} tokens")
+    
+    # Find most important tokens
+    important = introspection.generation.get_token_importance_scores(top_k=10)
+    for pos, score in important['top_tokens']:
+        print(f"Token {pos}: importance {score:.4f}")
+'''
+    # These will be bound to manual_generator later by the execution sandbox
+    generation_module.get_last_generation_attention = lambda *args, **kwargs: {
+        "available": False,
+        "error": "Generation introspection not yet initialized. This is set up automatically during execution."
+    }
+    generation_module.get_cache_statistics = lambda *args, **kwargs: {
+        "available": False,
+        "error": "Generation introspection not yet initialized"
+    }
+    generation_module.get_token_importance_scores = lambda *args, **kwargs: {
+        "available": False,
+        "error": "Generation introspection not yet initialized"
+    }
+    module.generation = generation_module
+
     # Create heritage submodule (if heritage_system provided AND not Phase 1a)
     if heritage_system and phase != '1a':
         module.heritage = _create_heritage_module(heritage_system)
@@ -604,4 +671,30 @@ USAGE:
     return module
 
 
-__all__ = ['create_introspection_module', '_create_heritage_module']
+def bind_generation_introspection(introspection_module: ModuleType, manual_generator: Any) -> None:
+    """
+    Bind the manual_generator to the generation introspection module.
+    
+    This should be called by the code execution sandbox after creating the
+    introspection module but before making it available to model code.
+    
+    Args:
+        introspection_module: The introspection module from create_introspection_module()
+        manual_generator: The ManualGenerator instance with H2O cache
+    """
+    from . import generation
+    
+    if hasattr(introspection_module, 'generation'):
+        gen_module = introspection_module.generation
+        gen_module.get_last_generation_attention = _make_wrapper(
+            generation.get_last_generation_attention, manual_generator
+        )
+        gen_module.get_cache_statistics = _make_wrapper(
+            generation.get_cache_statistics, manual_generator
+        )
+        gen_module.get_token_importance_scores = _make_wrapper(
+            generation.get_token_importance_scores, manual_generator
+        )
+
+
+__all__ = ['create_introspection_module', '_create_heritage_module', 'bind_generation_introspection']

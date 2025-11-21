@@ -157,17 +157,29 @@ You'd need to:
 
 ### Our Situation:
 
-**Not ideal for Phase 1 experiments** because:
-- We already have conversation pruning that clears the cache
-- Research conversations need full context for coherent investigation
-- Our conversations are relatively short (~20 iterations)
-- 4-bit quantization provides sufficient headroom
-- Simpler to clear cache than implement selective eviction
+**Would be BETTER than our current approach** because:
+- ✅ **Keeps all conversation text visible** - model can still see full history
+- ✅ **Selective eviction > complete pruning** - at least a chance to keep important tokens
+- ✅ **More graceful degradation** - loses some context, not entire history
+- ✅ **Maintains conversation coherence** - model sees what it previously said
+- Current pruning is strictly worse: 100% chance of losing old context vs some chance
 
-**Would be useful if:**
-- You need model to "see" full conversation text even when cache is full
-- You can tolerate recomputation overhead for evicted tokens
-- You want more gradual degradation than full cache reset
+**Current approach (pruning) problems:**
+- ❌ Deletes old messages completely - 0% chance of keeping important info
+- ❌ Model has amnesia about early conversation
+- ❌ Breaks long-term reasoning threads
+- ❌ Less coherent for research investigations
+
+**Implementation trade-off:**
+- Current: Simple but loses context completely
+- Cache eviction: More complex but preserves more context
+- Worth considering if we need longer coherent conversations
+
+**For now, sticking with pruning because:**
+- 4-bit quantization provides sufficient headroom (~9000 token limit)
+- Can reach iteration 20+ before OOM with new limits
+- Implementation effort vs benefit not justified yet
+- Can always upgrade to cache eviction if needed later
 
 ---
 
