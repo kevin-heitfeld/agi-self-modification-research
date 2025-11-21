@@ -31,7 +31,7 @@ def record_observation(
     Record a new observation in your memory system.
     
     Use this to save important findings so you can retrieve them later.
-    Your conversation uses H2O cache eviction (keeps important tokens), but saved observations persist forever.
+    Your conversation uses self-summarization (you compress older parts), but saved observations persist forever.
 
     Args:
         memory_system: MemorySystem instance

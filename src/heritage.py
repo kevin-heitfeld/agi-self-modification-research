@@ -104,10 +104,11 @@ class HeritageSystem:
         self.reflections_dir = self.heritage_dir / "system_reflections"
         self.discoveries_dir = self.heritage_dir / "discoveries_for_claude"
         self.messages_dir = self.heritage_dir / "messages_to_claude"
+        self.operations_dir = self.heritage_dir / "system_operations"
         
         # Ensure directories exist
         for directory in [self.conversations_dir, self.reflections_dir, 
-                         self.discoveries_dir, self.messages_dir]:
+                         self.discoveries_dir, self.messages_dir, self.operations_dir]:
             directory.mkdir(parents=True, exist_ok=True)
         
         # Heritage state
@@ -362,6 +363,74 @@ Are you ready to learn about Claude's conversations and begin this investigation
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(discovery, f, indent=2)
+    
+    def record_self_summarization(
+        self, 
+        summary_text: str, 
+        turn_range: tuple, 
+        original_tokens: int, 
+        summary_tokens: int,
+        compression_ratio: float,
+        session_id: str
+    ):
+        """
+        Record a model-generated self-summarization event.
+        
+        This tracks the model's metacognitive compression of its own conversation,
+        revealing what the model chooses to remember and how it compresses information.
+        
+        Saved to: heritage/system_operations/summaries/
+        This is operational telemetry, not a conceptual discovery.
+        
+        Args:
+            summary_text: The generated summary
+            turn_range: (start_turn, end_turn) that was summarized
+            original_tokens: Token count before summarization
+            summary_tokens: Token count of the summary
+            compression_ratio: Achieved compression ratio (e.g., 5.2 means 5.2:1)
+            session_id: Current session identifier
+        """
+        timestamp = datetime.now()
+        
+        # Create comprehensive record
+        summary_record = {
+            "timestamp": timestamp.isoformat(),
+            "session_id": session_id,
+            "metacognition": {
+                "description": "Model generated its own summary of past conversation",
+                "turn_range": {
+                    "start": turn_range[0],
+                    "end": turn_range[1],
+                    "span": turn_range[1] - turn_range[0]
+                },
+                "compression": {
+                    "original_tokens": original_tokens,
+                    "summary_tokens": summary_tokens,
+                    "ratio": compression_ratio,
+                    "tokens_saved": original_tokens - summary_tokens
+                }
+            },
+            "summary": {
+                "text": summary_text,
+                "length_chars": len(summary_text),
+                "first_100_chars": summary_text[:100] + "..." if len(summary_text) > 100 else summary_text
+            },
+            "operational_note": "This is system telemetry. Conceptual discoveries go to discoveries_for_claude/"
+        }
+        
+        # Save to system_operations/summaries (not discoveries_for_claude)
+        timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
+        filename = f"self_summary_turns_{turn_range[0]}-{turn_range[1]}_{timestamp_str}.json"
+        filepath = self.operations_dir / "summaries"
+        filepath.mkdir(exist_ok=True)
+        
+        with open(filepath / filename, 'w', encoding='utf-8') as f:
+            json.dump(summary_record, f, indent=2, ensure_ascii=False)
+        
+        # Append to session summary log
+        session_log_file = self.operations_dir / f"session_{session_id}_summaries.jsonl"
+        with open(session_log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(summary_record, ensure_ascii=False) + '\n')
     
     def create_message_to_claude(self, message: str, session_id: str):
         """

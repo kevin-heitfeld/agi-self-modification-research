@@ -130,12 +130,12 @@ class ModelManager:
             logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x")
         
         # Default conservative limits (CPU or unknown GPU)
-        # H2O cache eviction: Fixed KV cache size, intelligent token selection
+        # Self-summarization: Model-generated compression for unlimited conversation
         max_cache = int(2000 * size_scale * quant_scale)
         limits = {
             "max_new_tokens": int(max_cache * 0.5),                     # 50% of cache for response (conservative)
-            "max_cache_tokens": max_cache,                              # H2O cache capacity
-            "recent_window": int(max_cache * 0.25),                     # 25% recent window
+            "max_cache_tokens": max_cache,                              # Cache capacity before summarization
+            "recent_window": int(max_cache * 0.25),                     # 25% recent window (kept in full detail)
             "gpu_profile": "conservative",
             "model_size_b": model_size_b,
             "quantization": quantization
@@ -149,71 +149,75 @@ class ModelManager:
         if "A100" in self.gpu_name or "A10" in self.gpu_name:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
             # With 8-bit KV cache quantization: 50% memory savings
-            # H2O cache eviction: Fixed cache size, unlimited conversation length
+            # Flash Attention 2 + Self-summarization: Unlimited conversation length
             max_cache = int(10000 * size_scale * quant_scale)
             limits = {
                 "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache for response (40% for history)
-                "max_cache_tokens": max_cache,                              # H2O cache capacity
-                "recent_window": int(max_cache * 0.15),                     # 15% recent window (never evicted)
+                "max_cache_tokens": max_cache,                              # Cache capacity before summarization
+                "recent_window": int(max_cache * 0.15),                     # 15% recent window (never summarized)
                 "gpu_profile": "high_end_ampere",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with H2O cache eviction")
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
-            # With 8-bit KV cache quantization: 50% memory savings
-            # H2O cache eviction: Fixed cache size with intelligent token selection
-            # Pre-allocated cache: 4-bit model (~7.5GB) + 8-bit cache (~7GB) + system (~1.5GB) = ~16GB (8GB headroom)
-            # Memory is pre-allocated - OOM at init means cache too large, OOM during generation means attention leak
+            # Strategy: Flash Attention 2 + Self-Summarization (model-generated summaries)
+            # Memory: 4-bit model (~7.5GB) + 8-bit KV cache (~6.4GB @14K tokens) + summaries (~0.5GB) + safety (2GB) = ~16.4GB
+            # Flash Attention 2: No temporary attention buffers (vs ~30GB with eager attention @14K tokens!)
+            # Self-Summarization: [System Prompt] + [Model-Generated Summaries] + [Recent 2.1K tokens]
+            # Result: Unlimited conversation length with intelligent compression by the model itself
             max_cache = int(14000 * size_scale * quant_scale)
             limits = {
                 "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache: 8.4K tokens (~6.3K words)
-                "max_cache_tokens": max_cache,                              # 14K tokens (~10.5K words of context)
-                "recent_window": int(max_cache * 0.15),                     # 15% recent: 2.1K tokens (never evicted)
+                "max_cache_tokens": max_cache,                              # 14K tokens (~10.5K words before summarization)
+                "recent_window": int(max_cache * 0.15),                     # 15% recent: 2.1K tokens (kept in full detail)
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - maximized cache for long conversations (14K tokens)")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model")
+            logger.info(f"  Strategy: Flash Attention 2 + Self-Summarization")
+            logger.info(f"  Cache: 14K tokens (~10.5K words) before compression")
+            logger.info(f"  Unlimited conversation via model-generated summaries")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
             # With 8-bit KV cache quantization: 50% memory savings
-            # H2O cache eviction: Fixed cache size, unlimited conversation length
+            # Flash Attention 2 + Self-summarization: Unlimited conversation length
             max_cache = int(4000 * size_scale * quant_scale)
             limits = {
                 "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache for response
-                "max_cache_tokens": max_cache,                              # H2O cache capacity
+                "max_cache_tokens": max_cache,                              # Cache capacity before summarization
                 "recent_window": int(max_cache * 0.2),                      # 20% recent window (T4 needs more recent bias)
                 "gpu_profile": "t4_turing",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with H2O cache eviction")
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits")
             
         elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
             # V100 (16-32 GB) - Volta
             # With 8-bit KV cache quantization: 50% memory savings
-            # H2O cache eviction: Fixed cache size, unlimited conversation length
+            # Flash Attention 2 + Self-summarization: Unlimited conversation length
             max_cache = int(4000 * size_scale * quant_scale)
             limits = {
                 "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache for response
-                "max_cache_tokens": max_cache,                              # H2O cache capacity
+                "max_cache_tokens": max_cache,                              # Cache capacity before summarization
                 "recent_window": int(max_cache * 0.2),                      # 20% recent window
                 "gpu_profile": "v100_volta",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with H2O cache eviction")
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
             max_cache = int(2500 * size_scale * quant_scale)
             limits = {
                 "max_new_tokens": int(max_cache * 0.6),                     # 60% of cache for response
-                "max_cache_tokens": max_cache,                              # H2O cache capacity
+                "max_cache_tokens": max_cache,                              # Cache capacity before summarization
                 "recent_window": int(max_cache * 0.25),                     # 25% recent window (smaller GPUs need safety)
                 "gpu_profile": "moderate",
                 "model_size_b": model_size_b,

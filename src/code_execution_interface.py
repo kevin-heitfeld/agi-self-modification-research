@@ -199,11 +199,11 @@ class CodeExecutionInterface:
         """
         Bind the manual_generator to the generation introspection module.
         
-        This enables the model to access attention weights and H2O cache statistics
+        This enables the model to access generation configuration information
         from its own generation process via introspection.generation.
         
         Args:
-            manual_generator: The ManualGenerator instance with H2O cache support
+            manual_generator: The ManualGenerator instance with Flash Attention 2 + self-summarization
         """
         bind_generation_introspection(self.introspection, manual_generator)
         logger.info("✓ Generation introspection bound to manual generator")

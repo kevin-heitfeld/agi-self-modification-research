@@ -601,66 +601,36 @@ USAGE:
         memory_module.list_categories = _make_wrapper(memory_access.list_categories, memory_system)
         module.memory = memory_module
 
-    # Create generation submodule (always available - provides access to generation-time data)
+    # Create generation submodule (always available - provides basic generation config info)
     # Note: Requires manual_generator to be set later by the execution sandbox
     generation_module = ModuleType('introspection.generation')
-    generation_module.__doc__ = '''Access data captured during generation (attention weights, cache stats).
+    generation_module.__doc__ = '''Access generation system configuration and basic information.
 
 FUNCTIONS:
-    get_last_generation_attention(layer_indices: List[int] = None, aggregate: str = 'none') -> Dict
-        Get attention weights from your last generation without re-processing text.
-        This provides the ACTUAL attention patterns from when you generated your response.
-        
-        Args:
-            layer_indices: Which layers to return (None = all)
-            aggregate: 'none' (per-layer), 'mean' (average), or 'sum' (total)
+    get_generation_info() -> Dict
+        Get information about the generation system configuration.
         
         Returns dict with:
-            - available: bool - Whether attention was captured
-            - attention_weights: Tensors showing which tokens you attended to
-            - shape_info: Description of tensor dimensions
-    
-    get_cache_statistics() -> Dict
-        Get H2O cache statistics: memory usage, eviction info, token counts.
-        Shows how your conversation memory is being managed.
-    
-    get_token_importance_scores(top_k: int = None, normalize: bool = False) -> Dict
-        Get cumulative attention scores for all tokens in conversation.
-        Shows which tokens you've paid the most attention to overall.
+            - quantize_kv_cache: bool - Whether KV cache quantization is enabled
+            - self_summarization_enabled: bool - Whether self-summarization is active
+            - system_prompt_length: int - Length of cached system prompt in tokens
+            - conversation_cache_length: int - Current conversation KV cache length
+            - device: str - Device being used for generation
 
-IMPORTANT: These functions access data from ACTUAL generation, not re-processing.
-This is different from introspection.activations.capture_activations() which
-processes text from scratch.
+NOTE: With Flash Attention 2, attention weights are not materialized and cannot be captured.
+The system uses self-summarization for unlimited conversation length instead of attention-based eviction.
 
 USAGE:
-    # See which tokens you just attended to
-    attn = introspection.generation.get_last_generation_attention(aggregate='mean')
-    if attn['available']:
-        print(f"Attention shape: {attn['shape_info']}")
-        print(f"Attention weights: {attn['attention_weights']}")
-    
-    # Check cache health
-    cache = introspection.generation.get_cache_statistics()
-    print(f"Cache: {cache['cached_tokens']}/{cache['total_tokens']} tokens")
-    print(f"Evicted: {cache['evicted_tokens']} tokens")
-    
-    # Find most important tokens
-    important = introspection.generation.get_token_importance_scores(top_k=10)
-    for pos, score in important['top_tokens']:
-        print(f"Token {pos}: importance {score:.4f}")
+    # Check generation system configuration
+    info = introspection.generation.get_generation_info()
+    print(f"System prompt: {info['system_prompt_length']} tokens")
+    print(f"Conversation cache: {info['conversation_cache_length']} tokens")
+    print(f"Self-summarization: {info['self_summarization_enabled']}")
 '''
-    # These will be bound to manual_generator later by the execution sandbox
-    generation_module.get_last_generation_attention = lambda *args, **kwargs: {
+    # This will be bound to manual_generator later by the execution sandbox
+    generation_module.get_generation_info = lambda *args, **kwargs: {
         "available": False,
         "error": "Generation introspection not yet initialized. This is set up automatically during execution."
-    }
-    generation_module.get_cache_statistics = lambda *args, **kwargs: {
-        "available": False,
-        "error": "Generation introspection not yet initialized"
-    }
-    generation_module.get_token_importance_scores = lambda *args, **kwargs: {
-        "available": False,
-        "error": "Generation introspection not yet initialized"
     }
     module.generation = generation_module
 
@@ -680,20 +650,14 @@ def bind_generation_introspection(introspection_module: ModuleType, manual_gener
     
     Args:
         introspection_module: The introspection module from create_introspection_module()
-        manual_generator: The ManualGenerator instance with H2O cache
+        manual_generator: The ManualGenerator instance with Flash Attention 2 + self-summarization
     """
     from . import generation
     
     if hasattr(introspection_module, 'generation'):
         gen_module = introspection_module.generation
-        gen_module.get_last_generation_attention = _make_wrapper(
-            generation.get_last_generation_attention, manual_generator
-        )
-        gen_module.get_cache_statistics = _make_wrapper(
-            generation.get_cache_statistics, manual_generator
-        )
-        gen_module.get_token_importance_scores = _make_wrapper(
-            generation.get_token_importance_scores, manual_generator
+        gen_module.get_generation_info = _make_wrapper(
+            generation.get_generation_info, manual_generator
         )
 
 

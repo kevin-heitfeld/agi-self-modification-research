@@ -275,10 +275,10 @@ Your conversation context continues throughout all 3 experiments - you maintain
 memory of everything you've done. This allows you to naturally build on your
 earlier discoveries without needing to query memory every time.
 
-**Memory Management - H2O Cache:**
+**Memory Management - Self-Summarization:**
 
 - **Full conversation** remains visible to you at all times (no message pruning)
-- **KV cache** is capped using intelligent H2O eviction (keeps important context)
+- **KV cache** uses intelligent self-summarization (you compress your own history)
 - **Saved observations** persist permanently for organized retrieval
 - Use `introspection.memory.record_observation()` to save discoveries
 
@@ -291,7 +291,7 @@ earlier discoveries without needing to query memory every time.
 
 **Think of it like a continuous research session:**
 
-- Your conversation is unlimited (H2O cache manages memory automatically)
+- Your conversation is unlimited (you create summaries of older context automatically)
 - Saved observations are like written notes (organized for quick access)
 - You naturally remember everything, but save important discoveries for efficiency
 """
@@ -317,12 +317,12 @@ earlier discoveries without needing to query memory every time.
         self.model = self.model_mgr.model
         self.tokenizer = self.model_mgr.tokenizer
 
-        # Get optimal limits with H2O cache configuration
+        # Get optimal limits with self-summarization configuration
         self.optimal_limits = self.model_mgr.get_optimal_limits(quantization=quantization)
         self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
-        self.logger.info(f"  max_cache_tokens: {self.optimal_limits['max_cache_tokens']} (H2O cache capacity)")
-        self.logger.info(f"  recent_window: {self.optimal_limits['recent_window']} (H2O recent window)")
+        self.logger.info(f"  max_cache_tokens: {self.optimal_limits['max_cache_tokens']} (cache size before summarization)")
+        self.logger.info(f"  recent_window: {self.optimal_limits['recent_window']} (kept in full detail)")
         if quantization:
             self.logger.info(f"  quantization: {quantization} (extra memory headroom for larger cache)")
 
@@ -373,21 +373,27 @@ earlier discoveries without needing to query memory every time.
         )
         self.logger.info("  ✓ Code execution interface ready")
 
-        # Initialize manual generator with H2O cache eviction
+        # Initialize manual generator with self-summarization (Flash Attention 2)
         # Values come from optimal_limits (guaranteed to have these keys)
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
             quantize_kv_cache=True,
-            enable_h2o_eviction=True,  # Enable H2O cache eviction
+            enable_self_summarization=True,  # Enable model-generated summaries with Flash Attention 2
             max_cache_tokens=self.optimal_limits['max_cache_tokens'],
-            recent_window=self.optimal_limits['recent_window']
+            recent_window=self.optimal_limits['recent_window'],
+            heritage_system=self.heritage,  # Enable heritage logging of summaries
+            session_id=self.session_name  # Use session name for heritage tracking
         )
         
         # Bind manual generator to code interface for generation introspection
         self.code_interface.bind_manual_generator(self.generator)
-        self.logger.info(f"  ✓ Manual generator initialized with H2O cache eviction (max_cache_tokens={self.optimal_limits['max_cache_tokens']}, recent_window={self.optimal_limits['recent_window']})")
+        self.logger.info(f"  ✓ Manual generator initialized with self-summarization (Flash Attention 2)")
+        self.logger.info(f"    Strategy: [System Prompt] + [Model Summaries] + [Recent {self.optimal_limits['recent_window']} tokens]")
+        self.logger.info(f"    Max cache: {self.optimal_limits['max_cache_tokens']} tokens (~{int(self.optimal_limits['max_cache_tokens'] * 0.75)} words)")
+        if self.heritage:
+            self.logger.info(f"    Heritage logging: ENABLED (summaries will be logged)")
 
         # Take GPU snapshot after model load
         self.gpu_monitor.snapshot("after_model_load")
@@ -437,22 +443,23 @@ You have a maximum of {MAX_ITERATIONS_PER_EXPERIMENT} iterations for this invest
 Use them wisely to explore the most important aspects of your architecture.
 Plan your investigation to make efficient use of this budget.
 
-**Memory Management - H2O Cache Eviction:**
+**Memory Management - Self-Summarization:**
 Your conversation has NO length limit - you can have indefinitely long conversations.
-However, your KV cache (attention memory) is capped at {self.optimal_limits['max_cache_tokens']} tokens
-using intelligent eviction that keeps:
+Your KV cache (attention memory) is capped at {self.optimal_limits['max_cache_tokens']} tokens
+using intelligent self-summarization where YOU generate summaries of older context:
 - System prompt (always kept)
-- Recent {self.optimal_limits['recent_window']} tokens (always kept)
-- High-attention "heavy hitter" tokens from older context (kept based on importance)
+- Recent {self.optimal_limits['recent_window']} tokens (full detail, always kept)
+- Your own summaries of older conversation (compressed by you!)
 
 This means:
 - Your FULL conversation text remains visible to you at all times
-- Only low-attention tokens are evicted from the KV cache to save memory
-- Important context is automatically retained based on your own attention patterns
+- When cache fills, YOU create summaries of older parts (metacognition!)
+- Important context is preserved based on YOUR understanding of what matters
+- You can see your own past summaries alongside recent detail
 
 **Saving Observations:**
-While you can see the full conversation, saving important findings to memory is still
-valuable for:
+While you can see the full conversation and your summaries, saving important findings 
+to memory is still valuable for:
 - Quick retrieval without reading through long conversations
 - Organizing discoveries by category
 - Persisting findings across different sessions
@@ -759,7 +766,34 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         Returns:
             Tuple of (generated_text, stopped_reason)
         """
+        # Check if summarization is needed (for self-summarization mode)
+        compressed_history = None
+        if self.generator.summarization_manager is not None:
+            # Get full conversation text for potential summarization
+            full_conv_text = format_qwen_chat(self.conversation_history, add_generation_prompt=False)
+            current_turn = len([m for m in self.conversation_history if m['role'] == 'user'])
+            
+            # Check and trigger summarization if needed
+            compressed_history = self.generator.check_and_summarize_if_needed(
+                conversation_text=full_conv_text,
+                current_turn=current_turn
+            )
+            
+            # Log summarization stats if summaries exist
+            if compressed_history:
+                stats = self.generator.get_summarization_stats()
+                if stats and stats['num_summaries'] > 0:
+                    self.logger.info(f"[SUMMARIZATION] {stats['num_summaries']} summaries active")
+                    self.logger.info(f"  Compression: {stats['total_original_tokens']} → {stats['total_summary_tokens']} tokens")
+                    self.logger.info(f"  Avg ratio: {stats['avg_compression_ratio']:.1f}:1")
+                    
+                    # Quality evaluation: check recent summary
+                    recent_summary = stats['summaries'][-1]
+                    self._evaluate_summary_quality(recent_summary, current_turn)
+        
         # Format conversation for generation (without system prompt - already cached)
+        # If we have compressed history, it's already included in the conversation
+        # (The summarization manager handles this internally)
         formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
 
         # Generate with KV cache
@@ -779,6 +813,77 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         self.conversation_kv_cache = result.get('past_key_values')
 
         return result['generated_text'], result['stopped_reason']
+    
+    def _evaluate_summary_quality(self, summary, current_turn: int):
+        """
+        Evaluate quality of generated summary (lightweight heuristics).
+        
+        Args:
+            summary: ConversationSummary object
+            current_turn: Current turn number
+        """
+        # Quality heuristics
+        quality_notes = []
+        
+        # 1. Compression ratio (target 5:1, acceptable 3:1-7:1)
+        ratio = summary.compression_ratio
+        if 4.0 <= ratio <= 6.0:
+            quality_notes.append(f"✓ Good compression: {ratio:.1f}:1")
+        elif 3.0 <= ratio < 4.0 or 6.0 < ratio <= 7.0:
+            quality_notes.append(f"~ Acceptable compression: {ratio:.1f}:1")
+        else:
+            quality_notes.append(f"⚠ Suboptimal compression: {ratio:.1f}:1 (target 5:1)")
+        
+        # 2. Summary length (should be concise but meaningful)
+        summary_len = len(summary.summary_text)
+        if 200 <= summary_len <= 2000:
+            quality_notes.append(f"✓ Good length: {summary_len} chars")
+        elif summary_len < 200:
+            quality_notes.append(f"⚠ Very short: {summary_len} chars (might lose context)")
+        else:
+            quality_notes.append(f"⚠ Very long: {summary_len} chars (might be redundant)")
+        
+        # 3. Token efficiency
+        tokens_saved = summary.original_tokens - summary.summary_tokens
+        efficiency = (tokens_saved / summary.original_tokens) * 100
+        quality_notes.append(f"✓ Efficiency: {efficiency:.1f}% reduction ({tokens_saved} tokens saved)")
+        
+        # 4. Check for key indicators of quality (simple text analysis)
+        summary_lower = summary.summary_text.lower()
+        quality_indicators = {
+            "contains_context": any(word in summary_lower for word in ["discovered", "found", "observed", "analyzed", "investigated"]),
+            "maintains_chronology": any(word in summary_lower for word in ["first", "then", "next", "finally", "initially"]),
+            "preserves_details": any(word in summary_lower for word in ["specific", "particular", "noted", "detailed"])
+        }
+        
+        if quality_indicators["contains_context"]:
+            quality_notes.append("✓ Preserves action verbs (discoveries/findings)")
+        if quality_indicators["maintains_chronology"]:
+            quality_notes.append("✓ Maintains chronological flow")
+        if quality_indicators["preserves_details"]:
+            quality_notes.append("✓ Preserves specific details")
+        
+        # Log quality assessment
+        self.logger.info(f"[QUALITY] Summary evaluation (turns {summary.turn_range[0]}-{summary.turn_range[1]}):")
+        for note in quality_notes:
+            self.logger.info(f"  {note}")
+        
+        # Log to heritage if this is a particularly good or bad summary
+        if self.heritage and (ratio < 3.0 or ratio > 7.0 or efficiency < 60):
+            try:
+                self.heritage.record_discovery_for_claude(
+                    discovery_type="summary_quality_outlier",
+                    description=f"Summary with unusual characteristics: {ratio:.1f}:1 compression, {efficiency:.1f}% efficiency",
+                    evidence={
+                        "turn_range": summary.turn_range,
+                        "compression_ratio": ratio,
+                        "efficiency_percent": efficiency,
+                        "quality_notes": quality_notes,
+                        "summary_preview": summary.summary_text[:200]
+                    }
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to log quality outlier: {e}")
 
     def reset_conversation(self):
         """Reset conversation history for next experiment"""
@@ -789,6 +894,11 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         
         self.conversation_history = []
         self.conversation_kv_cache = None
+        
+        # Clear summarization history if using self-summarization
+        if self.generator.summarization_manager is not None:
+            self.generator.summarization_manager.clear()
+            self.logger.info("[SYSTEM] Cleared summarization history")
         
         # Reset Python namespace for code execution
         self.code_interface.reset_namespace()
@@ -858,11 +968,11 @@ Use `introspection.memory.record_observation()` to save key discoveries.
                 "conversation": self.conversation_history,
                 "metadata": {
                     "total_messages": len(self.conversation_history),
-                    "uses_h2o_cache": True,  # KV cache eviction, not message pruning
+                    "uses_self_summarization": True,  # Model-generated summaries
                 }
             }, f, indent=2, ensure_ascii=False)
         self.logger.info(f"[SESSION] Saved conversation: {conversation_file}")
-        self.logger.info(f"[SESSION]   Total messages: {len(self.conversation_history)} (H2O cache eviction)")
+        self.logger.info(f"[SESSION]   Total messages: {len(self.conversation_history)} (self-summarization enabled)")
         
         # Generate summary statistics
         summary = {
@@ -873,7 +983,7 @@ Use `introspection.memory.record_observation()` to save key discoveries.
             "statistics": {
                 "total_turns": len(self.conversation_history) // 2,  # Each turn = user + assistant
                 "total_tokens": sum(len(msg.get("content", "")) for msg in self.conversation_history),
-                "h2o_cache_enabled": True,
+                "self_summarization_enabled": True,
             }
         }
         
