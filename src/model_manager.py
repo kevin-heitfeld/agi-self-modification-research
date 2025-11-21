@@ -160,7 +160,7 @@ class ModelManager:
             # With 8-bit KV cache quantization: 50% memory savings
             limits = {
                 "max_new_tokens": int(1500 * size_scale * quant_scale),
-                "max_conversation_tokens": int(10000 * size_scale * quant_scale),
+                "max_conversation_tokens": int(9000 * size_scale * quant_scale),
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b,
                 "quantization": quantization
