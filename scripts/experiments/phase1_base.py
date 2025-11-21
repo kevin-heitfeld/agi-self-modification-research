@@ -23,7 +23,6 @@ from src.memory import MemorySystem
 from src.introspection import WeightInspector, ActivationMonitor, ArchitectureNavigator
 from src.heritage import HeritageSystem
 from src.manual_generation import ManualGenerator
-from src.memory_manager import MemoryManager
 from src.gpu_monitor import GPUMonitor
 from src.code_execution_interface import CodeExecutionInterface
 from src.colab_utils import ColabTimeoutTracker, ColabStorageManager
@@ -280,25 +279,25 @@ Your conversation context continues throughout all 3 experiments - you maintain
 memory of everything you've done. This allows you to naturally build on your
 earlier discoveries without needing to query memory every time.
 
-**Memory Management:**
+**Memory Management - H2O Cache:**
 
-- **Working memory** (this conversation) may be pruned if it gets too long
-- When approaching the token limit, you'll get a warning to save important findings
-- **Saved observations** persist permanently and survive any pruning
+- **Full conversation** remains visible to you at all times (no message pruning)
+- **KV cache** is capped using intelligent H2O eviction (keeps important context)
+- **Saved observations** persist permanently for organized retrieval
 - Use `introspection.memory.record_observation()` to save discoveries
 
 **Strategy for Success:**
 
-- Build on your discoveries naturally - you remember what you did earlier
-- Save important findings to memory as backup (in case of pruning)
+- Build on your discoveries naturally - you have full conversation history
+- Save important findings to memory for quick retrieval and organization
 - Use `introspection.memory.list_categories()` to see how you've organized observations
 - Query memory when you need to recall specific details from saved observations
 
 **Think of it like a continuous research session:**
 
-- Your working memory is like short-term memory (may be pruned to fit limits)
-- Saved observations are like written notes (permanent record)
-- You naturally remember recent work, but save important discoveries for safety
+- Your conversation is unlimited (H2O cache manages memory automatically)
+- Saved observations are like written notes (organized for quick access)
+- You naturally remember everything, but save important discoveries for efficiency
 """
 
     def initialize_systems(self, model_name: str, include_heritage: bool = True, quantization: str = None):
@@ -322,13 +321,14 @@ earlier discoveries without needing to query memory every time.
         self.model = self.model_mgr.model
         self.tokenizer = self.model_mgr.tokenizer
 
-        # Get optimal limits (pass quantization so it can adjust conversation token limits)
+        # Get optimal limits with H2O cache configuration
         self.optimal_limits = self.model_mgr.get_optimal_limits(quantization=quantization)
         self.logger.info(f"  Using {self.optimal_limits['gpu_profile']} configuration")
         self.logger.info(f"  max_new_tokens: {self.optimal_limits['max_new_tokens']}")
-        self.logger.info(f"  max_conversation_tokens: {self.optimal_limits['max_conversation_tokens']}")
+        self.logger.info(f"  max_cache_tokens: {self.optimal_limits['max_cache_tokens']} (H2O cache capacity)")
+        self.logger.info(f"  recent_window: {self.optimal_limits['recent_window']} (H2O recent window)")
         if quantization:
-            self.logger.info(f"  quantization: {quantization} (extra memory headroom for longer conversations)")
+            self.logger.info(f"  quantization: {quantization} (extra memory headroom for larger cache)")
 
         # Update GPU monitor
         if self.model_mgr.device == "cuda":
@@ -377,20 +377,24 @@ earlier discoveries without needing to query memory every time.
         )
         self.logger.info("  ✓ Code execution interface ready")
 
-        # Initialize manual generator
+        # Initialize manual generator with H2O cache eviction
+        # Use values from optimal_limits if available, otherwise use defaults
+        max_cache_tokens = self.optimal_limits.get('max_cache_tokens', 7000)
+        recent_window = self.optimal_limits.get('recent_window', 1000)
+        
         self.generator = ManualGenerator(
             model=self.model,
             tokenizer=self.tokenizer,
             device=self.model_mgr.device,
             quantize_kv_cache=True,
             enable_h2o_eviction=True,  # Enable H2O cache eviction
-            max_cache_tokens=7000,     # Match optimal limits
-            recent_window=1000         # Keep recent 1000 tokens
+            max_cache_tokens=max_cache_tokens,
+            recent_window=recent_window
         )
         
         # Bind manual generator to code interface for generation introspection
         self.code_interface.bind_manual_generator(self.generator)
-        self.logger.info("  ✓ Manual generator initialized with H2O cache eviction")
+        self.logger.info(f"  ✓ Manual generator initialized with H2O cache eviction (max_cache_tokens={max_cache_tokens}, recent_window={recent_window})")
 
         # Take GPU snapshot after model load
         self.gpu_monitor.snapshot("after_model_load")
@@ -410,13 +414,9 @@ earlier discoveries without needing to query memory every time.
 
         # Initialize conversation tracking
         self.conversation_kv_cache = None
-        self.memory_manager = MemoryManager(logger=self.logger)
 
         # Take GPU snapshot after system initialization
         self.gpu_monitor.snapshot("after_initialization")
-        
-        # Log initial token capacity
-        self._log_token_usage("after_initialization")
 
         self.logger.info("✓ All systems initialized!")
 
@@ -444,18 +444,27 @@ You have a maximum of {MAX_ITERATIONS_PER_EXPERIMENT} iterations for this invest
 Use them wisely to explore the most important aspects of your architecture.
 Plan your investigation to make efficient use of this budget.
 
-**Memory Management:**
-Your working memory (conversation context) has a limit of ~{self.optimal_limits['max_conversation_tokens']} tokens.
-When there isn't enough room for your next full response, old messages are automatically removed.
+**Memory Management - H2O Cache Eviction:**
+Your conversation has NO length limit - you can have indefinitely long conversations.
+However, your KV cache (attention memory) is capped at {self.optimal_limits['max_cache_tokens']} tokens
+using intelligent eviction that keeps:
+- System prompt (always kept)
+- Recent {self.optimal_limits['recent_window']} tokens (always kept)
+- High-attention "heavy hitter" tokens from older context (kept based on importance)
 
-**Important:**
-- You'll receive a warning when memory is getting full
-- **IMMEDIATELY save any important findings using introspection.memory.record_observation()**
-- After pruning, older conversation turns are cleared (only recent context remains)
-- Your saved observations persist permanently and can be retrieved anytime
+This means:
+- Your FULL conversation text remains visible to you at all times
+- Only low-attention tokens are evicted from the KV cache to save memory
+- Important context is automatically retained based on your own attention patterns
 
-**This is why saving observations is CRITICAL** - it's your only way to preserve
-discoveries when working memory gets cleared.
+**Saving Observations:**
+While you can see the full conversation, saving important findings to memory is still
+valuable for:
+- Quick retrieval without reading through long conversations
+- Organizing discoveries by category
+- Persisting findings across different sessions
+
+Use `introspection.memory.record_observation()` to save key discoveries.
 
 **Begin by examining your own architecture using code!**
 """
@@ -496,170 +505,6 @@ discoveries when working memory gets cleared.
         self.conversation_history.append(message)
         # Add to complete conversation (never pruned, saved to file)
         self.complete_conversation_history.append(message)
-
-    def _add_truncation_warning(self, message: str, stopped_reason: str, had_code: bool) -> str:
-        """
-        Add truncation warning to a message if response was cut off.
-        
-        Args:
-            message: The base message to add warning to
-            stopped_reason: The reason generation stopped ("eos" or "max_length")
-            had_code: Whether code was found in the truncated response
-            
-        Returns:
-            Message with truncation warning appended (if applicable)
-        """
-        if stopped_reason == "max_length":
-            if had_code:
-                # Code was found but response may have been cut off after it
-                message += "\n\n⚠️ **Note:** Your response was truncated (hit token limit). If you had more to say, please continue."
-                self.logger.info(f"[DEBUG] Added truncation warning (had code)")
-            else:
-                # This shouldn't happen here - handled separately in the no-code path
-                pass
-        
-        return message
-    
-    def _log_token_usage(self, stage: str, iteration: Optional[int] = None):
-        """
-        Log current token usage with utilization percentage.
-        Similar to GPU monitoring but for conversation tokens.
-        
-        Args:
-            stage: Description of current stage (e.g., "before_generation", "after_pruning")
-            iteration: Optional iteration number for context
-        """
-        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
-        max_tokens = self.optimal_limits['max_conversation_tokens']
-        max_new = self.optimal_limits['max_new_tokens']
-        
-        utilization = (current_tokens / max_tokens * 100) if max_tokens > 0 else 0
-        headroom = max_tokens - current_tokens
-        generations_left = headroom // max_new if max_new > 0 else 0
-        
-        iter_str = f"[iter {iteration}] " if iteration is not None else ""
-        self.logger.info(
-            f"[TOKENS] {iter_str}{stage}: {current_tokens}/{max_tokens} tokens "
-            f"({utilization:.1f}% used, {headroom} headroom, ~{generations_left} generations left)"
-        )
-
-    def _check_and_handle_memory_pruning(self, message: str, iteration: int) -> str:
-        """
-        Check if memory pruning is needed based on generation headroom and handle it.
-        Warns model when approaching limit, then prunes to target ratio if not enough room for next generation.
-        
-        Args:
-            message: The message to potentially add warnings/notices to
-            iteration: Current iteration number
-            
-        Returns:
-            Message with pruning warnings/notices appended (if applicable)
-        """
-        from src.memory_manager import MEMORY_PRUNE_TARGET_RATIO
-        
-        # Get current limits
-        max_tokens = self.optimal_limits['max_conversation_tokens']
-        max_new = self.optimal_limits['max_new_tokens']
-        
-        # Check if memory pruning is needed (generation-aware)
-        should_prune, prune_reasons = self.memory_manager.should_prune_memory(
-            self.conversation_history,
-            max_tokens,
-            max_new
-        )
-        
-        # Calculate current and needed token counts for warning
-        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
-        needed_tokens = current_tokens + max_new
-        warning_threshold = max_tokens - (max_new * 2)  # Warn when less than 2 generations of headroom
-        
-        # Warn when approaching limit (less than 2 generations of headroom but still 1 generation available)
-        if current_tokens >= warning_threshold and not should_prune:
-            headroom_tokens = max_tokens - current_tokens
-            generations_left = headroom_tokens // max_new
-            pruning_warning = (
-                f"\n\n⚠️ **MEMORY WARNING:** Working memory is getting full. "
-                f"Save important findings NOW using `introspection.memory.record_observation()` "
-                f"or they will be lost in the next pruning."
-            )
-            message += pruning_warning
-            self.logger.warning(
-                f"[MEMORY] Warning sent to model: {current_tokens}/{max_tokens} tokens, "
-                f"~{generations_left} generations of headroom"
-            )
-        
-        # Perform pruning if not enough room for next generation
-        if should_prune:
-            target_tokens = self.memory_manager.get_prune_target_tokens(
-                max_tokens,
-                max_new,
-                iteration,
-                MAX_ITERATIONS_PER_EXPERIMENT
-            )
-            
-            remaining_iterations = MAX_ITERATIONS_PER_EXPERIMENT - iteration
-            self.logger.info(f"[MEMORY] Pruning triggered: {', '.join(prune_reasons)}")
-            self.logger.info(
-                f"[MEMORY] Target: prune down to ~{target_tokens} tokens "
-                f"({remaining_iterations} iterations remaining)"
-            )
-            
-            # Prune by removing old messages until we reach target token count
-            # Always keep system message (index 0) and recent messages
-            system_msg = self.conversation_history[0] if self.conversation_history else None
-            messages = self.conversation_history[1:] if len(self.conversation_history) > 1 else []
-            
-            # Count tokens backward from most recent until we hit target
-            pruned_messages = []
-            token_count = 0
-            for msg in reversed(messages):
-                msg_tokens = len(msg.get("content", "")) // 4  # Rough estimate
-                if token_count + msg_tokens <= target_tokens:
-                    pruned_messages.insert(0, msg)
-                    token_count += msg_tokens
-                else:
-                    # Hit target, stop adding more
-                    break
-            
-            # Rebuild conversation with system + pruned messages
-            old_count = len(self.conversation_history)
-            self.conversation_history = [system_msg] + pruned_messages if system_msg else pruned_messages
-            new_count = len(self.conversation_history)
-            messages_removed = old_count - new_count
-            
-            # Also prune complete_conversation_history to match
-            # Keep system + same number of recent messages
-            if len(self.complete_conversation_history) > 0:
-                system_msg_complete = self.complete_conversation_history[0]
-                messages_complete = self.complete_conversation_history[1:]
-                # Take same number of recent messages
-                keep_count = len(pruned_messages)
-                pruned_complete = messages_complete[-keep_count:] if keep_count > 0 else []
-                self.complete_conversation_history = [system_msg_complete] + pruned_complete
-            
-            # Clear KV cache (it's now invalid after pruning history)
-            self.conversation_kv_cache = None
-            
-            self.logger.info(f"[MEMORY] Pruned {messages_removed} messages (kept {new_count}, ~{token_count} tokens)")
-            
-            # Log token usage after pruning
-            self._log_token_usage("after_pruning", iteration)
-            
-            # Add a system message explaining what happened
-            pruning_notice = f"""⚠️ **MEMORY PRUNED:** Working memory was full. Old messages removed to make room for new generations.
-
-**Important:** Your conversation history is now limited. Any findings not saved to permanent memory are LOST.
-
-**To continue effectively:**
-1. Query saved findings: `introspection.memory.query_observations()`
-2. Review what you've learned
-3. Save new discoveries as you make them
-
-Your permanent memory persists - use it!"""
-            
-            message += f"\n\n{pruning_notice}"
-        
-        return message
 
     def chat(self, user_message: str) -> str:
         """
@@ -792,9 +637,6 @@ Your permanent memory persists - use it!"""
             "generation_start",
             {"iteration": iteration, "conversation_turns": len(self.conversation_history)}
         )
-        
-        # Log token usage before generation
-        self._log_token_usage("before_generation", iteration)
 
         # Generate response
         response, stopped_reason = self.generate_response()
@@ -809,9 +651,6 @@ Your permanent memory persists - use it!"""
             "generation_end",
             {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
         )
-        
-        # Log token usage after generation
-        self._log_token_usage("after_generation", iteration)
 
         # Add to history
         self._add_message("assistant", response)
@@ -890,14 +729,12 @@ Your permanent memory persists - use it!"""
         if error:
             result_message += "\n\n⚠️ Some code blocks had errors. Review the output above."
         
-        # Add truncation warning if applicable
-        result_message = self._add_truncation_warning(result_message, stopped_reason, had_code=True)
+        # Add truncation warning if response was cut off
+        if stopped_reason == "max_length":
+            result_message += "\n\n⚠️ **Note:** Your previous response was truncated (hit token limit). If you had more to say, please continue."
         
         # Add iteration reminders
         result_message = self._add_iteration_reminder(result_message, iteration, MAX_ITERATIONS_PER_EXPERIMENT)
-
-        # Check and handle memory pruning
-        result_message = self._check_and_handle_memory_pruning(result_message, iteration)
         
         return result_message
     
@@ -913,9 +750,6 @@ Your permanent memory persists - use it!"""
 
         # Take GPU snapshot at experiment end
         self.gpu_monitor.snapshot("experiment_end", {"total_iterations": iteration})
-        
-        # Log final token usage
-        self._log_token_usage("experiment_end")
 
         # Print GPU memory summary with recommendations
         self.logger.info("\n" + "="*80)
@@ -924,7 +758,7 @@ Your permanent memory persists - use it!"""
         self.gpu_monitor.print_summary(
             current_limits={
                 "max_new_tokens": self.optimal_limits['max_new_tokens'],
-                "max_conversation_tokens": self.optimal_limits['max_conversation_tokens']
+                "max_cache_tokens": self.optimal_limits['max_cache_tokens']
             },
             include_recommendations=True
         )
@@ -977,9 +811,6 @@ Your permanent memory persists - use it!"""
         
         # Take snapshot after cleanup
         self.gpu_monitor.snapshot("after_reset")
-        
-        # Log token usage after reset (should be minimal)
-        self._log_token_usage("after_reset")
 
     def get_model_name(self, default: str = 'Qwen/Qwen2.5-14B-Instruct') -> str:
         """Get model name from environment variable or use default
@@ -1108,14 +939,10 @@ Your permanent memory persists - use it!"""
         import json
         from datetime import datetime
         
-        # Calculate current token count for checkpoint metadata
-        current_tokens = self.memory_manager.estimate_conversation_tokens(self.conversation_history)
-        
         checkpoint_data = {
             "checkpoint_name": checkpoint_name,
             "timestamp": datetime.now().isoformat(),
             "conversation_length": len(self.conversation_history),
-            "conversation_tokens": current_tokens,
             "conversation": self.conversation_history
         }
         

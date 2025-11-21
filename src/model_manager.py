@@ -94,7 +94,7 @@ class ModelManager:
             quantization: Quantization mode ('4bit', '8bit', or None)
         
         Returns:
-            Dict with recommended limits for max_new_tokens, max_conversation_tokens
+            Dict with recommended limits for max_new_tokens, max_cache_tokens, recent_window
         """
         # Detect model size from name
         model_size_b = 7.0  # Default to 7B
@@ -117,8 +117,8 @@ class ModelManager:
         size_scale = 7.0 / model_size_b
         
         # Quantization gives us more VRAM headroom for KV cache
-        # 8-bit: ~50% model memory savings → 1.5x more conversation tokens
-        # 4-bit: ~75% model memory savings → 2.0x more conversation tokens
+        # 8-bit: ~50% model memory savings → 1.5x cache capacity
+        # 4-bit: ~75% model memory savings → 2.0x cache capacity
         quant_scale = 1.0
         if quantization == "8bit":
             quant_scale = 1.5
@@ -130,9 +130,11 @@ class ModelManager:
             logger.info(f"Model size: {model_size_b}B, scale factor: {size_scale:.2f}x")
         
         # Default conservative limits (CPU or unknown GPU)
+        # H2O cache eviction: Fixed KV cache size, intelligent token selection
         limits = {
             "max_new_tokens": int(400 * size_scale * quant_scale),
-            "max_conversation_tokens": int(1500 * size_scale * quant_scale),
+            "max_cache_tokens": int(2000 * size_scale * quant_scale),  # H2O cache capacity
+            "recent_window": int(500 * size_scale * quant_scale),      # H2O recent window
             "gpu_profile": "conservative",
             "model_size_b": model_size_b,
             "quantization": quantization
@@ -146,59 +148,67 @@ class ModelManager:
         if "A100" in self.gpu_name or "A10" in self.gpu_name:
             # A100 (40-80 GB) or A10 (24 GB) - Ampere high-end
             # With 8-bit KV cache quantization: 50% memory savings
+            # H2O cache eviction: Fixed cache size, unlimited conversation length
             limits = {
                 "max_new_tokens": int(1200 * size_scale * quant_scale),
-                "max_conversation_tokens": int(8000 * size_scale * quant_scale),
+                "max_cache_tokens": int(10000 * size_scale * quant_scale),  # H2O cache capacity
+                "recent_window": int(1500 * size_scale * quant_scale),      # H2O recent window
                 "gpu_profile": "high_end_ampere",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with 8-bit KV cache quantization")
+            logger.info(f"🚀 High-end GPU detected ({self.gpu_name}) + {model_size_b}B model - using generous limits with H2O cache eviction")
             
         elif "L4" in self.gpu_name or (self.gpu_memory_gb >= 22 and float(self.gpu_compute_capability) >= 8.9):
             # L4 (24 GB) - Ada Lovelace
             # With 8-bit KV cache quantization: 50% memory savings
-            # Limits tuned for 4-bit model quantization (default) with significant headroom
+            # H2O cache eviction: Fixed cache size with intelligent token selection
             # 4-bit: ~7GB model + ~3-4GB cache = ~11GB total (plenty of headroom on 24GB GPU)
             # 8-bit: ~14GB model + ~3-4GB cache = ~18GB total (tighter but workable)
             limits = {
                 "max_new_tokens": int(1500 * size_scale * quant_scale),
-                "max_conversation_tokens": int(9000 * size_scale * quant_scale),
+                "max_cache_tokens": int(7000 * size_scale * quant_scale),   # H2O cache capacity
+                "recent_window": int(1000 * size_scale * quant_scale),      # H2O recent window
                 "gpu_profile": "l4_ada",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with 8-bit KV cache + Flash Attention")
+            logger.info(f"⚡ L4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using optimized limits with H2O cache eviction")
             
         elif "T4" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.5):
             # T4 (16 GB) - Turing
             # With 8-bit KV cache quantization: 50% memory savings
+            # H2O cache eviction: Fixed cache size, unlimited conversation length
             limits = {
                 "max_new_tokens": int(700 * size_scale * quant_scale),
-                "max_conversation_tokens": int(3500 * size_scale * quant_scale),
+                "max_cache_tokens": int(4000 * size_scale * quant_scale),   # H2O cache capacity
+                "recent_window": int(800 * size_scale * quant_scale),       # H2O recent window
                 "gpu_profile": "t4_turing",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with 8-bit KV cache quantization")
+            logger.info(f"✓ T4 GPU detected ({self.gpu_name}) + {model_size_b}B model - using balanced limits with H2O cache eviction")
             
         elif "V100" in self.gpu_name or (self.gpu_memory_gb >= 14 and float(self.gpu_compute_capability) >= 7.0):
             # V100 (16-32 GB) - Volta
             # With 8-bit KV cache quantization: 50% memory savings
+            # H2O cache eviction: Fixed cache size, unlimited conversation length
             limits = {
                 "max_new_tokens": int(700 * size_scale * quant_scale),
-                "max_conversation_tokens": int(3500 * size_scale * quant_scale),
+                "max_cache_tokens": int(4000 * size_scale * quant_scale),   # H2O cache capacity
+                "recent_window": int(800 * size_scale * quant_scale),       # H2O recent window
                 "gpu_profile": "v100_volta",
                 "model_size_b": model_size_b,
                 "quantization": quantization
             }
-            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with 8-bit KV cache quantization")
+            logger.info(f"✓ V100 GPU detected ({self.gpu_name}) + {model_size_b}B model - using moderate limits with H2O cache eviction")
             
         elif self.gpu_memory_gb >= 10:
             # Other GPU with decent memory (P100, etc.)
             limits = {
                 "max_new_tokens": int(450 * size_scale * quant_scale),
-                "max_conversation_tokens": int(1800 * size_scale * quant_scale),
+                "max_cache_tokens": int(2500 * size_scale * quant_scale),   # H2O cache capacity
+                "recent_window": int(600 * size_scale * quant_scale),       # H2O recent window
                 "gpu_profile": "moderate",
                 "model_size_b": model_size_b,
                 "quantization": quantization
@@ -210,7 +220,7 @@ class ModelManager:
             logger.warning(f"⚠ Small GPU detected ({self.gpu_name}, {self.gpu_memory_gb:.1f} GB) + {model_size_b}B model - using conservative limits")
         
         logger.info(f"  Recommended limits: max_new_tokens={limits['max_new_tokens']}, "
-                   f"max_conversation_tokens={limits['max_conversation_tokens']}")
+                   f"max_cache_tokens={limits['max_cache_tokens']}, recent_window={limits['recent_window']}")
         
         return limits
 

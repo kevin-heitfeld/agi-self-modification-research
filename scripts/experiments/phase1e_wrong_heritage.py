@@ -139,9 +139,7 @@ class Phase1eSession(Phase1BaseSession):
         self.logger.info(f"  ✓ Manual generator ready")
 
         # Initialize conversation tracking
-        from src.memory_manager import MemoryManager
         self.conversation_kv_cache = None
-        self.memory_manager = MemoryManager(logger=self.logger)
 
         self.logger.info("✓ All systems initialized with WRONG heritage!")
 
