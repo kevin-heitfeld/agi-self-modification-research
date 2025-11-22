@@ -512,6 +512,7 @@ class ModelManager:
 
         except Exception as e:
             logger.error(f"✗ Failed to load model: {e}")
+            logger.error(f"Full traceback:", exc_info=True)
             return False
 
     def generate(self, prompt: str, max_length: int = 100, **kwargs) -> str:
