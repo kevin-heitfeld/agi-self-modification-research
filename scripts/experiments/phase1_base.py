@@ -797,15 +797,38 @@ Use `introspection.memory.record_observation()` to save key discoveries.
                     recent_summary = stats['summaries'][-1]
                     self._evaluate_summary_quality(recent_summary, current_turn)
         
+        # Prepare conversation cache (handles incremental caching for quantized caches)
+        # For quantized caches: caches new messages, will regenerate full cache in generate()
+        # For standard caches: returns None (uses past_key_values directly)
+        self.generator.prepare_conversation_cache(
+            self.conversation_history,
+            format_qwen_chat
+        )
+        
         # Format conversation for generation (without system prompt - already cached)
-        # If we have compressed history, it's already included in the conversation
-        # (The summarization manager handles this internally)
-        formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
+        # The prompt parameter is only used for new input tokens during generation
+        # For quantized caches: the cached conversation will be replayed from cached tokens
+        # So we only need to format the current turn's prompt (last user message)
+        if self.generator.quantize_kv_cache:
+            # For quantized: just current turn (cache has history)
+            # Get last user message as the prompt
+            last_user_msgs = [msg for msg in self.conversation_history if msg['role'] == 'user']
+            if last_user_msgs:
+                formatted_conv = format_qwen_chat([last_user_msgs[-1]], add_generation_prompt=True)
+            else:
+                formatted_conv = format_qwen_chat([], add_generation_prompt=True)
+        else:
+            # For standard cache: format full conversation (cache reuses past_key_values)
+            formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
 
         # Calculate available tokens to prevent cache overflow
-        # Total cache = system prompt + conversation history + new tokens
+        # Total cache = system prompt + cached conversation + new tokens
         current_cache_size = self.generator.system_prompt_length
-        if self.conversation_kv_cache is not None:
+        if self.generator.quantize_kv_cache and self.generator.cached_conversation_tokens is not None:
+            # For quantized: use cached conversation size
+            current_cache_size += self.generator.cached_conversation_tokens.shape[1]
+        elif self.conversation_kv_cache is not None:
+            # For standard: use actual cache size
             current_cache_size += self.generator._get_cache_length(self.conversation_kv_cache)
         
         # Ensure we don't exceed max_cache_tokens
@@ -818,8 +841,8 @@ Use `introspection.memory.record_observation()` to save key discoveries.
             self.logger.warning(f"  Current cache: {current_cache_size}/{max_cache} tokens ({current_cache_size*100//max_cache}% full)")
 
         # Generate with KV cache
-        # The system prompt is already cached in the generator
-        # We pass the conversation and the conversation cache
+        # For quantized caches: cache is regenerated from system_prompt + cached_conversation inside generate()
+        # For standard caches: reuses past_key_values directly
         result = self.generator.generate(
             prompt=formatted_conv,
             past_key_values=self.conversation_kv_cache,
@@ -831,18 +854,10 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         )
 
         # Update conversation cache for next turn
-        # CRITICAL: For quantized caches, we don't reuse the cache (returns None)
-        # This is intentional - quantized caches have mutation issues
-        # Instead, we regenerate from system prompt each turn (fast with FA2)
+        # For quantized caches: returns None (conversation cached internally in generator)
+        # For standard caches: returns updated cache
         self.conversation_kv_cache = result.get('past_key_values')
-        
-        # If using quantized cache (returns None), clear any accumulated cache
-        # to prevent unbounded memory growth
-        if self.generator.quantize_kv_cache and self.conversation_kv_cache is None:
-            # Cache was not returned due to quantization
-            # This means next turn will regenerate from system prompt
-            # No action needed - cache won't accumulate
-            pass
+
 
         return result['generated_text'], result['stopped_reason']
     

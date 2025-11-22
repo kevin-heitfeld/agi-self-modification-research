@@ -130,6 +130,11 @@ class ManualGenerator:
         
         # Conversation KV cache (grows with each turn, summarized as needed)
         self.conversation_kv_cache: Optional[Any] = None
+        
+        # Track what's in the conversation cache to avoid reprocessing
+        # For quantized caches, we need to track processed messages to reprocess only new ones
+        self.cached_message_count: int = 0  # Number of messages already in conversation cache
+        self.cached_conversation_tokens: Optional[torch.Tensor] = None  # Tokens in conversation cache
 
         logger.info(f"ManualGenerator initialized on {device}")
 
@@ -219,6 +224,62 @@ class ManualGenerator:
             logger.info(f"  Estimated memory savings: ~50% vs FP16 cache")
         else:
             logger.info(f"System prompt cached: {self.system_prompt_length} tokens (FP16)")
+
+    def prepare_conversation_cache(self, conversation_messages: List[Dict[str, str]], format_fn: Callable) -> torch.Tensor:
+        """
+        Prepare conversation cache incrementally for quantized caches.
+        
+        For quantized caches, we can't reuse the cache due to mutation bugs.
+        Instead, we cache processed conversation tokens and regenerate the cache
+        from system_prompt + cached_conversation + new_messages only.
+        
+        Args:
+            conversation_messages: Full conversation history (list of message dicts)
+            format_fn: Function to format messages (e.g., format_qwen_chat)
+            
+        Returns:
+            Input IDs for the NEW portion of conversation (to be processed)
+        """
+        if not self.quantize_kv_cache:
+            # Non-quantized caches can be reused normally
+            return None
+        
+        # Check if we have new messages since last caching
+        num_messages = len(conversation_messages)
+        
+        if num_messages == self.cached_message_count:
+            # No new messages - return empty (will use cached conversation)
+            logger.debug(f"No new messages ({num_messages} cached)")
+            return torch.tensor([[]], dtype=torch.long, device=self.device)
+        
+        # Extract only NEW messages (those not yet cached)
+        new_messages = conversation_messages[self.cached_message_count:]
+        logger.debug(f"Processing {len(new_messages)} new messages (have {self.cached_message_count} cached)")
+        
+        # Format only the new messages
+        new_conversation_text = format_fn(new_messages, add_generation_prompt=False)
+        
+        # Tokenize new portion
+        new_tokens = self.tokenizer(new_conversation_text, return_tensors="pt")
+        new_input_ids = new_tokens["input_ids"].to(self.device)
+        
+        # Append to cached conversation tokens
+        if self.cached_conversation_tokens is not None and self.cached_conversation_tokens.shape[1] > 0:
+            # Concatenate with existing cached tokens
+            self.cached_conversation_tokens = torch.cat([
+                self.cached_conversation_tokens,
+                new_input_ids
+            ], dim=1)
+        else:
+            # First conversation tokens
+            self.cached_conversation_tokens = new_input_ids
+        
+        # Update message count
+        self.cached_message_count = num_messages
+        
+        logger.debug(f"Conversation cache: {self.cached_conversation_tokens.shape[1]} tokens ({num_messages} messages)")
+        
+        return new_input_ids
 
     def check_and_summarize_if_needed(
         self,
@@ -464,8 +525,9 @@ class ManualGenerator:
 
                 if self.quantize_kv_cache:
                     # Regenerate quantized cache from scratch
-                    # This is fast (8747 tokens ~0.5s) and avoids all mutation/corruption issues
-                    logger.debug(f"Regenerating HQQ quantized cache for system prompt ({self.system_prompt_length} tokens)")
+                    # This is fast (~0.5s for system prompt) and avoids all mutation/corruption issues
+                    # NEW: Also process cached conversation tokens to avoid reprocessing entire history
+                    logger.debug(f"Regenerating HQQ quantized cache: system_prompt ({self.system_prompt_length} tokens) + conversation ({self.cached_conversation_tokens.shape[1] if self.cached_conversation_tokens is not None else 0} tokens)")
 
                     # Create empty quantized cache
                     current_cache = None
@@ -502,19 +564,38 @@ class ManualGenerator:
                             import copy
                             current_cache = copy.deepcopy(self.system_prompt_cache)
 
-                    # Run forward pass to populate the cache (only if we have a quantized cache)
+                    # Run forward pass to populate the cache
                     if current_cache is not None and self.quantize_kv_cache:
                         with torch.no_grad():
+                            # First: process system prompt
                             _ = self.model(
                                 input_ids=self.system_prompt_input_ids,
                                 attention_mask=torch.ones_like(self.system_prompt_input_ids),
-                            use_cache=True,
-                            past_key_values=current_cache,
-                            return_dict=True
-                        )
-                    # current_cache is now filled with quantized KV states
+                                use_cache=True,
+                                past_key_values=current_cache,
+                                return_dict=True
+                            )
+                            
+                            # Second: process cached conversation (if any)
+                            if self.cached_conversation_tokens is not None and self.cached_conversation_tokens.shape[1] > 0:
+                                # Combine system prompt and conversation for attention mask
+                                total_cached_length = self.system_prompt_length + self.cached_conversation_tokens.shape[1]
+                                combined_mask = torch.ones((1, total_cached_length), dtype=torch.long, device=self.device)
+                                
+                                _ = self.model(
+                                    input_ids=self.cached_conversation_tokens,
+                                    attention_mask=combined_mask,
+                                    use_cache=True,
+                                    past_key_values=current_cache,
+                                    return_dict=True
+                                )
+                    # current_cache is now filled with: system_prompt + cached_conversation
 
-                    cache_type = "HQQ quantized (regenerated)"
+                    cache_length = self.system_prompt_length
+                    if self.cached_conversation_tokens is not None:
+                        cache_length += self.cached_conversation_tokens.shape[1]
+                    
+                    cache_type = f"HQQ quantized (regenerated: {cache_length} tokens)"
                 else:
                     # Safe to deep copy standard caches (no quantization metadata to corrupt)
                     import copy
