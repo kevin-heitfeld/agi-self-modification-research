@@ -831,7 +831,18 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         )
 
         # Update conversation cache for next turn
+        # CRITICAL: For quantized caches, we don't reuse the cache (returns None)
+        # This is intentional - quantized caches have mutation issues
+        # Instead, we regenerate from system prompt each turn (fast with FA2)
         self.conversation_kv_cache = result.get('past_key_values')
+        
+        # If using quantized cache (returns None), clear any accumulated cache
+        # to prevent unbounded memory growth
+        if self.generator.quantize_kv_cache and self.conversation_kv_cache is None:
+            # Cache was not returned due to quantization
+            # This means next turn will regenerate from system prompt
+            # No action needed - cache won't accumulate
+            pass
 
         return result['generated_text'], result['stopped_reason']
     
