@@ -648,6 +648,12 @@ Use `introspection.memory.record_observation()` to save key discoveries.
             "generation_end",
             {"iteration": iteration, "response_length": len(response), "stopped_reason": stopped_reason}
         )
+        
+        # Clear GPU cache to prevent memory fragmentation
+        # This releases reserved but unused memory back to CUDA, preventing the sawtooth
+        # memory growth pattern that causes OOM in long conversations
+        import torch
+        torch.cuda.empty_cache()
 
         # Add to history
         self._add_message("assistant", response)
