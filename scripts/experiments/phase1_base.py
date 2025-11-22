@@ -802,13 +802,28 @@ Use `introspection.memory.record_observation()` to save key discoveries.
         # (The summarization manager handles this internally)
         formatted_conv = format_qwen_chat(self.conversation_history, add_generation_prompt=True)
 
+        # Calculate available tokens to prevent cache overflow
+        # Total cache = system prompt + conversation history + new tokens
+        current_cache_size = self.generator.system_prompt_length
+        if self.conversation_kv_cache is not None:
+            current_cache_size += self.generator._get_cache_length(self.conversation_kv_cache)
+        
+        # Ensure we don't exceed max_cache_tokens
+        max_cache = self.optimal_limits['max_cache_tokens']
+        available_tokens = max(100, max_cache - current_cache_size)  # At least 100 tokens for response
+        adjusted_max_new_tokens = min(self.optimal_limits['max_new_tokens'], available_tokens)
+        
+        if adjusted_max_new_tokens < self.optimal_limits['max_new_tokens']:
+            self.logger.warning(f"[CACHE] Limiting generation: {self.optimal_limits['max_new_tokens']} → {adjusted_max_new_tokens} tokens")
+            self.logger.warning(f"  Current cache: {current_cache_size}/{max_cache} tokens ({current_cache_size*100//max_cache}% full)")
+
         # Generate with KV cache
         # The system prompt is already cached in the generator
         # We pass the conversation and the conversation cache
         result = self.generator.generate(
             prompt=formatted_conv,
             past_key_values=self.conversation_kv_cache,
-            max_new_tokens=self.optimal_limits['max_new_tokens'],
+            max_new_tokens=adjusted_max_new_tokens,
             temperature=0.7,
             top_p=0.9,
             use_cache=True,
